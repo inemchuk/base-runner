@@ -27,9 +27,10 @@ export function useCheckIn() {
   // Refetch state after successful tx
   useEffect(() => {
     if (isSuccess) {
-      refetch();
-      // Notify game.js that check-in was confirmed
-      window.dispatchEvent(new CustomEvent('base-checkin-confirmed'));
+      refetch().then(() => {
+        // Notify game.js only after fresh state is loaded
+        window.dispatchEvent(new CustomEvent('base-checkin-confirmed'));
+      });
     }
   }, [isSuccess, refetch]);
 

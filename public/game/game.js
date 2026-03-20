@@ -235,48 +235,67 @@ const CheckIn = (() => {
 const Leaderboard = (() => {
 
   const MEDALS = ['🥇', '🥈', '🥉'];
+  let mode = 'personal'; // 'personal' | 'global'
 
-  function render() {
-    const container = document.getElementById('lb-list');
-    if (!container) return;
-
-    const onChain = window.__BASE_LEADERBOARD_ENTRIES;
-
-    if (onChain && onChain.length > 0) {
-      container.innerHTML =
-        '<p class="lb-subtitle">🌐 Global On-Chain</p>' +
-        onChain.map((entry, i) => {
-          const rankClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
-          const medal = MEDALS[i] || `${i + 1}.`;
-          return `
-            <div class="lb-row ${rankClass}">
-              <span class="lb-rank">${medal}</span>
-              <span class="lb-name">${entry.name}</span>
-              <span class="lb-pts">${entry.score}</span>
-            </div>`;
-        }).join('');
-    } else {
-      const scores = Save.getScores();
-      if (scores.length === 0) {
-        container.innerHTML = '<p class="lb-empty">No scores yet.<br>Play to set a record! 🐔</p>';
-        return;
-      }
-      container.innerHTML =
-        '<p class="lb-subtitle">📱 Personal Best</p>' +
-        scores.map((score, i) => {
-          const rankClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
-          const medal = MEDALS[i] || `${i + 1}.`;
-          return `
-            <div class="lb-row ${rankClass}">
-              <span class="lb-rank">${medal}</span>
-              <span class="lb-name">You</span>
-              <span class="lb-pts">${score}</span>
-            </div>`;
-        }).join('');
-    }
+  function setMode(m) {
+    mode = m;
+    // Update tab styles
+    const btnP = document.getElementById('btn-lb-personal');
+    const btnG = document.getElementById('btn-lb-global');
+    if (btnP) btnP.className = 'lb-tab' + (m === 'personal' ? ' lb-tab-active' : '');
+    if (btnG) btnG.className = 'lb-tab' + (m === 'global'   ? ' lb-tab-active' : '');
+    render();
   }
 
-  return { render };
+  function renderPersonal() {
+    const container = document.getElementById('lb-list');
+    if (!container) return;
+    const scores = Save.getScores();
+    if (scores.length === 0) {
+      container.innerHTML = '<p class="lb-empty">No scores yet.<br>Play to set a record! 🐔</p>';
+      return;
+    }
+    container.innerHTML = scores.map((score, i) => {
+      const rankClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
+      const medal = MEDALS[i] || `${i + 1}.`;
+      return `<div class="lb-row ${rankClass}">
+        <span class="lb-rank">${medal}</span>
+        <span class="lb-name">You</span>
+        <span class="lb-pts">${score}</span>
+      </div>`;
+    }).join('');
+  }
+
+  function renderGlobal() {
+    const container = document.getElementById('lb-list');
+    if (!container) return;
+    const onChain = window.__BASE_LEADERBOARD_ENTRIES;
+    if (!onChain || onChain.length === 0) {
+      container.innerHTML = '<p class="lb-empty">Loading global scores…</p>';
+      return;
+    }
+    container.innerHTML = onChain.map((entry, i) => {
+      const rankClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
+      const medal = MEDALS[i] || `${i + 1}.`;
+      return `<div class="lb-row ${rankClass}">
+        <span class="lb-rank">${medal}</span>
+        <span class="lb-name">${entry.name}</span>
+        <span class="lb-pts">${entry.score}</span>
+      </div>`;
+    }).join('');
+  }
+
+  function render() {
+    if (mode === 'global') renderGlobal();
+    else renderPersonal();
+  }
+
+  // Re-render when global data arrives
+  window.addEventListener('base-leaderboard-loaded', () => {
+    if (mode === 'global') renderGlobal();
+  });
+
+  return { render, setMode };
 
 })();
 
@@ -3842,7 +3861,9 @@ function _initUI() {
   });
 
   // Кнопки leaderboard
-  _bind('btn-lb-back', 'click', () => UI.show('menu'));
+  _bind('btn-lb-back',     'click', () => UI.show('menu'));
+  _bind('btn-lb-personal', 'click', () => Leaderboard.setMode('personal'));
+  _bind('btn-lb-global',   'click', () => Leaderboard.setMode('global'));
 
   // Кнопки check-in
   _bind('btn-do-ci', 'click', () => {

@@ -106,7 +106,11 @@ export default function Game() {
 
       {/* Leaderboard Screen */}
       <div id="screen-lb" className="screen hidden">
-        <h2 style={{color:'#fff',fontSize:'clamp(1.2rem,6vw,2rem)',marginBottom:'24px',letterSpacing:'3px'}}>🏆 LEADERBOARD</h2>
+        <h2 style={{color:'#fff',fontSize:'clamp(1.2rem,6vw,2rem)',marginBottom:'16px',letterSpacing:'3px'}}>🏆 LEADERBOARD</h2>
+        <div className="lb-tabs">
+          <button className="lb-tab lb-tab-active" id="btn-lb-personal">Personal</button>
+          <button className="lb-tab" id="btn-lb-global">Global</button>
+        </div>
         <div id="lb-list" style={{width:'min(320px,90vw)',marginBottom:'24px'}}></div>
         <button className="btn btn-back" id="btn-lb-back">← BACK</button>
       </div>

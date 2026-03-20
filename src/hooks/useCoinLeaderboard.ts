@@ -18,7 +18,7 @@ export function useCoinLeaderboard() {
         address: COIN_CONTRACT_ADDRESS,
         abi: COIN_CONTRACT_ABI,
         functionName: 'getLeaderboard',
-      }) as Array<{ player: `0x${string}`; amount: bigint }>;
+      }) as unknown as Array<{ player: `0x${string}`; amount: bigint }>;
 
       const filtered = entries.filter(e => e.player !== '0x0000000000000000000000000000000000000000');
       const addresses = filtered.map(e => e.player);

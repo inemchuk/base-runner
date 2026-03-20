@@ -557,6 +557,24 @@ const World = (() => {
   let currentScore = 0;   // обновляется снаружи через setScore()
   let lastTrainRow = -50; // следим чтобы поезда не шли подряд
 
+  // ── Biome system ──────────────────────────────────────────
+  function getBiomeForRow(rowIdx) {
+    if (rowIdx <= 2) return { biome: 'default', nextBiome: null, blendT: 0 };
+    const totalCycle = 80 * 3; // 80 rows per biome × 3 biomes
+    const cyclePos   = rowIdx % totalCycle;
+    const biomeSlot  = Math.floor(cyclePos / 80);
+    const posInBiome = cyclePos - biomeSlot * 80;
+    const order      = ['default', 'desert', 'snow'];
+    const current    = order[biomeSlot];
+    const next       = order[(biomeSlot + 1) % order.length];
+    // Last 5 rows of a biome zone = smooth transition
+    if (posInBiome >= 75) {
+      const t = (posInBiome - 75) / 5;
+      return { biome: current, nextBiome: next, blendT: t };
+    }
+    return { biome: current, nextBiome: null, blendT: 0 };
+  }
+
   // ── Police Siren Event ───────────────────────────────────
   // States: 'idle' | 'clearing' | 'running' | 'done'
   const SIREN_COOLDOWN  = 35;   // seconds between events
@@ -833,18 +851,27 @@ const World = (() => {
   // Создать ряд нужного типа
   function makeSmartRow(rowIdx) {
     const type = nextRowType();
-    if (type === 'grass') return makeGrassRow(rowIdx);
-    if (type === 'road') {
+    let row;
+    if (type === 'grass') { row = makeGrassRow(rowIdx); }
+    else if (type === 'road') {
       // Поезд: 7% шанс, только если score >= 20 и давно не было поезда
       const trainChance = currentScore >= 20 ? 0.04 : 0;
       const farEnough   = rowIdx - lastTrainRow >= 25;
       if (farEnough && Math.random() < trainChance) {
         lastTrainRow = rowIdx;
-        return makeTrainRow(rowIdx);
+        row = makeTrainRow(rowIdx);
+      } else {
+        row = makeRoadRow(rowIdx);
       }
-      return makeRoadRow(rowIdx);
+    } else {
+      row = makeWaterRow(rowIdx);
     }
-    return makeWaterRow(rowIdx);
+    // Stamp biome info
+    const bi = getBiomeForRow(rowIdx);
+    row.biome     = bi.biome;
+    row.nextBiome = bi.nextBiome;
+    row.blendT    = bi.blendT;
+    return row;
   }
 
   // ═══════════════════════════════════════════════════════
@@ -869,7 +896,9 @@ const World = (() => {
     };
 
     // 25-35% density, but ensure at least one gap (path through)
-    const TYPES = ['bush', 'bush', 'tree', 'rock'];  // bush appears more
+    const biomeInfo = getBiomeForRow(rowIdx);
+    const BIOME_DECO = { default: ['bush', 'bush', 'tree', 'rock'], desert: ['cactus', 'cactus', 'tumbleweed', 'rock'], snow: ['pine', 'pine', 'snowman', 'rock'] };
+    const TYPES = BIOME_DECO[biomeInfo.biome] || BIOME_DECO.default;
     const occupied = new Set();
     const targetCount = 2 + Math.floor(rng(0) * 2);  // 2-3 objects per row
 
@@ -1285,7 +1314,7 @@ const World = (() => {
   function rowToY(rowIdx) { return -rowIdx * CELL; }
   function getRows()      { return rows; }
 
-  return { init, update, extendWorld, setScore, getRow, getRows, rowToY, CELL, COLS };
+  return { init, update, extendWorld, setScore, getRow, getRows, rowToY, getBiomeForRow, CELL, COLS };
 
 })();
 
@@ -1821,9 +1850,94 @@ const Renderer = (() => {
     water_fx:['rgba(255,255,255,0.08)', 'rgba(100,150,255,0.12)'],
   };
 
-  // Get current blended colour
+  // ── Biome palettes ─────────────────────────────────────────
+  const BIOME_PALETTES = {
+    default: PALETTE,
+
+    desert: {
+      sky:      ['#E8D5A3', '#1a1005'],
+      grass0:   ['#C2B280', '#3a2e1a'],
+      grass1:   ['#B8A872', '#352a16'],
+      road0:    ['#6B5B45', '#2a2218'],
+      road1:    ['#5F5040', '#252015'],
+      water0:   ['#1565C0', '#0a1a40'],
+      water1:   ['#1976D2', '#0c2050'],
+      bush:     ['#5B7F3B', '#1a2a0f'],
+      bushLt:   ['#6B8F4B', '#223615'],
+      treeDk:   ['#2E5E1A', '#0a1a06'],
+      treeMd:   ['#3E7E2A', '#142a0a'],
+      treeLt:   ['#4E9E3A', '#1e3a0e'],
+      trunk:    ['#8B7355', '#3a2e1a'],
+      rockDk:   ['#A0876A', '#443828'],
+      rockLt:   ['#C4A882', '#665540'],
+      logDk:    ['#8B7355', '#3a2e1a'],
+      logLt:    ['#A08E6E', '#4a3e28'],
+      stripe:   ['#FFD700', '#886600'],
+      water_fx: ['rgba(255,255,255,0.08)', 'rgba(100,150,255,0.12)'],
+    },
+
+    snow: {
+      sky:      ['#B0C4DE', '#0a0a1e'],
+      grass0:   ['#E8E8F0', '#2a2a3a'],
+      grass1:   ['#D8D8E8', '#252536'],
+      road0:    ['#707080', '#222233'],
+      road1:    ['#606070', '#1c1c2a'],
+      water0:   ['#4A8BB5', '#0a1a30'],
+      water1:   ['#5A9BC5', '#0c2040'],
+      bush:     ['#E0E0E8', '#2a2a35'],
+      bushLt:   ['#F0F0F8', '#353540'],
+      treeDk:   ['#1B5E3A', '#091a12'],
+      treeMd:   ['#2E7D4A', '#0f2a18'],
+      treeLt:   ['#388E5C', '#1a3a22'],
+      trunk:    ['#5D4037', '#2a1a10'],
+      rockDk:   ['#8899AA', '#334455'],
+      rockLt:   ['#AABBCC', '#556677'],
+      logDk:    ['#6D5548', '#2a1a10'],
+      logLt:    ['#7D6E58', '#3a2818'],
+      stripe:   ['#FFFFFF', '#888888'],
+      water_fx: ['rgba(200,220,255,0.10)', 'rgba(120,160,255,0.14)'],
+    },
+  };
+
+  const BIOME_DECORATIONS = {
+    default: ['bush', 'bush', 'tree', 'rock'],
+    desert:  ['cactus', 'cactus', 'tumbleweed', 'rock'],
+    snow:    ['pine', 'pine', 'snowman', 'rock'],
+  };
+
+  const BIOME_ORDER     = ['default', 'desert', 'snow'];
+  const BIOME_CYCLE_LEN = 80;
+  const BIOME_BLEND_LEN = 5;
+
+  // Darken a hex color by a factor (0=no change, 1=black)
+  function darkenHex(hex, factor) {
+    const c = hex.replace('#', '');
+    const r = Math.round(parseInt(c.substr(0,2), 16) * (1 - factor));
+    const g = Math.round(parseInt(c.substr(2,2), 16) * (1 - factor));
+    const b = Math.round(parseInt(c.substr(4,2), 16) * (1 - factor));
+    return '#' + [r,g,b].map(v => Math.max(0,v).toString(16).padStart(2,'0')).join('');
+  }
+
+  // Biome info for player's current row (set each frame)
+  let _currentBiomeInfo = { biome: 'default', nextBiome: null, blendT: 0 };
+
+  // Get current blended colour (uses player's biome for global elements)
   function dc(key) {
-    return lerpColor(PALETTE[key][0], PALETTE[key][1], nightRatio);
+    return dcBiome(key, _currentBiomeInfo);
+  }
+
+  // Biome-aware color: palette lookup + day/night + biome blend
+  function dcBiome(key, bi) {
+    const pal = BIOME_PALETTES[bi.biome] || PALETTE;
+    if (!pal[key]) return '#ff00ff'; // debug fallback
+    const base = lerpColor(pal[key][0], pal[key][1], nightRatio);
+    if (bi.blendT > 0 && bi.nextBiome) {
+      const nextPal = BIOME_PALETTES[bi.nextBiome] || PALETTE;
+      if (!nextPal[key]) return base;
+      const next = lerpColor(nextPal[key][0], nextPal[key][1], nightRatio);
+      return lerpColor(base, next, bi.blendT);
+    }
+    return base;
   }
 
   function init() {
@@ -2007,6 +2121,8 @@ const Renderer = (() => {
     ctx.translate(offsetX, 0);
     ctx.scale(scale, scale);
     ctx.translate(0, -cameraY);
+    // Set current biome for global elements (sky)
+    _currentBiomeInfo = World.getBiomeForRow(Player.getState().row);
     drawRows();
     drawTrails();
     drawPlayer();
@@ -2084,17 +2200,17 @@ const Renderer = (() => {
   function drawRows() {
     for (const row of World.getRows()) {
       const y = World.rowToY(row.idx);
+      const bi = { biome: row.biome || 'default', nextBiome: row.nextBiome || null, blendT: row.blendT || 0 };
       if (row.type === 'grass') {
-        drawGrassRow(row, y);
+        drawGrassRow(row, y, bi);
       } else if (row.type === 'road') {
-        ctx.fillStyle = row.idx % 2 === 0 ? dc('road0') : dc('road1');
+        ctx.fillStyle = row.idx % 2 === 0 ? dcBiome('road0', bi) : dcBiome('road1', bi);
         ctx.fillRect(0, y, COLS * CELL, CELL);
-        drawRoadMarkings(y);
+        drawRoadMarkings(y, bi);
         drawCars(row, y);
       } else if (row.type === 'water') {
-        let waterColor = row.idx % 2 === 0 ? dc('water0') : dc('water1');
+        let waterColor = row.idx % 2 === 0 ? dcBiome('water0', bi) : dcBiome('water1', bi);
         if (weatherRatio > 0.05 && (weatherState === 1 || weatherState === 3)) {
-          // Brighter night water colors so waves remain visible
           const wetWater = nightRatio > 0.3 ? '#0a1a45' : '#0d3a6e';
           const blend = weatherState === 3 ? 0.5 : 0.35;
           waterColor = lerpColor(waterColor, wetWater, Math.min(weatherRatio, 1) * blend);
@@ -2102,28 +2218,20 @@ const Renderer = (() => {
         ctx.fillStyle = waterColor;
         ctx.fillRect(0, y, COLS * CELL, CELL);
         drawWaterEffect(y);
-        drawLogs(row, y);
+        drawLogs(row, y, bi);
       } else if (row.type === 'train') {
         drawTrainRow(row, y);
       }
     }
   }
 
-  function drawGrassRow(row, y) {
-    // Ground — day/night blended colour
-    let grassColor = row.idx % 2 === 0 ? dc('grass0') : dc('grass1');
+  function drawGrassRow(row, y, bi) {
+    // Ground — day/night + biome blended colour
+    let grassColor = row.idx % 2 === 0 ? dcBiome('grass0', bi) : dcBiome('grass1', bi);
     if (weatherRatio > 0.05 && weatherState > 0) {
-      let wetGrass;
-      if (weatherState === 2) {
-        // Fog: slightly muted/grey grass
-        wetGrass = nightRatio > 0.3 ? '#0f200f' : '#4a7a4a';
-      } else if (weatherState === 4) {
-        // Wind: minimal change
-        wetGrass = nightRatio > 0.3 ? '#152a15' : '#428542';
-      } else {
-        // Rain/Storm: wet dark green
-        wetGrass = nightRatio > 0.3 ? '#0d1f0d' : '#3a6b3a';
-      }
+      // Darken biome grass for weather effect
+      const baseGrass = dcBiome('grass0', bi);
+      const wetGrass = darkenHex(baseGrass, weatherState === 2 ? 0.15 : weatherState === 4 ? 0.08 : 0.25);
       const blend = weatherState === 3 ? 0.4 : 0.3;
       grassColor = lerpColor(grassColor, wetGrass, Math.min(weatherRatio, 1) * blend);
     }
@@ -2138,39 +2246,40 @@ const Renderer = (() => {
       for (const d of row.decorations) {
         const cx = d.col * CELL + CELL / 2;
         const cy = y + CELL / 2;
-        const swayX = d.type === 'rock' ? 0 : windSway;
-        if      (d.type === 'bush') drawBush(cx + swayX, cy);
-        else if (d.type === 'tree') drawTree(cx + swayX * 1.5, cy);
-        else if (d.type === 'rock') drawRock(cx, cy);
+        const swayX = d.type === 'rock' || d.type === 'snowman' ? 0 : windSway;
+        if      (d.type === 'bush')       drawBush(cx + swayX, cy, bi);
+        else if (d.type === 'tree')       drawTree(cx + swayX * 1.5, cy, bi);
+        else if (d.type === 'rock')       drawRock(cx, cy, bi);
+        else if (d.type === 'cactus')     drawCactus(cx + swayX * 0.5, cy, bi);
+        else if (d.type === 'tumbleweed') drawTumbleweed(cx + swayX * 2, cy, bi);
+        else if (d.type === 'pine')       drawPine(cx + swayX * 1.2, cy, bi);
+        else if (d.type === 'snowman')    drawSnowman(cx, cy, bi);
       }
     }
   }
 
   // ── Bush: round dark-green blob ────────────────────────────
-  function drawBush(cx, cy) {
+  function drawBush(cx, cy, bi) {
     const r = CELL * 0.3;
-    // Shadow
     ctx.fillStyle = 'rgba(0,0,0,0.15)';
     ctx.beginPath();
     ctx.ellipse(cx, cy + r * 0.9, r * 0.9, r * 0.28, 0, 0, Math.PI * 2);
     ctx.fill();
-    // Main bush body — cluster of circles
     const clusters = [
       {dx:  0,   dy: -r*0.1, r: r * 0.72},
       {dx: -r*0.45, dy:  r*0.15, r: r * 0.55},
       {dx:  r*0.45, dy:  r*0.15, r: r * 0.55},
     ];
     for (const c of clusters) {
-      ctx.fillStyle = dc('bush');
+      ctx.fillStyle = dcBiome('bush', bi);
       ctx.beginPath();
       ctx.arc(cx + c.dx, cy + c.dy, c.r, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = dc('bushLt');
+      ctx.fillStyle = dcBiome('bushLt', bi);
       ctx.beginPath();
       ctx.arc(cx + c.dx - c.r*0.2, cy + c.dy - c.r*0.25, c.r * 0.55, 0, Math.PI * 2);
       ctx.fill();
     }
-    // Highlight dot
     ctx.fillStyle = 'rgba(255,255,255,0.18)';
     ctx.beginPath();
     ctx.arc(cx - r*0.18, cy - r*0.35, r * 0.22, 0, Math.PI * 2);
@@ -2178,31 +2287,27 @@ const Renderer = (() => {
   }
 
   // ── Tree: trunk + round canopy ──────────────────────────────
-  function drawTree(cx, cy) {
+  function drawTree(cx, cy, bi) {
     const r = CELL * 0.32;
-    // Shadow (ellipse under canopy)
     ctx.fillStyle = 'rgba(0,0,0,0.18)';
     ctx.beginPath();
     ctx.ellipse(cx, cy + r * 0.7, r * 0.95, r * 0.3, 0, 0, Math.PI * 2);
     ctx.fill();
-    // Trunk
     const trunkW = r * 0.32, trunkH = r * 0.55;
-    ctx.fillStyle = '#795548';
+    ctx.fillStyle = dcBiome('trunk', bi);
     ctx.fillRect(cx - trunkW/2, cy + r*0.15, trunkW, trunkH);
-    // Canopy — layered circles for depth
-    ctx.fillStyle = '#1B5E20';
+    ctx.fillStyle = dcBiome('treeDk', bi);
     ctx.beginPath();
     ctx.arc(cx, cy - r * 0.1, r, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = '#2E7D32';
+    ctx.fillStyle = dcBiome('treeMd', bi);
     ctx.beginPath();
     ctx.arc(cx, cy - r * 0.18, r * 0.82, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = '#388E3C';
+    ctx.fillStyle = dcBiome('treeLt', bi);
     ctx.beginPath();
     ctx.arc(cx - r*0.15, cy - r * 0.3, r * 0.58, 0, Math.PI * 2);
     ctx.fill();
-    // Highlight
     ctx.fillStyle = 'rgba(255,255,255,0.15)';
     ctx.beginPath();
     ctx.arc(cx - r*0.25, cy - r*0.5, r * 0.28, 0, Math.PI * 2);
@@ -2210,25 +2315,164 @@ const Renderer = (() => {
   }
 
   // ── Rock: flat grey stone ───────────────────────────────────
-  function drawRock(cx, cy) {
+  function drawRock(cx, cy, bi) {
     const rw = CELL * 0.3, rh = CELL * 0.22;
-    // Shadow
     ctx.fillStyle = 'rgba(0,0,0,0.15)';
     ctx.beginPath();
     ctx.ellipse(cx, cy + rh * 0.9, rw * 0.9, rh * 0.35, 0, 0, Math.PI * 2);
     ctx.fill();
-    // Rock body — flat single colour
-    ctx.fillStyle = dc('rockDk');
+    ctx.fillStyle = dcBiome('rockDk', bi);
     ctx.beginPath();
     ctx.ellipse(cx, cy, rw, rh, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // ── Cactus: tall green column with arms (desert) ────────────
+  function drawCactus(cx, cy, bi) {
+    const h = CELL * 0.6, w = CELL * 0.12;
+    // Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + h * 0.35, w * 2.5, h * 0.1, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Main trunk
+    ctx.fillStyle = dcBiome('treeMd', bi);
+    roundRect(ctx, cx - w/2, cy - h * 0.35, w, h, w/2);
+    ctx.fill();
+    // Left arm
+    ctx.fillStyle = dcBiome('treeDk', bi);
+    const armW = w * 0.8, armH = h * 0.22;
+    roundRect(ctx, cx - w*2, cy - h * 0.1, w * 1.6, armW, armW/2);
+    ctx.fill();
+    roundRect(ctx, cx - w*2, cy - h * 0.1 - armH, armW, armH + armW/2, armW/2);
+    ctx.fill();
+    // Right arm
+    ctx.fillStyle = dcBiome('treeLt', bi);
+    roundRect(ctx, cx + w*0.4, cy + h * 0.05, w * 1.4, armW, armW/2);
+    ctx.fill();
+    roundRect(ctx, cx + w*1.4, cy + h * 0.05 - armH * 0.7, armW, armH * 0.7 + armW/2, armW/2);
+    ctx.fill();
+    // Highlight
+    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    ctx.fillRect(cx - w*0.15, cy - h * 0.3, w * 0.2, h * 0.5);
+  }
+
+  // ── Tumbleweed: round tangled ball (desert) ────────────────
+  function drawTumbleweed(cx, cy, bi) {
+    const r = CELL * 0.2;
+    // Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.12)';
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + r * 0.7, r * 0.85, r * 0.25, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Body
+    ctx.fillStyle = dcBiome('trunk', bi);
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+    // Wire arcs
+    ctx.strokeStyle = darkenHex(dcBiome('trunk', bi), 0.2);
+    ctx.lineWidth = 1.2;
+    for (let i = 0; i < 4; i++) {
+      const angle = (i / 4) * Math.PI;
+      ctx.beginPath();
+      ctx.arc(cx + Math.cos(angle) * r * 0.2, cy + Math.sin(angle) * r * 0.2, r * 0.6, angle, angle + Math.PI * 0.8);
+      ctx.stroke();
+    }
+    // Highlight
+    ctx.fillStyle = 'rgba(255,255,255,0.1)';
+    ctx.beginPath();
+    ctx.arc(cx - r * 0.2, cy - r * 0.3, r * 0.25, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // ── Pine: triangular evergreen (snow) ──────────────────────
+  function drawPine(cx, cy, bi) {
+    const h = CELL * 0.55, w = CELL * 0.38;
+    // Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + h * 0.35, w * 0.6, h * 0.08, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Trunk
+    const trunkW = CELL * 0.08, trunkH = CELL * 0.12;
+    ctx.fillStyle = dcBiome('trunk', bi);
+    ctx.fillRect(cx - trunkW/2, cy + h * 0.1, trunkW, trunkH);
+    // Three stacked triangles
+    const layers = [
+      { y: cy + h * 0.1,  w: w * 0.9, h: h * 0.4, key: 'treeDk' },
+      { y: cy - h * 0.1,  w: w * 0.7, h: h * 0.35, key: 'treeMd' },
+      { y: cy - h * 0.28, w: w * 0.5, h: h * 0.3, key: 'treeLt' },
+    ];
+    for (const l of layers) {
+      ctx.fillStyle = dcBiome(l.key, bi);
+      ctx.beginPath();
+      ctx.moveTo(cx, l.y - l.h);
+      ctx.lineTo(cx - l.w / 2, l.y);
+      ctx.lineTo(cx + l.w / 2, l.y);
+      ctx.closePath();
+      ctx.fill();
+    }
+    // Snow cap
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - h * 0.28 - h * 0.3);
+    ctx.lineTo(cx - w * 0.12, cy - h * 0.28 - h * 0.15);
+    ctx.lineTo(cx + w * 0.12, cy - h * 0.28 - h * 0.15);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // ── Snowman: three stacked circles (snow) ──────────────────
+  function drawSnowman(cx, cy, bi) {
+    // Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.12)';
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + CELL * 0.22, CELL * 0.22, CELL * 0.06, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Bottom ball
+    ctx.fillStyle = '#F0F0F5';
+    ctx.beginPath();
+    ctx.arc(cx, cy + CELL * 0.08, CELL * 0.18, 0, Math.PI * 2);
+    ctx.fill();
+    // Middle ball
+    ctx.fillStyle = '#E8E8ED';
+    ctx.beginPath();
+    ctx.arc(cx, cy - CELL * 0.1, CELL * 0.14, 0, Math.PI * 2);
+    ctx.fill();
+    // Head
+    ctx.fillStyle = '#F5F5FA';
+    ctx.beginPath();
+    ctx.arc(cx, cy - CELL * 0.25, CELL * 0.1, 0, Math.PI * 2);
+    ctx.fill();
+    // Eyes
+    ctx.fillStyle = '#222';
+    ctx.beginPath();
+    ctx.arc(cx - CELL * 0.03, cy - CELL * 0.27, CELL * 0.015, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(cx + CELL * 0.03, cy - CELL * 0.27, CELL * 0.015, 0, Math.PI * 2);
+    ctx.fill();
+    // Carrot nose
+    ctx.fillStyle = '#FF8C00';
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - CELL * 0.25);
+    ctx.lineTo(cx + CELL * 0.06, cy - CELL * 0.24);
+    ctx.lineTo(cx, cy - CELL * 0.23);
+    ctx.closePath();
+    ctx.fill();
+    // Shade on right side
+    ctx.fillStyle = 'rgba(0,0,0,0.06)';
+    ctx.beginPath();
+    ctx.arc(cx + CELL * 0.04, cy + CELL * 0.08, CELL * 0.16, -0.5, 0.5);
     ctx.fill();
   }
 
   // Keep for fallback (unused now but kept for safety)
   function drawGrassDetails(y) {}
 
-  function drawRoadMarkings(y) {
-    ctx.strokeStyle = dc('stripe');
+  function drawRoadMarkings(y, bi) {
+    ctx.strokeStyle = dcBiome('stripe', bi);
     ctx.lineWidth   = 2;
     ctx.setLineDash([14, 14]);
     ctx.beginPath();
@@ -2535,14 +2779,14 @@ const Renderer = (() => {
     }
   }
 
-  function drawLogs(row, rowY) {
+  function drawLogs(row, rowY, bi) {
     for (const log of row.obstacles) {
       const x = log.x;
       const y = rowY + (CELL - log.height) / 2;
-      ctx.fillStyle = '#795548';
+      ctx.fillStyle = dcBiome('logDk', bi);
       roundRect(ctx, x, y, log.width, log.height, 8);
       ctx.fill();
-      ctx.strokeStyle = '#6D4C41';
+      ctx.strokeStyle = darkenHex(dcBiome('logDk', bi), 0.15);
       ctx.lineWidth   = 2;
       const stripes = Math.floor(log.width / 14);
       for (let s = 1; s < stripes; s++) {
@@ -2551,7 +2795,7 @@ const Renderer = (() => {
         ctx.lineTo(x + s * 14, y + log.height - 4);
         ctx.stroke();
       }
-      ctx.fillStyle = '#8D6E63';
+      ctx.fillStyle = dcBiome('logLt', bi);
       roundRect(ctx, x, y, 12, log.height, 8);
       ctx.fill();
       roundRect(ctx, x + log.width - 12, y, 12, log.height, 8);

@@ -2,25 +2,19 @@
 
 import { useEffect } from 'react';
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
-import { createPublicClient, http } from 'viem';
 import { base } from 'wagmi/chains';
 import { Attribution } from 'ox/erc8021';
+import { getName } from '@coinbase/onchainkit/identity';
 import { LEADERBOARD_ABI, LEADERBOARD_ADDRESS } from '@/config/leaderboard-contract';
 
 const DATA_SUFFIX = Attribution.toDataSuffix({ codes: ['bc_2a3sfttm'] });
 
-// Resolve address → Basename (e.g. "ivan.base.eth") via Base L2 reverse lookup
+// Resolve address → Basename via OnchainKit (official Base name resolution)
 async function resolveBasename(address: string): Promise<string> {
   try {
-    const client = createPublicClient({ chain: base, transport: http() });
-    // Base uses L2 reverse registrar
-    const name = await client.getEnsName({
-      address: address as `0x${string}`,
-      universalResolverAddress: '0xC6d566A56A1aFf6508b41f6c90ff131615583BCD',
-    });
+    const name = await getName({ address: address as `0x${string}`, chain: base });
     if (name) return name.replace('.base.eth', '.base');
   } catch {}
-  // Fallback: short address
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
 }
 

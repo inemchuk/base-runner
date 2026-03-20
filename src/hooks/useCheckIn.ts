@@ -1,11 +1,13 @@
 'use client';
 
 import { useCallback, useEffect } from 'react';
-import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
+import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, useSwitchChain } from 'wagmi';
+import { base } from 'wagmi/chains';
 import { CHECKIN_ABI, CHECKIN_ADDRESS } from '@/config/checkin-contract';
 
 export function useCheckIn() {
-  const { address } = useAccount();
+  const { address, chainId } = useAccount();
+  const { switchChainAsync } = useSwitchChain();
 
   const { data: stateData, refetch } = useReadContract({
     address: CHECKIN_ADDRESS,
@@ -37,13 +39,16 @@ export function useCheckIn() {
   const total = stateData ? Number(stateData[2]) : 0;
   const isAvailable = lastDay < todayUTC;
 
-  const claim = useCallback(() => {
+  const claim = useCallback(async () => {
+    if (chainId !== base.id) {
+      await switchChainAsync({ chainId: base.id });
+    }
     writeContract({
       address: CHECKIN_ADDRESS,
       abi: CHECKIN_ABI,
       functionName: 'checkIn',
     });
-  }, [writeContract]);
+  }, [writeContract, switchChainAsync, chainId]);
 
   // Expose to game.js via window
   useEffect(() => {

@@ -3600,7 +3600,7 @@ const UI = (() => {
         claimBtn.style.display = '';
         claimBtn.disabled = false;
         claimBtn._amount = _sessionCoins;
-        if (coinsEarnedEl) coinsEarnedEl.textContent = _sessionCoins;
+        claimBtn.innerHTML = `<span style="display:inline-flex;align-items:center;gap:5px;vertical-align:middle;font-weight:bold;letter-spacing:2px;">⛓ Claim <img src="/game/coin.png" style="width:16px;height:16px;object-fit:contain;display:block;position:relative;top:-2px;"><span id="go-coins-earned">${_sessionCoins}</span></span>`;
       } else {
         claimBtn.style.display = 'none';
       }
@@ -3725,7 +3725,7 @@ const UI = (() => {
       if (claimBtn) {
         claimBtn.disabled      = false;
         claimBtn.style.opacity = '1';
-        claimBtn.innerHTML     = `<span style="display:inline-flex;align-items:center;gap:6px;vertical-align:middle;">${todayReward.icon} Claim +${todayReward.coins}</span>`;
+        claimBtn.innerHTML     = `<span style="display:inline-flex;align-items:center;gap:6px;vertical-align:middle;font-weight:bold;letter-spacing:2px;">${todayReward.icon} Claim +${todayReward.coins}</span>`;
       }
     } else {
       if (statusEl) statusEl.className = 'ci-status unavail';

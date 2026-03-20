@@ -4,19 +4,10 @@ import { useEffect } from 'react';
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { base } from 'wagmi/chains';
 import { Attribution } from 'ox/erc8021';
-import { getName } from '@coinbase/onchainkit/identity';
 import { LEADERBOARD_ABI, LEADERBOARD_ADDRESS } from '@/config/leaderboard-contract';
+import { resolveBasenames } from '@/lib/resolveBasename';
 
 const DATA_SUFFIX = Attribution.toDataSuffix({ codes: ['bc_2a3sfttm'] });
-
-// Resolve address → Basename via OnchainKit (official Base name resolution)
-async function resolveBasename(address: string): Promise<string> {
-  try {
-    const name = await getName({ address: address as `0x${string}`, chain: base });
-    if (name) return name.replace('.base.eth', '.base');
-  } catch {}
-  return `${address.slice(0, 6)}…${address.slice(-4)}`;
-}
 
 export function useLeaderboard() {
   const { address } = useAccount();
@@ -76,12 +67,13 @@ export function useLeaderboard() {
         (e) => e.player !== '0x0000000000000000000000000000000000000000'
       );
 
-      Promise.all(
-        validEntries.map(async (e, i) => {
-          const name = await resolveBasename(e.player);
-          return { rank: i + 1, name, score: Number(e.score), address: e.player };
-        })
-      ).then((resolved) => {
+      resolveBasenames(validEntries.map((e: any) => e.player)).then((names) => {
+        const resolved = validEntries.map((e: any, i: number) => ({
+          rank: i + 1,
+          name: names.get(e.player.toLowerCase()) ?? `${e.player.slice(0, 6)}…${e.player.slice(-4)}`,
+          score: Number(e.score),
+          address: e.player,
+        }));
         (window as any).__BASE_LEADERBOARD_ENTRIES = resolved;
         window.dispatchEvent(new CustomEvent('base-leaderboard-loaded'));
       });

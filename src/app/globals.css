@@ -245,9 +245,12 @@
     .lb-row.gold   { background: rgba(0,82,255,0.25); color: #fff; border-color: rgba(0,82,255,0.5); }
     .lb-row.silver { background: rgba(0,60,180,0.18); }
     .lb-row.bronze { background: rgba(0,40,120,0.18); }
-    .lb-rank { font-size: 1.4rem; width: 36px; text-align: center; }
-    .lb-pts  { font-weight: bold; font-size: 1.2rem; }
-    .lb-empty { color: #666; text-align: center; margin-top: 30px; font-size: 1rem; }
+    .lb-rank    { font-size: 1.4rem; width: 36px; text-align: center; }
+    .lb-name    { flex: 1; text-align: left; padding: 0 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .lb-pts     { font-weight: bold; font-size: 1.2rem; }
+    .lb-empty   { color: #666; text-align: center; margin-top: 30px; font-size: 1rem; }
+    .lb-subtitle { color: #4D8FFF; font-size: 0.8rem; letter-spacing: 2px; text-align: center; margin-bottom: 12px; }
+    .btn-submit-score { background: linear-gradient(135deg,#0050FF,#0080FF); color:#fff; font-size: clamp(0.85rem,3.5vw,1rem); margin-bottom: 8px; }
 
     /* ===== CHECK-IN ===== */
     #screen-ci {

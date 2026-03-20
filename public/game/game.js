@@ -236,26 +236,44 @@ const Leaderboard = (() => {
 
   const MEDALS = ['🥇', '🥈', '🥉'];
 
-  // Отрендерить таблицу лидеров в DOM-элемент #lb-list
   function render() {
     const container = document.getElementById('lb-list');
-    const scores    = Save.getScores();
+    if (!container) return;
 
-    if (scores.length === 0) {
-      container.innerHTML = '<p class="lb-empty">No scores yet.<br>Play to set a record! 🐔</p>';
-      return;
+    const onChain = window.__BASE_LEADERBOARD_ENTRIES;
+
+    if (onChain && onChain.length > 0) {
+      container.innerHTML =
+        '<p class="lb-subtitle">🌐 Global On-Chain</p>' +
+        onChain.map((entry, i) => {
+          const rankClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
+          const medal = MEDALS[i] || `${i + 1}.`;
+          return `
+            <div class="lb-row ${rankClass}">
+              <span class="lb-rank">${medal}</span>
+              <span class="lb-name">${entry.name}</span>
+              <span class="lb-pts">${entry.score}</span>
+            </div>`;
+        }).join('');
+    } else {
+      const scores = Save.getScores();
+      if (scores.length === 0) {
+        container.innerHTML = '<p class="lb-empty">No scores yet.<br>Play to set a record! 🐔</p>';
+        return;
+      }
+      container.innerHTML =
+        '<p class="lb-subtitle">📱 Personal Best</p>' +
+        scores.map((score, i) => {
+          const rankClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
+          const medal = MEDALS[i] || `${i + 1}.`;
+          return `
+            <div class="lb-row ${rankClass}">
+              <span class="lb-rank">${medal}</span>
+              <span class="lb-name">You</span>
+              <span class="lb-pts">${score}</span>
+            </div>`;
+        }).join('');
     }
-
-    container.innerHTML = scores.map((score, i) => {
-      const rankClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
-      const medal     = MEDALS[i] || `${i + 1}.`;
-      return `
-        <div class="lb-row ${rankClass}">
-          <span class="lb-rank">${medal}</span>
-          <span>Score</span>
-          <span class="lb-pts">${score}</span>
-        </div>`;
-    }).join('');
   }
 
   return { render };
@@ -3122,6 +3140,22 @@ const UI = (() => {
     const goBest  = document.getElementById('go-best');
     if (goScore) goScore.textContent = `Score: ${score}`;
     if (goBest)  goBest.textContent  = `Best: ${best}`;
+
+    // Submit Score button: show only if score > on-chain best
+    const submitBtn = document.getElementById('btn-submit-score');
+    if (submitBtn) {
+      const lb = window.__BASE_LEADERBOARD;
+      const onChainBest = lb ? lb.myBest : 0;
+      if (score > onChainBest) {
+        submitBtn.style.display = '';
+        submitBtn.textContent = '⛓ Submit Score';
+        submitBtn.disabled = false;
+        submitBtn._score = score;
+      } else {
+        submitBtn.style.display = 'none';
+      }
+    }
+
     show('gameover');
   }
 
@@ -3535,6 +3569,32 @@ function _initUI() {
   _bind('btn-go-menu', 'click', () => {
     currentState = GameState.MENU;
     UI.show('menu');
+  });
+  _bind('btn-submit-score', 'click', () => {
+    const btn = document.getElementById('btn-submit-score');
+    if (!btn || btn.disabled) return;
+    const score = btn._score;
+    if (!score) return;
+    btn.disabled = true;
+    btn.textContent = '⏳ Submitting...';
+    window.dispatchEvent(new CustomEvent('base-submit-score', { detail: { score } }));
+  });
+
+  // Listen for score submission confirmation
+  window.addEventListener('base-score-submitted', () => {
+    const btn = document.getElementById('btn-submit-score');
+    if (btn) {
+      btn.textContent = '✅ Submitted!';
+      btn.disabled = true;
+    }
+  });
+
+  // Refresh leaderboard when new data loads
+  window.addEventListener('base-leaderboard-loaded', () => {
+    const lbScreen = document.getElementById('screen-lb');
+    if (lbScreen && !lbScreen.classList.contains('hidden')) {
+      Leaderboard.render();
+    }
   });
 
   // Кнопки leaderboard

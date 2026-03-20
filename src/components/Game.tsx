@@ -3,9 +3,11 @@
 import { useEffect } from 'react';
 import Script from 'next/script';
 import { useCheckIn } from '@/hooks/useCheckIn';
+import { useLeaderboard } from '@/hooks/useLeaderboard';
 
 export default function Game() {
   useCheckIn();
+  useLeaderboard();
 
   useEffect(() => {
     // Resize canvas on mount
@@ -24,9 +26,18 @@ export default function Game() {
     };
     window.addEventListener('base-checkin-claim', handleClaim);
 
+    // Listen for submit score requests from game.js
+    const handleSubmitScore = (e: Event) => {
+      const score = (e as CustomEvent).detail?.score;
+      const submitFn = (window as any).__BASE_SUBMIT_SCORE;
+      if (submitFn && score) submitFn(score);
+    };
+    window.addEventListener('base-submit-score', handleSubmitScore);
+
     return () => {
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('base-checkin-claim', handleClaim);
+      window.removeEventListener('base-submit-score', handleSubmitScore);
     };
   }, []);
 
@@ -88,6 +99,7 @@ export default function Game() {
         <p style={{color:'rgba(255,255,255,0.5)',marginBottom:'32px',fontSize:'clamp(0.75rem,3vw,1rem)',letterSpacing:'2px'}}>
           BEST: <span id="go-best">0</span>
         </p>
+        <button className="btn btn-submit-score" id="btn-submit-score">⛓ Submit Score</button>
         <button className="btn btn-restart" id="btn-restart">↺ PLAY AGAIN</button>
         <button className="btn btn-back" id="btn-go-menu">← MENU</button>
       </div>

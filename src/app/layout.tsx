@@ -10,6 +10,9 @@ export const metadata: Metadata = {
     description: 'How far can you go? A Crossy Road-style game on Base.',
     type: 'website',
   },
+  other: {
+    'base:app_id': '69bd15a3945e0bb74a271ff1',
+  },
 };
 
 export const viewport: Viewport = {

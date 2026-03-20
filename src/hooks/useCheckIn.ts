@@ -3,7 +3,10 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, useSwitchChain } from 'wagmi';
 import { base } from 'wagmi/chains';
+import { Attribution } from 'ox/erc8021';
 import { CHECKIN_ABI, CHECKIN_ADDRESS } from '@/config/checkin-contract';
+
+const DATA_SUFFIX = Attribution.toDataSuffix({ codes: ['bc_2a3sfttm'] });
 
 export function useCheckIn() {
   const { address, chainId } = useAccount();
@@ -66,6 +69,7 @@ export function useCheckIn() {
       address: CHECKIN_ADDRESS,
       abi: CHECKIN_ABI,
       functionName: 'checkIn',
+      dataSuffix: DATA_SUFFIX,
     });
   }, [writeContract, switchChainAsync, chainId]);
 

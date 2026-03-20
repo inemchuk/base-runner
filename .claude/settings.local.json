@@ -10,7 +10,21 @@
       "Bash(gh auth:*)",
       "Bash(git --version)",
       "Bash(git init:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git remote:*)",
+      "Bash(git push:*)",
+      "Bash(ssh -T git@github.com)",
+      "Bash(mkdir -p ~/.ssh)",
+      "Bash(ssh-keygen -t ed25519 -C \"ivannemchuk@gmail.com\" -f ~/.ssh/id_ed25519 -N \"\")",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:github.com)",
+      "Bash(curl -s https://baserunnerapp.vercel.app/.well-known/farcaster.json)",
+      "Bash(python3 -m json.tool)",
+      "Bash(ls /Users/ivannemchuk/base-runner/public/*.png)",
+      "Bash(ls ~/Desktop/*.png ~/Desktop/*.PNG)",
+      "Bash(cp \"/Users/ivannemchuk/Desktop/icon.png\" \"/Users/ivannemchuk/base-runner/public/icon.png\")",
+      "Bash(cp \"/Users/ivannemchuk/Desktop/icon.png\" \"/Users/ivannemchuk/base-runner/public/splash.png\")"
     ]
   }
 }

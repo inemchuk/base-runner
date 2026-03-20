@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://base-runner.vercel.app';
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://baserunnerapp.vercel.app';
 
 export function GET() {
   return NextResponse.json({

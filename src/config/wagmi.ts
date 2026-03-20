@@ -1,4 +1,4 @@
-import { http, createConfig, createStorage, cookieStorage } from 'wagmi';
+import { http, fallback, createConfig, createStorage, cookieStorage } from 'wagmi';
 import { base } from 'wagmi/chains';
 import { baseAccount, injected } from 'wagmi/connectors';
 
@@ -13,7 +13,11 @@ export const config = createConfig({
   storage: createStorage({ storage: cookieStorage }),
   ssr: true,
   transports: {
-    [base.id]: http('https://mainnet.base.org'),
+    [base.id]: fallback([
+      http('https://mainnet.base.org'),
+      http('https://base.llamarpc.com'),
+      http('https://base-rpc.publicnode.com'),
+    ]),
   },
 });
 

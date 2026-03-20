@@ -4,10 +4,14 @@ import { useEffect } from 'react';
 import Script from 'next/script';
 import { useCheckIn } from '@/hooks/useCheckIn';
 import { useLeaderboard } from '@/hooks/useLeaderboard';
+import { useCoinLeaderboard } from '@/hooks/useCoinLeaderboard';
+import { useCoinClaim } from '@/hooks/useCoinClaim';
 
 export default function Game() {
   useCheckIn();
   useLeaderboard();
+  useCoinLeaderboard();
+  useCoinClaim();
 
   useEffect(() => {
     // Resize canvas on mount
@@ -34,10 +38,19 @@ export default function Game() {
     };
     window.addEventListener('base-submit-score', handleSubmitScore);
 
+    // Listen for coin claim requests from game.js
+    const handleClaimCoins = (e: Event) => {
+      const amount = (e as CustomEvent).detail?.amount;
+      const claimFn = (window as any).__BASE_CLAIM_COINS;
+      if (claimFn && amount) claimFn(amount);
+    };
+    window.addEventListener('base-claim-coins', handleClaimCoins);
+
     return () => {
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('base-checkin-claim', handleClaim);
       window.removeEventListener('base-submit-score', handleSubmitScore);
+      window.removeEventListener('base-claim-coins', handleClaimCoins);
     };
   }, []);
 
@@ -63,6 +76,13 @@ export default function Game() {
             <span id="new-record-badge">🏆 NEW RECORD!</span>
           </div>
         </div>
+        <div id="coin-hud">
+          <span className="score-label">COINS</span>
+          <div style={{display:'flex',flexDirection:'row',alignItems:'center',gap:'5px'}}>
+            <img src="/game/coin.png" alt="coin" style={{width:'18px',height:'18px',objectFit:'contain',flexShrink:0}} />
+            <span className="score-val-num" id="coin-count">0</span>
+          </div>
+        </div>
         <button id="btn-mute">🔊</button>
       </div>
 
@@ -85,7 +105,9 @@ export default function Game() {
       <div id="screen-menu" className="screen">
         <h1 className="game-title">BASE RUNNER</h1>
         <p className="subtitle">how far can you go?</p>
+        <div id="menu-coin-balance"><img src="/game/coin.png" className="coin-icon" alt="coin" /> <span id="menu-coin-count">0</span></div>
         <button className="btn btn-start" id="btn-start">▶ PLAY</button>
+        <button className="btn btn-shop" id="btn-shop">🛒 Shop</button>
         <button className="btn btn-lb" id="btn-lb">🏆 Leaderboard</button>
         <button className="btn btn-ci" id="btn-ci">📅 Daily Check-in</button>
       </div>
@@ -100,6 +122,7 @@ export default function Game() {
           BEST: <span id="go-best">0</span>
         </p>
         <button className="btn btn-submit-score" id="btn-submit-score">⛓ Submit Score</button>
+        <button className="btn btn-claim-coins" id="btn-claim-coins"><span style={{display:'inline-flex',alignItems:'center',gap:'5px',verticalAlign:'middle'}}>⛓ Claim <img src="/game/coin.png" alt="coin" style={{width:'16px',height:'16px',objectFit:'contain',display:'block',position:'relative',top:'-2px'}} /><span id="go-coins-earned">0</span></span></button>
         <button className="btn btn-restart" id="btn-restart">↺ PLAY AGAIN</button>
         <button className="btn btn-back" id="btn-go-menu">← MENU</button>
       </div>
@@ -110,9 +133,21 @@ export default function Game() {
         <div className="lb-tabs">
           <button className="lb-tab lb-tab-active" id="btn-lb-personal">Personal</button>
           <button className="lb-tab" id="btn-lb-global">Global</button>
+          <button className="lb-tab" id="btn-lb-coins">Coins</button>
         </div>
         <div id="lb-list" style={{width:'min(320px,90vw)',marginBottom:'24px'}}></div>
         <button className="btn btn-back" id="btn-lb-back">← BACK</button>
+      </div>
+
+      {/* Shop Screen */}
+      <div id="screen-shop" className="screen hidden">
+        <h2 style={{color:'#fff',fontSize:'clamp(1.2rem,6vw,2rem)',marginBottom:'8px',letterSpacing:'3px'}}>🛒 SHOP</h2>
+        <div id="shop-balance" style={{color:'#FFD700',fontSize:'clamp(1rem,4.5vw,1.3rem)',marginBottom:'20px',fontWeight:'bold',display:'flex',alignItems:'center',gap:'6px',justifyContent:'center'}}>
+          <img src="/game/coin.png" alt="coin" style={{width:'22px',height:'22px',objectFit:'contain'}} />
+          <span id="shop-coin-count">0</span>
+        </div>
+        <div id="shop-items" style={{width:'min(320px,90vw)',marginBottom:'24px'}}></div>
+        <button className="btn btn-back" id="btn-shop-back">← BACK</button>
       </div>
 
       {/* Check-in Screen */}

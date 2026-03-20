@@ -1,10 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import { useAccount } from 'wagmi';
 import { useMiniKit, useAddFrame } from '@coinbase/onchainkit/minikit';
-import Game from '@/components/Game';
 import SignIn from '@/components/SignIn';
+
+const Game = dynamic(() => import('@/components/Game'), { ssr: false });
 import { usePlayer } from '@/hooks/usePlayer';
 
 export default function Home() {
@@ -27,7 +29,9 @@ export default function Home() {
     return () => clearTimeout(timer);
   }, [isConnected, isAuthed, context, addFrame]);
 
-  if (!isConnected || !isAuthed) {
+  const isDev = typeof window !== 'undefined' && window.location.hostname === 'localhost';
+
+  if (!isDev && (!isConnected || !isAuthed)) {
     return <SignIn onSuccess={() => setIsAuthed(true)} />;
   }
 

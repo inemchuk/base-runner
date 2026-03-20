@@ -166,7 +166,7 @@ const CheckIn = (() => {
     let newStreak = (ci.lastDate === yesterday) ? ci.streak + 1 : 1;
     let newTotal  = ci.total + 1;
 
-    const DAY_COINS = [10, 15, 20, 30, 40, 60, 100];
+    const DAY_COINS = [5, 5, 5, 10, 10, 20, 30];
     const daySlot = (newStreak - 1) % 7;
     const reward  = DAY_COINS[daySlot];
 
@@ -193,7 +193,7 @@ const CheckIn = (() => {
     // On-chain state
     if (_hasOnChain()) {
       const oc = window.__BASE_CHECKIN;
-      const DAY_COINS = [10, 15, 20, 30, 40, 60, 100];
+      const DAY_COINS = [5, 5, 5, 10, 10, 20, 30];
       const nextStreak = oc.isAvailable ? oc.streak + 1 : oc.streak;
       return {
         streak:    oc.streak,
@@ -213,7 +213,7 @@ const CheckIn = (() => {
       available,
       isPending: false,
       reward:    (() => {
-        const DAY_COINS = [10, 15, 20, 30, 40, 60, 100];
+        const DAY_COINS = [5, 5, 5, 10, 10, 20, 30];
         const nextStreak = available ? ci.streak + 1 : ci.streak;
         return DAY_COINS[(Math.max(0, nextStreak - 1)) % 7];
       })(),
@@ -235,16 +235,25 @@ const CheckIn = (() => {
 const Leaderboard = (() => {
 
   const MEDALS = ['🥇', '🥈', '🥉'];
-  let mode = 'personal'; // 'personal' | 'global'
+  let mode = 'personal'; // 'personal' | 'global' | 'coins'
 
   function setMode(m) {
     mode = m;
     // Update tab styles
     const btnP = document.getElementById('btn-lb-personal');
     const btnG = document.getElementById('btn-lb-global');
+    const btnC = document.getElementById('btn-lb-coins');
     if (btnP) btnP.className = 'lb-tab' + (m === 'personal' ? ' lb-tab-active' : '');
     if (btnG) btnG.className = 'lb-tab' + (m === 'global'   ? ' lb-tab-active' : '');
-    render();
+    if (btnC) btnC.className = 'lb-tab' + (m === 'coins'    ? ' lb-tab-active' : '');
+    if (m === 'coins') {
+      renderCoins();
+      // Запускаем загрузку данных если ещё не были загружены
+      const fetchFn = window.__BASE_FETCH_COIN_LB;
+      if (fetchFn) fetchFn();
+    } else {
+      render();
+    }
   }
 
   function renderPersonal() {
@@ -285,14 +294,39 @@ const Leaderboard = (() => {
     }).join('');
   }
 
+  function renderCoins() {
+    const container = document.getElementById('lb-list');
+    if (!container) return;
+    const entries = window.__BASE_COIN_LB_ENTRIES;
+    if (!entries || entries.length === 0) {
+      container.innerHTML = '<p class="lb-empty">Loading coin rankings…</p>';
+      return;
+    }
+    container.innerHTML = entries.map((entry, i) => {
+      const rankClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
+      const medal = MEDALS[i] || `${i + 1}.`;
+      return `<div class="lb-row ${rankClass}">
+        <span class="lb-rank">${medal}</span>
+        <span class="lb-name">${entry.name}</span>
+        <span class="lb-pts" style="display:flex;align-items:center;gap:4px;">
+          <img src="/game/coin.png" style="width:14px;height:14px;object-fit:contain;"> ${entry.balance}
+        </span>
+      </div>`;
+    }).join('');
+  }
+
   function render() {
     if (mode === 'global') renderGlobal();
+    else if (mode === 'coins') renderCoins();
     else renderPersonal();
   }
 
-  // Re-render when global data arrives
+  // Re-render when данные приходят
   window.addEventListener('base-leaderboard-loaded', () => {
     if (mode === 'global') renderGlobal();
+  });
+  window.addEventListener('base-coin-lb-loaded', () => {
+    if (mode === 'coins') renderCoins();
   });
 
   return { render, setMode };
@@ -948,7 +982,18 @@ const World = (() => {
       decorations.push({ col, type });
     }
 
-    return { idx: rowIdx, type: 'grass', obstacles: [], spawnQueue: [], spawnTimer: 0, dir: 0, speed: 0, decorations };
+    // Coins: ~12% chance of 1 coin per grass row → roughly 1 coin every 15-20 steps
+    const coinOccupied = new Set(decorations.map(d => d.col));
+    const coinCount = rng(99) < 0.12 ? 1 : 0;
+    const coinsList = [];
+    let coinAttempts = 0;
+    while (coinsList.length < coinCount && coinAttempts < 20) {
+      coinAttempts++;
+      const col = Math.floor(rng(coinAttempts + 70) * COLS);
+      if (!coinOccupied.has(col)) { coinOccupied.add(col); coinsList.push({ col, collected: false }); }
+    }
+
+    return { idx: rowIdx, type: 'grass', obstacles: [], spawnQueue: [], spawnTimer: 0, dir: 0, speed: 0, decorations, coins: coinsList };
   }
 
   // ── Дорога ──────────────────────────────────────────────
@@ -1333,7 +1378,16 @@ const World = (() => {
   function rowToY(rowIdx) { return -rowIdx * CELL; }
   function getRows()      { return rows; }
 
-  return { init, update, extendWorld, setScore, getRow, getRows, rowToY, getBiomeForRow, CELL, COLS };
+  function collectCoin(rowIdx, col) {
+    const row = getRow(rowIdx);
+    if (!row || !row.coins) return false;
+    const coin = row.coins.find(c => c.col === col && !c.collected);
+    if (!coin) return false;
+    coin.collected = true;
+    return true;
+  }
+
+  return { init, update, extendWorld, setScore, getRow, getRows, rowToY, getBiomeForRow, collectCoin, CELL, COLS };
 
 })();
 
@@ -1426,6 +1480,15 @@ const Player = (() => {
     if (state.row > state.maxRow) {
       state.maxRow = state.row;
       state.score  = state.row - 1;
+    }
+
+    // --- Сбор монеты ---
+    if (World.collectCoin(state.row, state.col)) {
+      const newTotal = Save.addCoins(1);
+      _sessionCoins++;
+      if (typeof Vibrate !== 'undefined') Vibrate.coin();
+      if (typeof UI !== 'undefined') UI.updateCoins(newTotal);
+      if (typeof Renderer !== 'undefined') Renderer.addCoinEffect(state.col * CELL + CELL / 2, World.rowToY(state.row) + CELL / 2);
     }
 
     // --- Направление взгляда ---
@@ -1760,6 +1823,10 @@ const Renderer = (() => {
     }
   }
 
+  // ── Coin pickup effects ──────────────────────────────────
+  const coinEffects = [];   // { x, y, age }
+  const COIN_EFFECT_DUR = 0.7;
+
   // ── Footprint trails ─────────────────────────────────────
   const trails = [];          // { x, y, age, maxAge, rowType }
   const TRAIL_MAX_AGE = 0.7;  // seconds before fading out
@@ -1960,6 +2027,7 @@ const Renderer = (() => {
   }
 
   let playerImg = null;
+  let coinImg   = null;
 
   function init() {
     canvas = document.getElementById('gameCanvas');
@@ -1967,15 +2035,20 @@ const Renderer = (() => {
     ctx    = canvas.getContext('2d');
     loadCarSprites();
     loadPlayerSprite();
+    loadCoinSprite();
     resize();
   }
 
   function loadPlayerSprite() {
     const img = new Image();
-    img.onload = () => {
-      playerImg = img;
-    };
+    img.onload = () => { playerImg = img; };
     img.src = '/game/player.png';
+  }
+
+  function loadCoinSprite() {
+    const img = new Image();
+    img.onload = () => { coinImg = img; };
+    img.src = '/game/coin.png';
   }
 
   // ── Car sprites loaded from embedded base64 ──────────────
@@ -2156,6 +2229,7 @@ const Renderer = (() => {
     drawRows();
     drawTrails();
     drawPlayer();
+    drawCoinEffects(dt_approx);
     // Draw death particles in world space (before restore)
     if (deathActive) {
       drawDeathAnimation(dt_approx);
@@ -2267,6 +2341,38 @@ const Renderer = (() => {
     }
     ctx.fillStyle = grassColor;
     ctx.fillRect(0, y, COLS * CELL, CELL);
+
+    // Coins
+    if (row.coins) {
+      const t = Date.now() / 600;
+      const size = CELL * 0.72;
+      for (const coin of row.coins) {
+        if (coin.collected) continue;
+        const cx = coin.col * CELL + CELL / 2;
+        const cy = y + CELL / 2;
+        const bob    = Math.sin(t + coin.col * 1.3) * CELL * 0.07;
+        const scaleX = Math.abs(Math.cos(t * 0.9 + coin.col * 0.7));
+        const drawW  = size * Math.max(scaleX, 0.08);
+        // Shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.22)';
+        ctx.beginPath();
+        ctx.ellipse(cx, cy + size * 0.46, drawW * 0.48, CELL * 0.055, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.save();
+        ctx.translate(cx, cy + bob);
+        if (coinImg) {
+          // Спрайт пользователя — spinning эффект через scaleX
+          ctx.drawImage(coinImg, -drawW / 2, -size / 2, drawW, size);
+        } else {
+          // Fallback: нарисованная монета
+          ctx.fillStyle = '#FFD700';
+          ctx.beginPath();
+          ctx.ellipse(0, 0, drawW / 2, size / 2, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+    }
 
     // Decorations — wind/storm sway
     if (row.decorations) {
@@ -3129,6 +3235,32 @@ const Renderer = (() => {
     }
   }
 
+  function addCoinEffect(x, y) {
+    coinEffects.push({ x, y, age: 0 });
+  }
+
+  function drawCoinEffects(dt) {
+    for (let i = coinEffects.length - 1; i >= 0; i--) {
+      const e = coinEffects[i];
+      e.age += dt;
+      if (e.age >= COIN_EFFECT_DUR) { coinEffects.splice(i, 1); continue; }
+      const t = e.age / COIN_EFFECT_DUR;
+      const alpha = 1 - t;
+      const rise  = CELL * 0.9 * t;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle   = '#FFD700';
+      ctx.strokeStyle = '#7A5800';
+      ctx.lineWidth   = 2;
+      ctx.font = `bold ${Math.round(CELL * 0.32)}px Arial`;
+      ctx.textAlign    = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.strokeText('+1', e.x, e.y - rise);
+      ctx.fillText  ('+1', e.x, e.y - rise);
+      ctx.restore();
+    }
+  }
+
   function drawPlayer() {
     if (typeof currentState !== 'undefined' && currentState === GameState.MENU) return;
     if (deathActive && deathTimer > 0.05) return;
@@ -3338,7 +3470,7 @@ const Renderer = (() => {
   function _dbgWeather(state) { weatherState = state; weatherRatio = 0; if (state===3) { rainInitDone=false; initRain(STORM_RAIN_COUNT); } else if (state===1) { rainInitDone=false; initRain(RAIN_COUNT); } }
   let _dbgNightForce = null;
   function _dbgNight(on) { _dbgNightForce = on; nightTarget = on ? 1 : 0; _nightOn = on; }
-  return { init, resize, updateCamera, draw, setScore, setWeather, triggerDeath, isDying, deathDone, stopDeath, resetWeather, addTrail, _dbgWeather, _dbgNight };
+  return { init, resize, updateCamera, draw, setScore, setWeather, triggerDeath, isDying, deathDone, stopDeath, resetWeather, addTrail, addCoinEffect, _dbgWeather, _dbgNight };
 
 })();
 
@@ -3360,6 +3492,7 @@ const UI = (() => {
     gameover: document.getElementById('screen-gameover'),
     lb:       document.getElementById('screen-lb'),
     ci:       document.getElementById('screen-ci'),
+    shop:     document.getElementById('screen-shop'),
   };
 
   const hud       = document.getElementById('hud');
@@ -3441,8 +3574,8 @@ const UI = (() => {
   function showGameOver(score, best) {
     const goScore = document.getElementById('go-score');
     const goBest  = document.getElementById('go-best');
-    if (goScore) goScore.textContent = `Score: ${score}`;
-    if (goBest)  goBest.textContent  = `Best: ${best}`;
+    if (goScore) goScore.textContent = score;
+    if (goBest)  goBest.textContent  = best;
 
     // Submit Score button: show only if score > on-chain best
     const submitBtn = document.getElementById('btn-submit-score');
@@ -3459,6 +3592,20 @@ const UI = (() => {
       }
     }
 
+    // Claim Coins button: show if coins were collected this run
+    const claimBtn = document.getElementById('btn-claim-coins');
+    const coinsEarnedEl = document.getElementById('go-coins-earned');
+    if (claimBtn) {
+      if (_sessionCoins > 0) {
+        claimBtn.style.display = '';
+        claimBtn.disabled = false;
+        claimBtn._amount = _sessionCoins;
+        if (coinsEarnedEl) coinsEarnedEl.textContent = _sessionCoins;
+      } else {
+        claimBtn.style.display = 'none';
+      }
+    }
+
     show('gameover');
   }
 
@@ -3467,14 +3614,15 @@ const UI = (() => {
   let _ciTimerInterval = null;
 
   // Rewards per day (day 1-7 in a streak cycle)
+  const COIN_IMG_HTML = '<img src="/game/coin.png" style="width:18px;height:18px;object-fit:contain;vertical-align:middle;position:relative;top:-1px;">';
   const DAY_REWARDS = [
-    { coins: 10,  icon: '🪙' },
-    { coins: 15,  icon: '🪙' },
-    { coins: 20,  icon: '🪙' },
-    { coins: 30,  icon: '💰' },
-    { coins: 40,  icon: '💰' },
-    { coins: 60,  icon: '💎' },
-    { coins: 100, icon: '👑' },
+    { coins: 5,  icon: COIN_IMG_HTML },
+    { coins: 5,  icon: COIN_IMG_HTML },
+    { coins: 5,  icon: COIN_IMG_HTML },
+    { coins: 10, icon: '💰' },
+    { coins: 10, icon: '💰' },
+    { coins: 20, icon: '💎' },
+    { coins: 30, icon: '👑' },
   ];
 
   function _msUntilUTCMidnight() {
@@ -3577,7 +3725,7 @@ const UI = (() => {
       if (claimBtn) {
         claimBtn.disabled      = false;
         claimBtn.style.opacity = '1';
-        claimBtn.textContent   = `${todayReward.icon} Claim +${todayReward.coins}`;
+        claimBtn.innerHTML     = `<span style="display:inline-flex;align-items:center;gap:6px;vertical-align:middle;">${todayReward.icon} Claim +${todayReward.coins}</span>`;
       }
     } else {
       if (statusEl) statusEl.className = 'ci-status unavail';
@@ -3606,10 +3754,126 @@ const UI = (() => {
     show('lb');
   }
 
-  return { show, updateScore, updateBest, showGameOver, showCheckIn, showLeaderboard };
+  // ===== Обновить баланс монет (HUD + меню + магазин) =====
+  const coinCountEl     = document.getElementById('coin-count');
+  const menuCoinCountEl = document.getElementById('menu-coin-count');
+  function updateCoins(total) {
+    if (coinCountEl)     coinCountEl.textContent     = total;
+    if (menuCoinCountEl) menuCoinCountEl.textContent = total;
+    const shopEl = document.getElementById('shop-coin-count');
+    if (shopEl) shopEl.textContent = total;
+  }
+
+  return { show, updateScore, updateBest, showGameOver, showCheckIn, showLeaderboard, updateCoins };
 
 })();
 
+
+/* ===== shop.js ===== */
+const Shop = (() => {
+  // Каталог предметов магазина
+  const ITEMS = [
+    { id: 'skin_default',    name: 'Builder',    price: 0,   icon: '👷', desc: 'Default character',     owned: true  },
+    { id: 'skin_astronaut',  name: 'Astronaut',  price: 150, icon: '🧑‍🚀', desc: 'Out of this world!',    owned: false },
+    { id: 'skin_ninja',      name: 'Ninja',      price: 200, icon: '🥷', desc: 'Silent and swift',       owned: false },
+    { id: 'skin_robot',      name: 'Robot',      price: 300, icon: '🤖', desc: 'Fully automated',        owned: false },
+    { id: 'skin_wizard',     name: 'Wizard',     price: 500, icon: '🧙', desc: 'Pure magic',             owned: false },
+  ];
+
+  const SAVE_KEY = 'shop_v1';
+
+  function loadShopData() {
+    try { return JSON.parse(localStorage.getItem(SAVE_KEY) || '{}'); } catch { return {}; }
+  }
+  function saveShopData(d) {
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(d)); } catch {}
+  }
+  function getOwned() {
+    const d = loadShopData();
+    return d.owned || ['skin_default'];
+  }
+  function getEquipped() {
+    return loadShopData().equipped || 'skin_default';
+  }
+  function own(id) {
+    const d = loadShopData();
+    const owned = d.owned || ['skin_default'];
+    if (!owned.includes(id)) owned.push(id);
+    d.owned = owned;
+    saveShopData(d);
+  }
+  function equip(id) {
+    const d = loadShopData();
+    d.equipped = id;
+    saveShopData(d);
+  }
+
+  function render() {
+    const container = document.getElementById('shop-items');
+    const coinEl    = document.getElementById('shop-coin-count');
+    if (!container) return;
+    const balance = Save.getCoins();
+    if (coinEl) coinEl.textContent = balance;
+
+    const owned    = getOwned();
+    const equipped = getEquipped();
+
+    container.innerHTML = '';
+    for (const item of ITEMS) {
+      const isOwned    = owned.includes(item.id);
+      const isEquipped = equipped === item.id;
+      const canAfford  = balance >= item.price;
+
+      const el = document.createElement('div');
+      el.className = 'shop-item' + (isEquipped ? ' shop-item-equipped' : '');
+      el.innerHTML = `
+        <span class="shop-icon">${item.icon}</span>
+        <div class="shop-info">
+          <span class="shop-name">${item.name}</span>
+          <span class="shop-desc">${item.desc}</span>
+        </div>
+        <div class="shop-action">
+          ${isEquipped
+            ? '<span class="shop-badge-on">✓ ON</span>'
+            : isOwned
+              ? `<button class="shop-btn shop-btn-equip" data-id="${item.id}">Equip</button>`
+              : `<button class="shop-btn shop-btn-buy${canAfford ? '' : ' disabled'}" data-id="${item.id}" data-price="${item.price}" style="display:inline-flex;flex-direction:row;align-items:center;justify-content:center;gap:4px;"><img src="/game/coin.png" style="width:14px;height:14px;object-fit:contain;display:block;flex-shrink:0;"> ${item.price}</button>`
+          }
+        </div>`;
+      container.appendChild(el);
+    }
+
+    // Button handlers
+    container.querySelectorAll('.shop-btn-equip').forEach(btn => {
+      btn.addEventListener('click', () => { equip(btn.dataset.id); render(); });
+    });
+    container.querySelectorAll('.shop-btn-buy').forEach(btn => {
+      if (btn.classList.contains('disabled')) return;
+      btn.addEventListener('click', () => {
+        const price = parseInt(btn.dataset.price);
+        const cur   = Save.getCoins();
+        if (cur < price) return;
+        // Spend coins
+        const d = Save.load();
+        d.coins -= price;
+        Save.save(d);
+        own(btn.dataset.id);
+        equip(btn.dataset.id);
+        if (typeof UI !== 'undefined') {
+          UI.updateCoins(Save.getCoins());
+        }
+        render();
+      });
+    });
+  }
+
+  function show() {
+    render();
+    if (typeof UI !== 'undefined') UI.show('shop');
+  }
+
+  return { show, getEquipped };
+})();
 
 /* ===== main.js ===== */
 /**
@@ -3677,7 +3941,10 @@ function menuLoop(timestamp) {
 }
 
 // ===== ИНИЦИАЛИЗАЦИЯ ИГРЫ =====
+let _sessionCoins = 0;
+
 function initGame() {
+  _sessionCoins = 0;
   Renderer.init();
   World.init();
   Player.init();
@@ -3689,6 +3956,7 @@ function initGame() {
   currentState = GameState.PLAYING;
   UI.show('game');
   UI.updateBest(Save.getBest());
+  UI.updateCoins(Save.getCoins());
 
   lastTime = performance.now();
   requestAnimationFrame(gameLoop);
@@ -3746,6 +4014,9 @@ function onGameOver() {
   currentState = GameState.GAMEOVER;
   const score = Player.getScore();
   const best  = Save.addScore(score);
+  // Синхронизируем монеты с глобальным лидербордом
+  const syncFn = window.__BASE_SYNC_COINS;
+  if (syncFn) syncFn(Save.getCoins());
   setTimeout(() => UI.showGameOver(score, best), 600);
 }
 
@@ -3863,6 +4134,8 @@ function _initUI() {
   _bind('btn-start', 'click', () => initGame());
   _bind('btn-lb',    'click', () => UI.showLeaderboard());
   _bind('btn-ci',    'click', () => UI.showCheckIn());
+  _bind('btn-shop',  'click', () => Shop.show());
+  _bind('btn-shop-back', 'click', () => UI.show('menu'));
 
   // Кнопка звука
   _bind('btn-mute', 'click', () => Sound.toggleMute());
@@ -3892,6 +4165,29 @@ function _initUI() {
     }
   });
 
+  // Claim Coins button
+  _bind('btn-claim-coins', 'click', () => {
+    const btn = document.getElementById('btn-claim-coins');
+    if (!btn || btn.disabled) return;
+    const amount = btn._amount;
+    if (!amount) return;
+    btn.disabled = true;
+    btn.innerHTML = '⏳ Claiming...';
+    window.dispatchEvent(new CustomEvent('base-claim-coins', { detail: { amount } }));
+  });
+
+  // Coin claim confirmed
+  window.addEventListener('base-coins-claimed', () => {
+    const btn = document.getElementById('btn-claim-coins');
+    if (btn) {
+      btn.innerHTML = '✅ Claimed!';
+      btn.disabled = true;
+    }
+    // Синхронизируем лидерборд монет
+    const syncFn = window.__BASE_SYNC_COINS;
+    if (syncFn) syncFn(Save.getCoins());
+  });
+
   // Refresh leaderboard when new data loads
   window.addEventListener('base-leaderboard-loaded', () => {
     const lbScreen = document.getElementById('screen-lb');
@@ -3904,6 +4200,7 @@ function _initUI() {
   _bind('btn-lb-back',     'click', () => UI.show('menu'));
   _bind('btn-lb-personal', 'click', () => Leaderboard.setMode('personal'));
   _bind('btn-lb-global',   'click', () => Leaderboard.setMode('global'));
+  _bind('btn-lb-coins',    'click', () => Leaderboard.setMode('coins'));
 
   // Кнопки check-in
   _bind('btn-do-ci', 'click', () => {
@@ -3924,6 +4221,16 @@ function _initUI() {
 
   // Listen for on-chain check-in confirmation from React
   window.addEventListener('base-checkin-confirmed', () => {
+    // Начислить монеты за on-chain чекин
+    const DAY_COINS = [5, 5, 5, 10, 10, 20, 30];
+    const ci = Save.getCheckin();
+    const newStreak = ci.streak + 1;
+    const daySlot = (newStreak - 1) % 7;
+    const reward = DAY_COINS[daySlot];
+    const today = new Date().toISOString().slice(0, 10);
+    Save.saveCheckin({ lastDate: today, streak: newStreak, total: (ci.total || 0) + 1 });
+    const newTotal = Save.addCoins(reward);
+    UI.updateCoins(newTotal);
     UI.showCheckIn();
   });
   _bind('btn-ci-back', 'click', () => UI.show('menu'));
@@ -3935,8 +4242,9 @@ function _initUI() {
 
 // ===== СТАРТ — ждём готовности DOM =====
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', _initUI);
+  document.addEventListener('DOMContentLoaded', () => { _initUI(); UI.updateCoins(Save.getCoins()); });
 } else {
   _initUI();
+  UI.updateCoins(Save.getCoins());
 }
 

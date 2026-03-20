@@ -96,8 +96,10 @@
     .btn-start  { background: #0052FF; color: #fff; box-shadow: 0 5px 0 #003399, 0 0 20px rgba(0,82,255,0.4); }
     .btn-lb     { background: rgba(0,82,255,0.15); color: #4D8FFF; box-shadow: 0 5px 0 rgba(0,50,180,0.5); border: 1.5px solid rgba(0,82,255,0.4); }
     .btn-ci     { background: rgba(0,82,255,0.15); color: #4D8FFF; box-shadow: 0 5px 0 rgba(0,50,180,0.5); border: 1.5px solid rgba(0,82,255,0.4); }
-    .btn-back   { background: rgba(255,255,255,0.07); color: #aaa; box-shadow: 0 5px 0 rgba(0,0,0,0.4); border: 1.5px solid rgba(255,255,255,0.1); margin-top: 20px; }
-    .btn-restart{ background: var(--danger); color: #fff; box-shadow: 0 5px 0 #7f0000; }
+    .btn-back   { background: rgba(255,255,255,0.07); color: #aaa; box-shadow: 0 5px 0 rgba(255,255,255,0.09); border: 1.5px solid rgba(255,255,255,0.1); margin-top: 20px; }
+    .btn-restart      { background: var(--danger); color: #fff; box-shadow: 0 5px 0 #7f0000; }
+    .btn-submit-score { background: linear-gradient(135deg,#0050FF,#0080FF); color:#fff; box-shadow: 0 5px 0 #003399; }
+    .btn-claim-coins  { background: linear-gradient(135deg,#B8860B,#FFD700); color:#1a1000; box-shadow: 0 5px 0 #7A5800; }
 
     /* ===== LEADERBOARD TABS ===== */
     .lb-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
@@ -133,7 +135,7 @@
       padding: 14px 20px;
       display: flex;
       justify-content: space-between;
-      align-items: center;
+      align-items: stretch;
       z-index: 5;
       pointer-events: none;
     }
@@ -255,7 +257,6 @@
     .lb-pts     { font-weight: bold; font-size: 1.2rem; }
     .lb-empty   { color: #666; text-align: center; margin-top: 30px; font-size: 1rem; }
     .lb-subtitle { color: #4D8FFF; font-size: 0.8rem; letter-spacing: 2px; text-align: center; margin-bottom: 12px; }
-    .btn-submit-score { background: linear-gradient(135deg,#0050FF,#0080FF); color:#fff; font-size: clamp(0.85rem,3.5vw,1rem); margin-bottom: 8px; }
 
     /* ===== CHECK-IN ===== */
     #screen-ci {
@@ -376,5 +377,108 @@
       margin-bottom: 6px;
       letter-spacing: 3px;
       text-shadow: 0 0 20px rgba(0,82,255,0.6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
     }
   
+    /* ===== МОНЕТЫ — HUD ===== */
+    #coin-hud {
+      background: rgba(0,8,30,0.82);
+      border: 1px solid rgba(255,215,0,0.35);
+      border-radius: 12px;
+      box-shadow: 0 0 14px rgba(255,215,0,0.12);
+      padding: 6px 14px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      gap: 1px;
+    }
+    .coin-hud-row {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .coin-icon-hud {
+      width: 18px;
+      height: 18px;
+      object-fit: contain;
+    }
+
+    /* ===== МОНЕТЫ — МЕНЮ ===== */
+    #menu-coin-balance {
+      color: #FFD700;
+      font-size: clamp(1rem, 4vw, 1.2rem);
+      font-weight: bold;
+      margin-bottom: 12px;
+      letter-spacing: 1px;
+      display: inline-flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 6px;
+    }
+    #menu-coin-balance img { width: 28px; height: 28px; object-fit: contain; flex-shrink: 0; }
+
+    /* ===== КНОПКА МАГАЗИНА ===== */
+    .btn-shop {
+      background: linear-gradient(135deg, #FF8C00, #FFD700);
+      color: #1a0a00;
+      border: none;
+      box-shadow: 0 5px 0 #7A4000;
+    }
+    .btn-shop:hover { background: linear-gradient(135deg, #FFA020, #FFE040); }
+
+    /* ===== ЭКРАН МАГАЗИНА ===== */
+    #shop-items {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .shop-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: rgba(255,255,255,0.07);
+      border: 1.5px solid rgba(255,255,255,0.12);
+      border-radius: 14px;
+      padding: 12px 16px;
+      transition: border-color 0.2s;
+    }
+    .shop-item-equipped {
+      border-color: #FFD700;
+      background: rgba(255,215,0,0.1);
+    }
+    .shop-icon { font-size: 1.8rem; flex-shrink: 0; }
+    .shop-info { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+    .shop-name { color: #fff; font-size: 0.95rem; font-weight: bold; letter-spacing: 1px; }
+    .shop-desc { color: rgba(255,255,255,0.5); font-size: 0.75rem; }
+    .shop-action { flex-shrink: 0; }
+    .shop-badge-on {
+      color: #FFD700; font-size: 0.85rem; font-weight: bold; letter-spacing: 1px;
+    }
+    .shop-btn {
+      padding: 7px 14px;
+      border-radius: 10px;
+      border: none;
+      font-family: inherit;
+      font-size: 0.8rem;
+      font-weight: bold;
+      cursor: pointer;
+      letter-spacing: 1px;
+      transition: transform 0.1s, opacity 0.2s;
+    }
+    .shop-btn:active { transform: scale(0.94); }
+    .shop-btn-equip { background: #0052FF; color: #fff; }
+    .shop-btn-buy   { background: #FFD700; color: #1a0a00; display:inline-flex; align-items:center; justify-content:center; gap:4px; }
+    .shop-btn-buy.disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .coin-icon {
+      width: 22px;
+      height: 22px;
+      object-fit: contain;
+      vertical-align: middle;
+      margin-bottom: 2px;
+    }

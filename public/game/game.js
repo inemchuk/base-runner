@@ -1959,12 +1959,23 @@ const Renderer = (() => {
     return base;
   }
 
+  let playerImg = null;
+
   function init() {
     canvas = document.getElementById('gameCanvas');
     if (!canvas) return;
     ctx    = canvas.getContext('2d');
     loadCarSprites();
+    loadPlayerSprite();
     resize();
+  }
+
+  function loadPlayerSprite() {
+    const img = new Image();
+    img.onload = () => {
+      playerImg = img;
+    };
+    img.src = '/game/player.png';
   }
 
   // ── Car sprites loaded from embedded base64 ──────────────
@@ -3127,6 +3138,35 @@ const Renderer = (() => {
     const y    = ps.visualY;
     const fd   = ps.facingDir;
     const flip = fd === -1 ? -1 : 1;
+
+    // ── Sprite-based render ───────────────────────────────
+    if (playerImg) {
+      const WALK_FREQ = 9;
+      const walkPhase = walkTime * WALK_FREQ * Math.PI * 2;
+      const jumpArc   = ps.jumping
+        ? Math.sin(Math.PI * Math.min(ps.jumpTimer / 0.16, 1)) * CELL * 0.18
+        : 0;
+      const bobY = ps.jumping ? Math.abs(Math.sin(walkPhase)) * CELL * 0.025 : 0;
+      const baseY = y - jumpArc;
+
+      const size = CELL * 1.5;
+
+      // Shadow — under feet
+      const shadowScale = ps.jumping ? Math.max(0.5, 1 - jumpArc / (CELL * 0.3)) : 1;
+      ctx.fillStyle = 'rgba(0,0,0,0.22)';
+      ctx.beginPath();
+      ctx.ellipse(x, y + CELL * 0.2, CELL * 0.28 * shadowScale, CELL * 0.09 * shadowScale, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.save();
+      ctx.translate(x, baseY + bobY);
+      ctx.scale(flip, 1);
+      ctx.drawImage(playerImg, -size / 2, -size * 0.72, size, size);
+      ctx.restore();
+      return;
+    }
+
+    // ── Fallback: procedural render ───────────────────────
 
     // ── Walk cycle parameters ──────────────────────────────
     // walkPhase drives all limb swings (0→2π per step cycle)

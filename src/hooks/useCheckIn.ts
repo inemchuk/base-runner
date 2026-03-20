@@ -19,6 +19,7 @@ export function useCheckIn() {
 
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
     hash: txHash,
+    pollingInterval: 1000,
   });
 
   // Refetch state after successful tx

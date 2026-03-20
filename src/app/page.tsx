@@ -25,7 +25,11 @@ export default function Home() {
   useEffect(() => {
     if (!isConnected || !isAuthed) return;
     if (context?.client.added) return;
-    const timer = setTimeout(() => addFrame(), 3000);
+    const timer = setTimeout(() => {
+      addFrame().catch(() => {
+        // manifest not yet validated — silently ignore
+      });
+    }, 3000);
     return () => clearTimeout(timer);
   }, [isConnected, isAuthed, context, addFrame]);
 

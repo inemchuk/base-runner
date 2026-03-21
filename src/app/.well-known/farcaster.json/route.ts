@@ -7,7 +7,7 @@ export function GET() {
     accountAssociation: {
       header: "eyJmaWQiOjMwNzMxNjcsInR5cGUiOiJjdXN0b2R5Iiwia2V5IjoiMHgyN2FBRkMyZDYxNDlCRThkRENkZTBhQzA5NmI1Y2VmMDk0NENDNDQzIn0",
       payload: "eyJkb21haW4iOiJiYXNlcnVubmVyYXBwLnZlcmNlbC5hcHAifQ",
-      signature: "ewbOm9wjCZZbgKpZBwvG0FBwBZ0e6E2EmHUqqV/8pUFYuvuqFMCywvnBkhvD1Goo0Rl8eMoGvwumyS0kE2B6/xs=",
+      signature: "ewbOm9wjCZZbgKpZBwvG0FBwBZ0e6E2EmHUqqV_8pUFYuvuqFMCywvnBkhvD1Goo0Rl8eMoGvwumyS0kE2B6_xs",
     },
     frame: {
       version: '1',

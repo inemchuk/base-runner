@@ -2041,7 +2041,7 @@ const Renderer = (() => {
 
   function loadPlayerSprite() {
     // Определяем спрайт исходя из выбранного персонажа в магазине
-    let src = '/game/player.png';
+    let src = '/game/chars/cryptokid.png';
     if (typeof Shop !== 'undefined') {
       const equippedId = Shop.getEquipped();
       const spriteSrc  = Shop.getSprite(equippedId);
@@ -2051,10 +2051,10 @@ const Renderer = (() => {
     img.onload = () => { playerImg = img; };
     img.onerror = () => {
       // Fallback на дефолтный спрайт если файл не найден
-      if (src !== '/game/player.png') {
+      if (src !== '/game/chars/cryptokid.png') {
         const fallback = new Image();
         fallback.onload = () => { playerImg = fallback; };
-        fallback.src = '/game/player.png';
+        fallback.src = '/game/chars/cryptokid.png';
       }
     };
     img.src = src;
@@ -3796,11 +3796,11 @@ const UI = (() => {
 const Shop = (() => {
   // Каталог предметов магазина
   const ITEMS = [
-    { id: 'skin_default',      name: 'Builder',       price: 0,   icon: '👷', desc: 'Default character',  sprite: '/game/player.png'              },
+    { id: 'skin_cryptokid',    name: 'Crypto Kid',    price: 0,   icon: '🧒', desc: 'Born on-chain',       sprite: '/game/chars/cryptokid.png'     },
     { id: 'skin_street_runner',name: 'Street Runner', price: 150, icon: '🏃', desc: 'Fast on the streets', sprite: '/game/chars/street_runner.png' },
-    { id: 'skin_cryptokid',    name: 'Crypto Kid',    price: 200, icon: '🧒', desc: 'Born on-chain',       sprite: '/game/chars/cryptokid.png'     },
-    { id: 'skin_robot',        name: 'Robot',         price: 300, icon: '🤖', desc: 'Fully automated',     sprite: null                            },
-    { id: 'skin_wizard',       name: 'Wizard',        price: 500, icon: '🧙', desc: 'Pure magic',          sprite: null                            },
+    { id: 'skin_default',      name: 'Builder',       price: 300, icon: '👷', desc: 'Default character',   sprite: '/game/player.png'              },
+    { id: 'skin_founder',      name: 'Founder',       price: 500, icon: '🏗️', desc: 'Building the future', sprite: '/game/chars/founder.png'       },
+    { id: 'skin_base_king',    name: 'Base King',     price: 1000,icon: '👑', desc: 'Rule the chain',      sprite: '/game/chars/base_king.png'     },
   ];
 
   const SAVE_KEY = 'shop_v1';
@@ -3813,14 +3813,14 @@ const Shop = (() => {
   }
   function getOwned() {
     const d = loadShopData();
-    return d.owned || ['skin_default'];
+    return d.owned || ['skin_cryptokid'];
   }
   function getEquipped() {
-    return loadShopData().equipped || 'skin_default';
+    return loadShopData().equipped || 'skin_cryptokid';
   }
   function own(id) {
     const d = loadShopData();
-    const owned = d.owned || ['skin_default'];
+    const owned = d.owned || ['skin_cryptokid'];
     if (!owned.includes(id)) owned.push(id);
     d.owned = owned;
     saveShopData(d);
@@ -3901,7 +3901,7 @@ const Shop = (() => {
 
   function getSprite(id) {
     const item = ITEMS.find(i => i.id === id);
-    return (item && item.sprite) ? item.sprite : '/game/player.png';
+    return (item && item.sprite) ? item.sprite : '/game/chars/cryptokid.png';
   }
 
   function show() {

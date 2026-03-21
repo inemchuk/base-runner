@@ -7,12 +7,10 @@ export function GET() {
   const p = process.env.FARCASTER_PAYLOAD;
   const s = process.env.FARCASTER_SIGNATURE;
 
-  return NextResponse.json({
-    accountAssociation: {
-      header: h || '',
-      payload: p || '',
-      signature: s || '',
-    },
+  // Only include accountAssociation if all env vars are set (non-empty)
+  const hasAssociation = h && p && s;
+
+  const manifest: Record<string, unknown> = {
     frame: {
       version: '1',
       name: 'Base Runner',
@@ -26,5 +24,11 @@ export function GET() {
       tags: ['game', 'base', 'onchain'],
       webhookUrl: `${APP_URL}/api/webhook`,
     },
-  });
+  };
+
+  if (hasAssociation) {
+    manifest.accountAssociation = { header: h, payload: p, signature: s };
+  }
+
+  return NextResponse.json(manifest);
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { createSiweMessage, generateSiweNonce } from 'viem/siwe';
 import { useAccount, useConnect, useSignMessage, usePublicClient } from 'wagmi';
 
@@ -11,6 +11,22 @@ export default function SignIn({ onSuccess }: { onSuccess: () => void }) {
   const publicClient = usePublicClient();
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [noWallet, setNoWallet] = useState(false);
+
+  // Auto-connect to injected wallet (Base app)
+  useEffect(() => {
+    if (isConnected) return;
+    const injected = connectors.find(c => c.type === 'injected');
+    if (injected) {
+      connect({ connector: injected }, {
+        onError: () => setNoWallet(true),
+      });
+    } else {
+      // No injected wallet = not in Base app
+      const timer = setTimeout(() => setNoWallet(true), 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [isConnected, connect, connectors]);
 
   async function handleSignIn() {
     if (!isConnected || !address || !chainId || !publicClient) return;
@@ -40,24 +56,38 @@ export default function SignIn({ onSuccess }: { onSuccess: () => void }) {
     }
   }
 
-  if (!isConnected) {
+  // No injected wallet — not inside Base app
+  if (noWallet && !isConnected) {
     return (
       <div className="screen">
         <h1 className="game-title">BASE RUNNER</h1>
-        <p className="subtitle">connect wallet to play</p>
-        {connectors.map((connector) => (
-          <button
-            key={connector.uid}
-            className="btn btn-start"
-            onClick={() => connect({ connector })}
-          >
-            {connector.name === 'Injected' ? 'EVM' : connector.name}
-          </button>
-        ))}
+        <p className="subtitle" style={{ marginBottom: '16px' }}>
+          Play in the Base app
+        </p>
+        <a
+          href="https://base.org/app"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="btn btn-start"
+          style={{ textDecoration: 'none', textAlign: 'center' }}
+        >
+          Open Base App
+        </a>
       </div>
     );
   }
 
+  // Connecting...
+  if (!isConnected) {
+    return (
+      <div className="screen">
+        <h1 className="game-title">BASE RUNNER</h1>
+        <p className="subtitle">Connecting...</p>
+      </div>
+    );
+  }
+
+  // Connected — sign in
   return (
     <div className="screen">
       <h1 className="game-title">BASE RUNNER</h1>

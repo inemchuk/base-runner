@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useAccount } from 'wagmi';
 import SignIn from '@/components/SignIn';
@@ -12,13 +12,6 @@ export default function Home() {
   const { isConnected } = useAccount();
   const [isAuthed, setIsAuthed] = useState(false);
   usePlayer();
-
-  // Signal to Base App that the frame is ready (hides splash screen)
-  useEffect(() => {
-    import('@farcaster/miniapp-sdk').then(({ sdk }) => {
-      sdk.actions.ready({ disableNativeGestures: true }).catch(() => {});
-    }).catch(() => {});
-  }, []);
 
   const isDev = process.env.NODE_ENV === 'development';
 

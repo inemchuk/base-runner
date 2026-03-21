@@ -700,7 +700,7 @@ const World = (() => {
         carCount,
         carDistMin,
         carDistMax,
-        logCount:     weightedPick([4, 5, 6], [30, 50, 20]),
+        logCount:     weightedPick([5, 6, 7], [30, 50, 20]),
         carSpeedBase: carSpeedBase * 1.6,
         carSpeedVar:  10,
         logSpeedBase,
@@ -711,7 +711,7 @@ const World = (() => {
 
     // ── Кол-во брёвен: больше коротких на высоком score ──
     const logCount = weightedPick(
-      [4, 5, 6],
+      [5, 6, 7],
       [Math.round(_lerp(40, 20, p)), 50, Math.round(_lerp(10, 30, p))]
     );
 
@@ -1077,9 +1077,9 @@ const World = (() => {
     // ── Строим spawnQueue: [log][gap][log][gap]... ────────
     const p = smoothProgress(currentScore, 0, 250);
 
-    // Промежутки масштабируются: 2–3 клетки → 1–2 клетки
-    const gapMin = Math.round(_lerp(2, 1, p));
-    const gapMax = Math.round(_lerp(3, 2, p));
+    // Промежутки масштабируются: 1–2 клетки → 1–1 клетка
+    const gapMin = 1;
+    const gapMax = Math.round(_lerp(2, 1, p));
 
     // Длина брёвен: больше коротких на высоком score (сложнее)
     const logWeights = [
@@ -1094,8 +1094,8 @@ const World = (() => {
     let logsBuilt = 0;
     let consecutiveLargeGaps = 0;
 
-    // Гарантируем minimum 4 бревна И заполняем всю ширину поля
-    while (filled < WORLD_W || logsBuilt < 4) {
+    // Гарантируем minimum 5 брёвен И заполняем всю ширину поля
+    while (filled < WORLD_W || logsBuilt < 5) {
       const lenCells = weightedPick([2, 3, 4], logWeights);
       const logW     = lenCells * CELL;
 
@@ -1487,7 +1487,7 @@ const Player = (() => {
       const newTotal = Save.addCoins(1);
       _sessionCoins++;
       if (typeof Vibrate !== 'undefined') Vibrate.coin();
-      if (typeof UI !== 'undefined') UI.updateCoins(newTotal);
+      if (typeof UI !== 'undefined') UI.updateCoins(newTotal, _sessionCoins);
       if (typeof Renderer !== 'undefined') Renderer.addCoinEffect(state.col * CELL + CELL / 2, World.rowToY(state.row) + CELL / 2);
     }
 
@@ -2040,9 +2040,29 @@ const Renderer = (() => {
   }
 
   function loadPlayerSprite() {
+    // Определяем спрайт исходя из выбранного персонажа в магазине
+    let src = '/game/player.png';
+    if (typeof Shop !== 'undefined') {
+      const equippedId = Shop.getEquipped();
+      const spriteSrc  = Shop.getSprite(equippedId);
+      if (spriteSrc) src = spriteSrc;
+    }
     const img = new Image();
     img.onload = () => { playerImg = img; };
-    img.src = '/game/player.png';
+    img.onerror = () => {
+      // Fallback на дефолтный спрайт если файл не найден
+      if (src !== '/game/player.png') {
+        const fallback = new Image();
+        fallback.onload = () => { playerImg = fallback; };
+        fallback.src = '/game/player.png';
+      }
+    };
+    img.src = src;
+  }
+
+  function reloadPlayerSprite() {
+    playerImg = null;
+    loadPlayerSprite();
   }
 
   function loadCoinSprite() {
@@ -3470,7 +3490,7 @@ const Renderer = (() => {
   function _dbgWeather(state) { weatherState = state; weatherRatio = 0; if (state===3) { rainInitDone=false; initRain(STORM_RAIN_COUNT); } else if (state===1) { rainInitDone=false; initRain(RAIN_COUNT); } }
   let _dbgNightForce = null;
   function _dbgNight(on) { _dbgNightForce = on; nightTarget = on ? 1 : 0; _nightOn = on; }
-  return { init, resize, updateCamera, draw, setScore, setWeather, triggerDeath, isDying, deathDone, stopDeath, resetWeather, addTrail, addCoinEffect, _dbgWeather, _dbgNight };
+  return { init, resize, updateCamera, draw, setScore, setWeather, triggerDeath, isDying, deathDone, stopDeath, resetWeather, addTrail, addCoinEffect, reloadPlayerSprite, _dbgWeather, _dbgNight };
 
 })();
 
@@ -3754,11 +3774,14 @@ const UI = (() => {
     show('lb');
   }
 
-  // ===== Обновить баланс монет (HUD + меню + магазин) =====
+  // ===== Обновить баланс монет =====
+  // total  — общий баланс (меню, шоп)
+  // hudVal — монеты этой сессии (HUD во время игры); если не передан — равен total
   const coinCountEl     = document.getElementById('coin-count');
   const menuCoinCountEl = document.getElementById('menu-coin-count');
-  function updateCoins(total) {
-    if (coinCountEl)     coinCountEl.textContent     = total;
+  function updateCoins(total, hudVal) {
+    const hud = hudVal !== undefined ? hudVal : total;
+    if (coinCountEl)     coinCountEl.textContent     = hud;
     if (menuCoinCountEl) menuCoinCountEl.textContent = total;
     const shopEl = document.getElementById('shop-coin-count');
     if (shopEl) shopEl.textContent = total;
@@ -3773,11 +3796,11 @@ const UI = (() => {
 const Shop = (() => {
   // Каталог предметов магазина
   const ITEMS = [
-    { id: 'skin_default',    name: 'Builder',    price: 0,   icon: '👷', desc: 'Default character',     owned: true  },
-    { id: 'skin_astronaut',  name: 'Astronaut',  price: 150, icon: '🧑‍🚀', desc: 'Out of this world!',    owned: false },
-    { id: 'skin_ninja',      name: 'Ninja',      price: 200, icon: '🥷', desc: 'Silent and swift',       owned: false },
-    { id: 'skin_robot',      name: 'Robot',      price: 300, icon: '🤖', desc: 'Fully automated',        owned: false },
-    { id: 'skin_wizard',     name: 'Wizard',     price: 500, icon: '🧙', desc: 'Pure magic',             owned: false },
+    { id: 'skin_default',      name: 'Builder',       price: 0,   icon: '👷', desc: 'Default character',  sprite: '/game/player.png'              },
+    { id: 'skin_street_runner',name: 'Street Runner', price: 150, icon: '🏃', desc: 'Fast on the streets', sprite: '/game/chars/street_runner.png' },
+    { id: 'skin_cryptokid',    name: 'Crypto Kid',    price: 200, icon: '🧒', desc: 'Born on-chain',       sprite: '/game/chars/cryptokid.png'     },
+    { id: 'skin_robot',        name: 'Robot',         price: 300, icon: '🤖', desc: 'Fully automated',     sprite: null                            },
+    { id: 'skin_wizard',       name: 'Wizard',        price: 500, icon: '🧙', desc: 'Pure magic',          sprite: null                            },
   ];
 
   const SAVE_KEY = 'shop_v1';
@@ -3824,10 +3847,14 @@ const Shop = (() => {
       const isEquipped = equipped === item.id;
       const canAfford  = balance >= item.price;
 
+      const iconHtml = item.sprite
+        ? `<span class="shop-icon shop-icon-img"><img src="${item.sprite}" alt="${item.name}" style="width:48px;height:48px;object-fit:contain;display:block;image-rendering:pixelated;"></span>`
+        : `<span class="shop-icon">${item.icon}</span>`;
+
       const el = document.createElement('div');
       el.className = 'shop-item' + (isEquipped ? ' shop-item-equipped' : '');
       el.innerHTML = `
-        <span class="shop-icon">${item.icon}</span>
+        ${iconHtml}
         <div class="shop-info">
           <span class="shop-name">${item.name}</span>
           <span class="shop-desc">${item.desc}</span>
@@ -3845,7 +3872,11 @@ const Shop = (() => {
 
     // Button handlers
     container.querySelectorAll('.shop-btn-equip').forEach(btn => {
-      btn.addEventListener('click', () => { equip(btn.dataset.id); render(); });
+      btn.addEventListener('click', () => {
+        equip(btn.dataset.id);
+        if (typeof Renderer !== 'undefined') Renderer.reloadPlayerSprite();
+        render();
+      });
     });
     container.querySelectorAll('.shop-btn-buy').forEach(btn => {
       if (btn.classList.contains('disabled')) return;
@@ -3859,6 +3890,7 @@ const Shop = (() => {
         Save.save(d);
         own(btn.dataset.id);
         equip(btn.dataset.id);
+        if (typeof Renderer !== 'undefined') Renderer.reloadPlayerSprite();
         if (typeof UI !== 'undefined') {
           UI.updateCoins(Save.getCoins());
         }
@@ -3867,12 +3899,17 @@ const Shop = (() => {
     });
   }
 
+  function getSprite(id) {
+    const item = ITEMS.find(i => i.id === id);
+    return (item && item.sprite) ? item.sprite : '/game/player.png';
+  }
+
   function show() {
     render();
     if (typeof UI !== 'undefined') UI.show('shop');
   }
 
-  return { show, getEquipped };
+  return { show, getEquipped, getSprite };
 })();
 
 /* ===== main.js ===== */
@@ -3956,7 +3993,7 @@ function initGame() {
   currentState = GameState.PLAYING;
   UI.show('game');
   UI.updateBest(Save.getBest());
-  UI.updateCoins(Save.getCoins());
+  UI.updateCoins(Save.getCoins(), 0); // HUD начинается с 0 — показываем монеты текущей сессии
 
   lastTime = performance.now();
   requestAnimationFrame(gameLoop);
@@ -4232,6 +4269,8 @@ function _initUI() {
     const newTotal = Save.addCoins(reward);
     UI.updateCoins(newTotal);
     UI.showCheckIn();
+    // Заклеймить монеты за чекин on-chain
+    window.dispatchEvent(new CustomEvent('base-claim-coins', { detail: { amount: reward } }));
   });
   _bind('btn-ci-back', 'click', () => UI.show('menu'));
 

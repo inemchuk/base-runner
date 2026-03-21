@@ -3,12 +3,13 @@ import { NextResponse } from 'next/server';
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://baserunnerapp.vercel.app';
 
 export function GET() {
+  const h = process.env.FARCASTER_HEADER;
+  const p = process.env.FARCASTER_PAYLOAD;
+  const s = process.env.FARCASTER_SIGNATURE;
+  const accountAssociation = (h && p && s) ? { header: h, payload: p, signature: s } : undefined;
+
   return NextResponse.json({
-    accountAssociation: {
-      header: process.env.FARCASTER_HEADER || '',
-      payload: process.env.FARCASTER_PAYLOAD || '',
-      signature: process.env.FARCASTER_SIGNATURE || '',
-    },
+    ...(accountAssociation ? { accountAssociation } : {}),
     frame: {
       version: '1',
       name: 'Base Runner',

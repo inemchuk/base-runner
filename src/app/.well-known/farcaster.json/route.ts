@@ -3,14 +3,12 @@ import { NextResponse } from 'next/server';
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://baserunnerapp.vercel.app';
 
 export function GET() {
-  const h = process.env.FARCASTER_HEADER;
-  const p = process.env.FARCASTER_PAYLOAD;
-  const s = process.env.FARCASTER_SIGNATURE;
-
-  // Only include accountAssociation if all env vars are set (non-empty)
-  const hasAssociation = h && p && s;
-
   const manifest: Record<string, unknown> = {
+    accountAssociation: {
+      header: "eyJmaWQiOjMwNzMxNjcsInR5cGUiOiJjdXN0b2R5Iiwia2V5IjoiMHgyN2FBRkMyZDYxNDlCRThkRENkZTBhQzA5NmI1Y2VmMDk0NENDNDQzIn0",
+      payload: "eyJkb21haW4iOiJiYXNlcnVubmVyYXBwLnZlcmNlbC5hcHAifQ",
+      signature: "ewbOm9wjCZZbgKpZBwvG0FBwBZ0e6E2EmHUqqV/8pUFYuvuqFMCywvnBkhvD1Goo0Rl8eMoGvwumyS0kE2B6/xs=",
+    },
     frame: {
       version: '1',
       name: 'Base Runner',
@@ -25,10 +23,6 @@ export function GET() {
       webhookUrl: `${APP_URL}/api/webhook`,
     },
   };
-
-  if (hasAssociation) {
-    manifest.accountAssociation = { header: h, payload: p, signature: s };
-  }
 
   return NextResponse.json(manifest);
 }

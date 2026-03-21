@@ -6,10 +6,15 @@ export function GET() {
   const h = process.env.FARCASTER_HEADER;
   const p = process.env.FARCASTER_PAYLOAD;
   const s = process.env.FARCASTER_SIGNATURE;
-  const accountAssociation = (h && p && s) ? { header: h, payload: p, signature: s } : undefined;
+
+  // Without valid accountAssociation, don't serve a manifest at all —
+  // Base app will treat the app as a standard web app.
+  if (!h || !p || !s) {
+    return new NextResponse(null, { status: 404 });
+  }
 
   return NextResponse.json({
-    ...(accountAssociation ? { accountAssociation } : {}),
+    accountAssociation: { header: h, payload: p, signature: s },
     frame: {
       version: '1',
       name: 'Base Runner',

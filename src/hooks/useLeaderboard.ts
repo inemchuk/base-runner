@@ -1,90 +1,51 @@
 'use client';
 
-import { useEffect } from 'react';
-import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
-import { base } from 'wagmi/chains';
-import { Attribution } from 'ox/erc8021';
-import { LEADERBOARD_ABI, LEADERBOARD_ADDRESS } from '@/config/leaderboard-contract';
-import { resolveBasenames } from '@/lib/resolveBasename';
-
-const DATA_SUFFIX = Attribution.toDataSuffix({ codes: ['bc_2a3sfttm'] });
+import { useEffect, useCallback } from 'react';
+import { useAccount } from 'wagmi';
 
 export function useLeaderboard() {
   const { address } = useAccount();
 
-  const { data: entries, refetch } = useReadContract({
-    address: LEADERBOARD_ADDRESS,
-    abi: LEADERBOARD_ABI,
-    functionName: 'getLeaderboard',
-  });
-
-  const { data: myBest } = useReadContract({
-    address: LEADERBOARD_ADDRESS,
-    abi: LEADERBOARD_ABI,
-    functionName: 'bestScore',
-    args: address ? [address] : undefined,
-    query: { enabled: !!address },
-  });
-
-  const { writeContract, data: txHash, isPending } = useWriteContract();
-
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
-    hash: txHash,
-    chainId: base.id,
-    pollingInterval: 2000,
-    confirmations: 1,
-  });
-
-  useEffect(() => {
-    if (isSuccess) {
-      refetch().then(() => {
-        window.dispatchEvent(new CustomEvent('base-score-submitted'));
-      });
+  const fetchLeaderboard = useCallback(async () => {
+    try {
+      const res = await fetch('/api/score/leaderboard');
+      const data = await res.json();
+      (window as any).__BASE_LEADERBOARD_ENTRIES = data.entries || [];
+      window.dispatchEvent(new CustomEvent('base-leaderboard-loaded'));
+    } catch (err) {
+      console.error('leaderboard fetch error:', err);
     }
-  }, [isSuccess, refetch]);
+  }, []);
 
-  const submit = (score: number) => {
-    writeContract({
-      address: LEADERBOARD_ADDRESS,
-      abi: LEADERBOARD_ABI,
-      functionName: 'submitScore',
-      args: [BigInt(score)],
-      dataSuffix: DATA_SUFFIX,
-    });
-  };
+  const submit = useCallback(async (score: number) => {
+    if (!address) return;
+    try {
+      await fetch('/api/score/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address, score }),
+      });
+      // Refetch leaderboard after submit
+      await fetchLeaderboard();
+      window.dispatchEvent(new CustomEvent('base-score-submitted'));
+    } catch (err) {
+      console.error('score submit error:', err);
+    }
+  }, [address, fetchLeaderboard]);
 
-  // Expose to game.js via window
   useEffect(() => {
-    (window as any).__BASE_LEADERBOARD = {
-      myBest: myBest ? Number(myBest) : 0,
-      isPending: isPending || isConfirming,
-    };
     (window as any).__BASE_SUBMIT_SCORE = submit;
+    (window as any).__BASE_LEADERBOARD = { myBest: 0, isPending: false };
 
-    // Resolve and expose leaderboard entries with names
-    if (entries) {
-      const validEntries = (entries as unknown as any[]).filter(
-        (e) => e.player !== '0x0000000000000000000000000000000000000000'
-      );
-
-      resolveBasenames(validEntries.map((e: any) => e.player)).then((names) => {
-        const resolved = validEntries.map((e: any, i: number) => ({
-          rank: i + 1,
-          name: names.get(e.player.toLowerCase()) ?? `${e.player.slice(0, 6)}…${e.player.slice(-4)}`,
-          score: Number(e.score),
-          address: e.player,
-        }));
-        (window as any).__BASE_LEADERBOARD_ENTRIES = resolved;
-        window.dispatchEvent(new CustomEvent('base-leaderboard-loaded'));
-      });
-    }
+    // Fetch on mount
+    fetchLeaderboard();
 
     return () => {
-      delete (window as any).__BASE_LEADERBOARD;
       delete (window as any).__BASE_SUBMIT_SCORE;
+      delete (window as any).__BASE_LEADERBOARD;
       delete (window as any).__BASE_LEADERBOARD_ENTRIES;
     };
-  }, [entries, myBest, isPending, isConfirming]);
+  }, [submit, fetchLeaderboard]);
 
-  return { entries, myBest, submit, isPending, isConfirming, isSuccess };
+  return { submit, fetchLeaderboard };
 }

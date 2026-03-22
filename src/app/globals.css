@@ -253,6 +253,7 @@
     .lb-row.silver { background: rgba(0,60,180,0.18); }
     .lb-row.bronze { background: rgba(0,40,120,0.18); }
     .lb-rank    { font-size: 1.4rem; width: 36px; text-align: center; }
+    .lb-avatar  { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
     .lb-name    { flex: 1; text-align: left; padding: 0 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .lb-pts     { font-weight: bold; font-size: 1.2rem; }
     .lb-empty   { color: #666; text-align: center; margin-top: 30px; font-size: 1rem; }

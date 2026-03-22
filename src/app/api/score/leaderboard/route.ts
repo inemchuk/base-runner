@@ -18,7 +18,7 @@ function getReverseNode(address: `0x${string}`): `0x${string}` {
   return keccak256(encodePacked(['bytes32', 'bytes32'], [baseReverseNode, addressNode]));
 }
 
-async function resolveAddress(address: `0x${string}`): Promise<{ name: string | null; avatar: string | null }> {
+async function resolveNameAndAvatar(address: `0x${string}`): Promise<{ name: string | null; avatar: string | null }> {
   try {
     const node = getReverseNode(address);
     const [nameResult, avatarResult] = await Promise.allSettled([
@@ -33,9 +33,11 @@ async function resolveAddress(address: `0x${string}`): Promise<{ name: string | 
   }
 }
 
+const memStore = new Map<string, number>();
+
 export async function GET() {
   try {
-    let raw: Array<{ address: string; balance: number }> = [];
+    let raw: Array<{ address: string; score: number }> = [];
 
     if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
       const { Redis } = await import('@upstash/redis');
@@ -43,29 +45,33 @@ export async function GET() {
         url: process.env.UPSTASH_REDIS_REST_URL,
         token: process.env.UPSTASH_REDIS_REST_TOKEN,
       });
-      const result = await redis.zrange('coin_lb', 0, 19, { rev: true, withScores: true }) as (string | number)[];
+      const result = await redis.zrange('scores', 0, 99, { rev: true, withScores: true }) as (string | number)[];
       for (let i = 0; i < result.length; i += 2) {
-        raw.push({ address: result[i] as string, balance: result[i + 1] as number });
+        raw.push({ address: result[i] as string, score: result[i + 1] as number });
       }
+    } else {
+      // In-memory fallback
+      const sorted = [...memStore.entries()].sort((a, b) => b[1] - a[1]).slice(0, 100);
+      raw = sorted.map(([address, score]) => ({ address, score }));
     }
 
     // Resolve basenames + avatars
-    const entries = await Promise.all(
+    const resolved = await Promise.all(
       raw.map(async (entry, i) => {
-        const { name, avatar } = await resolveAddress(entry.address as `0x${string}`);
+        const { name, avatar } = await resolveNameAndAvatar(entry.address as `0x${string}`);
         return {
           rank: i + 1,
           address: entry.address,
           name: name ? name.replace('.base.eth', '.base') : `${entry.address.slice(0, 6)}…${entry.address.slice(-4)}`,
           avatar,
-          balance: entry.balance,
+          score: entry.score,
         };
       })
     );
 
-    return NextResponse.json({ entries });
+    return NextResponse.json({ entries: resolved });
   } catch (e) {
-    console.error('coins/leaderboard error:', e);
+    console.error('score/leaderboard error:', e);
     return NextResponse.json({ entries: [] });
   }
 }

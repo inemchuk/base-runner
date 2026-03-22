@@ -286,8 +286,10 @@ const Leaderboard = (() => {
     container.innerHTML = onChain.map((entry, i) => {
       const rankClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
       const medal = MEDALS[i] || `${i + 1}.`;
+      const avatarHtml = entry.avatar ? `<img class="lb-avatar" src="${entry.avatar}" onerror="this.style.display='none'" />` : '';
       return `<div class="lb-row ${rankClass}">
         <span class="lb-rank">${medal}</span>
+        ${avatarHtml}
         <span class="lb-name">${entry.name}</span>
         <span class="lb-pts">${entry.score}</span>
       </div>`;
@@ -305,8 +307,10 @@ const Leaderboard = (() => {
     container.innerHTML = entries.map((entry, i) => {
       const rankClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
       const medal = MEDALS[i] || `${i + 1}.`;
+      const avatarHtml = entry.avatar ? `<img class="lb-avatar" src="${entry.avatar}" onerror="this.style.display='none'" />` : '';
       return `<div class="lb-row ${rankClass}">
         <span class="lb-rank">${medal}</span>
+        ${avatarHtml}
         <span class="lb-name">${entry.name}</span>
         <span class="lb-pts" style="display:flex;align-items:center;gap:4px;">
           <img src="/game/coin.png" style="width:14px;height:14px;object-fit:contain;"> ${entry.balance}
@@ -3597,30 +3601,14 @@ const UI = (() => {
     if (goScore) goScore.textContent = score;
     if (goBest)  goBest.textContent  = best;
 
-    // Submit Score button: show only if score > on-chain best
-    const submitBtn = document.getElementById('btn-submit-score');
-    if (submitBtn) {
-      const lb = window.__BASE_LEADERBOARD;
-      const onChainBest = lb ? lb.myBest : 0;
-      if (score > onChainBest) {
-        submitBtn.style.display = '';
-        submitBtn.textContent = '⛓ Submit Score';
-        submitBtn.disabled = false;
-        submitBtn._score = score;
-      } else {
-        submitBtn.style.display = 'none';
-      }
-    }
-
     // Claim Coins button: show if coins were collected this run
     const claimBtn = document.getElementById('btn-claim-coins');
-    const coinsEarnedEl = document.getElementById('go-coins-earned');
     if (claimBtn) {
       if (_sessionCoins > 0) {
         claimBtn.style.display = '';
         claimBtn.disabled = false;
         claimBtn._amount = _sessionCoins;
-        claimBtn.innerHTML = `<span style="display:inline-flex;align-items:center;gap:5px;vertical-align:middle;font-weight:bold;letter-spacing:2px;">⛓ Claim <img src="/game/coin.png" style="width:16px;height:16px;object-fit:contain;display:block;position:relative;top:-2px;"><span id="go-coins-earned">${_sessionCoins}</span></span>`;
+        claimBtn.innerHTML = `<span style="display:inline-flex;align-items:center;gap:5px;vertical-align:middle;font-weight:bold;letter-spacing:2px;">Claim <img src="/game/coin.png" style="width:16px;height:16px;object-fit:contain;display:block;position:relative;top:-2px;"><span id="go-coins-earned">${_sessionCoins}</span></span>`;
       } else {
         claimBtn.style.display = 'none';
       }
@@ -4054,6 +4042,8 @@ function onGameOver() {
   // Синхронизируем монеты с глобальным лидербордом
   const syncFn = window.__BASE_SYNC_COINS;
   if (syncFn) syncFn(Save.getCoins());
+  // Auto-submit score to offchain leaderboard
+  window.dispatchEvent(new CustomEvent('base-auto-submit-score', { detail: { score } }));
   setTimeout(() => UI.showGameOver(score, best), 600);
 }
 
@@ -4183,41 +4173,22 @@ function _initUI() {
     currentState = GameState.MENU;
     UI.show('menu');
   });
-  _bind('btn-submit-score', 'click', () => {
-    const btn = document.getElementById('btn-submit-score');
-    if (!btn || btn.disabled) return;
-    const score = btn._score;
-    if (!score) return;
-    btn.disabled = true;
-    btn.textContent = '⏳ Submitting...';
-    window.dispatchEvent(new CustomEvent('base-submit-score', { detail: { score } }));
-  });
-
-  // Listen for score submission confirmation
-  window.addEventListener('base-score-submitted', () => {
-    const btn = document.getElementById('btn-submit-score');
-    if (btn) {
-      btn.textContent = '✅ Submitted!';
-      btn.disabled = true;
-    }
-  });
-
-  // Claim Coins button
+  // Claim Coins button (offchain — instant)
   _bind('btn-claim-coins', 'click', () => {
     const btn = document.getElementById('btn-claim-coins');
     if (!btn || btn.disabled) return;
     const amount = btn._amount;
     if (!amount) return;
     btn.disabled = true;
-    btn.innerHTML = '⏳ Claiming...';
+    btn.innerHTML = '⏳ Saving...';
     window.dispatchEvent(new CustomEvent('base-claim-coins', { detail: { amount } }));
   });
 
-  // Coin claim confirmed
+  // Coin claim confirmed (offchain — instant)
   window.addEventListener('base-coins-claimed', () => {
     const btn = document.getElementById('btn-claim-coins');
     if (btn) {
-      btn.innerHTML = '✅ Claimed!';
+      btn.innerHTML = '✅ Saved!';
       btn.disabled = true;
     }
     // Синхронизируем лидерборд монет

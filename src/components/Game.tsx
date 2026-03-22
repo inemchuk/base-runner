@@ -30,13 +30,13 @@ export default function Game() {
     };
     window.addEventListener('base-checkin-claim', handleClaim);
 
-    // Listen for submit score requests from game.js
-    const handleSubmitScore = (e: Event) => {
+    // Auto-submit score after game over (offchain)
+    const handleAutoSubmit = (e: Event) => {
       const score = (e as CustomEvent).detail?.score;
       const submitFn = (window as any).__BASE_SUBMIT_SCORE;
       if (submitFn && score) submitFn(score);
     };
-    window.addEventListener('base-submit-score', handleSubmitScore);
+    window.addEventListener('base-auto-submit-score', handleAutoSubmit);
 
     // Listen for coin claim requests from game.js
     const handleClaimCoins = (e: Event) => {
@@ -49,7 +49,7 @@ export default function Game() {
     return () => {
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('base-checkin-claim', handleClaim);
-      window.removeEventListener('base-submit-score', handleSubmitScore);
+      window.removeEventListener('base-auto-submit-score', handleAutoSubmit);
       window.removeEventListener('base-claim-coins', handleClaimCoins);
     };
   }, []);
@@ -121,8 +121,7 @@ export default function Game() {
         <p style={{color:'rgba(255,255,255,0.5)',marginBottom:'32px',fontSize:'clamp(0.75rem,3vw,1rem)',letterSpacing:'2px'}}>
           BEST: <span id="go-best">0</span>
         </p>
-        <button className="btn btn-submit-score" id="btn-submit-score">⛓ Submit Score</button>
-        <button className="btn btn-claim-coins" id="btn-claim-coins"><span style={{display:'inline-flex',alignItems:'center',gap:'5px',verticalAlign:'middle'}}>⛓ Claim <img src="/game/coin.png" alt="coin" style={{width:'16px',height:'16px',objectFit:'contain',display:'block',position:'relative',top:'-2px'}} /><span id="go-coins-earned">0</span></span></button>
+        <button className="btn btn-claim-coins" id="btn-claim-coins"><span style={{display:'inline-flex',alignItems:'center',gap:'5px',verticalAlign:'middle'}}>Claim <img src="/game/coin.png" alt="coin" style={{width:'16px',height:'16px',objectFit:'contain',display:'block',position:'relative',top:'-2px'}} /><span id="go-coins-earned">0</span></span></button>
         <button className="btn btn-restart" id="btn-restart">↺ PLAY AGAIN</button>
         <button className="btn btn-back" id="btn-go-menu">← MENU</button>
       </div>

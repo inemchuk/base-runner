@@ -12,7 +12,7 @@ export default function Home() {
   const { connect, connectors } = useConnect();
   usePlayer();
 
-  // Auto-connect to injected wallet (Base app)
+  // Auto-connect to injected wallet (Base app) in background
   useEffect(() => {
     if (isConnected) return;
     const injected = connectors.find(c => c.type === 'injected');
@@ -21,25 +21,6 @@ export default function Home() {
     }
   }, [isConnected, connect, connectors]);
 
-  const isDev = process.env.NODE_ENV === 'development';
-
-  if (!isDev && !isConnected) {
-    return (
-      <div className="screen">
-        <h1 className="game-title">BASE RUNNER</h1>
-        <p className="subtitle">Connecting...</p>
-        <a
-          href="https://base.org/app"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="btn btn-start"
-          style={{ textDecoration: 'none', textAlign: 'center', marginTop: '20px' }}
-        >
-          Open Base App
-        </a>
-      </div>
-    );
-  }
-
+  // Always show the game — don't gate behind wallet connection
   return <Game />;
 }

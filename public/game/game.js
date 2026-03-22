@@ -286,7 +286,9 @@ const Leaderboard = (() => {
     container.innerHTML = onChain.map((entry, i) => {
       const rankClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
       const medal = MEDALS[i] || `${i + 1}.`;
-      const avatarHtml = entry.avatar ? `<img class="lb-avatar" src="${entry.avatar}" onerror="this.style.display='none'" />` : '';
+      const avatarHtml = entry.avatar
+        ? `<img class="lb-avatar" src="${entry.avatar}" onerror="this.style.background='rgba(0,82,255,0.3)';this.removeAttribute('src');" />`
+        : `<span class="lb-avatar"></span>`;
       return `<div class="lb-row ${rankClass}">
         <span class="lb-rank">${medal}</span>
         ${avatarHtml}
@@ -307,7 +309,9 @@ const Leaderboard = (() => {
     container.innerHTML = entries.map((entry, i) => {
       const rankClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
       const medal = MEDALS[i] || `${i + 1}.`;
-      const avatarHtml = entry.avatar ? `<img class="lb-avatar" src="${entry.avatar}" onerror="this.style.display='none'" />` : '';
+      const avatarHtml = entry.avatar
+        ? `<img class="lb-avatar" src="${entry.avatar}" onerror="this.style.background='rgba(0,82,255,0.3)';this.removeAttribute('src');" />`
+        : `<span class="lb-avatar"></span>`;
       return `<div class="lb-row ${rankClass}">
         <span class="lb-rank">${medal}</span>
         ${avatarHtml}
@@ -3606,7 +3610,7 @@ const UI = (() => {
       const coinsEarned = document.getElementById('go-coins-earned');
       if (coinsEarned) coinsEarned.textContent = _sessionCoins;
       const coinsRow = document.getElementById('go-coins-row');
-      if (coinsRow) coinsRow.style.display = '';
+      if (coinsRow) coinsRow.style.display = 'flex';
     } else {
       const coinsRow = document.getElementById('go-coins-row');
       if (coinsRow) coinsRow.style.display = 'none';

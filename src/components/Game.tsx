@@ -109,10 +109,10 @@ export default function Game() {
         <p style={{color:'#4D8FFF',marginBottom:'6px',fontSize:'clamp(0.9rem,4vw,1.2rem)',letterSpacing:'2px'}}>
           SCORE: <span id="go-score">0</span>
         </p>
-        <p style={{color:'rgba(255,255,255,0.5)',marginBottom:'32px',fontSize:'clamp(0.75rem,3vw,1rem)',letterSpacing:'2px'}}>
+        <p style={{color:'rgba(255,255,255,0.5)',marginBottom:'8px',fontSize:'clamp(0.75rem,3vw,1rem)',letterSpacing:'2px'}}>
           BEST: <span id="go-best">0</span>
         </p>
-        <p id="go-coins-row" style={{color:'#FFD700',marginBottom:'16px',fontSize:'clamp(0.85rem,3.5vw,1.1rem)',letterSpacing:'2px',display:'flex',alignItems:'center',justifyContent:'center',gap:'5px'}}>
+        <p id="go-coins-row" style={{color:'#FFD700',marginBottom:'32px',fontSize:'clamp(0.85rem,3.5vw,1.1rem)',letterSpacing:'2px',display:'none',alignItems:'center',justifyContent:'center',gap:'5px'}}>
           <img src="/game/coin.png" alt="coin" style={{width:'18px',height:'18px',objectFit:'contain'}} /> +<span id="go-coins-earned">0</span> COINS
         </p>
         <button className="btn btn-restart" id="btn-restart">↺ PLAY AGAIN</button>

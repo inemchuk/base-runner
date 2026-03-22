@@ -144,6 +144,10 @@ export default function Game() {
           <img src="/game/coin.png" alt="coin" style={{width:'22px',height:'22px',objectFit:'contain'}} />
           <span id="shop-coin-count">0</span>
         </div>
+        <div id="shop-tabs" style={{display:'flex',gap:'0',marginBottom:'16px',width:'min(320px,90vw)'}}>
+          <button id="shop-tab-skins" className="shop-tab shop-tab-active">Skins</button>
+          <button id="shop-tab-boosters" className="shop-tab">Boosters</button>
+        </div>
         <div id="shop-items" style={{width:'min(320px,90vw)',marginBottom:'24px'}}></div>
         <button className="btn btn-back" id="btn-shop-back">← BACK</button>
       </div>

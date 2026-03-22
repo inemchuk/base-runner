@@ -1455,6 +1455,7 @@ const Player = (() => {
     state.visualX  = state.col * CELL + CELL / 2;
     state.visualY  = World.rowToY(state.row) + CELL / 2;
     state.jumpFrom = { x: state.visualX, y: state.visualY };
+    resetShield();
   }
 
   // ===== Движение в направлении (dRow, dCol) =====
@@ -1490,13 +1491,30 @@ const Player = (() => {
       state.score  = state.row - 1;
     }
 
-    // --- Сбор монеты ---
-    if (World.collectCoin(state.row, state.col)) {
-      const newTotal = Save.addCoins(1);
-      _sessionCoins++;
-      if (typeof Vibrate !== 'undefined') Vibrate.coin();
-      if (typeof UI !== 'undefined') UI.updateCoins(newTotal, _sessionCoins);
-      if (typeof Renderer !== 'undefined') Renderer.addCoinEffect(state.col * CELL + CELL / 2, World.rowToY(state.row) + CELL / 2);
+    // --- Сбор монеты (+ магнит: радиус 2 клетки с анимацией) ---
+    const hasMagnet   = (typeof Shop !== 'undefined' && Shop.hasBoosted('boost_magnet'));
+    const magnetRange = hasMagnet ? 2 : 0;
+    const coinValue   = (typeof Shop !== 'undefined' && Shop.hasBoosted('boost_double')) ? 2 : 1;
+    const playerX = state.col * CELL + CELL / 2;
+    const playerY = World.rowToY(state.row) + CELL / 2;
+    for (let dc = -magnetRange; dc <= magnetRange; dc++) {
+      const checkCol = state.col + dc;
+      if (checkCol < 0 || checkCol >= COLS) continue;
+      if (World.collectCoin(state.row, checkCol)) {
+        const newTotal = Save.addCoins(coinValue);
+        _sessionCoins += coinValue;
+        if (typeof Vibrate !== 'undefined') Vibrate.coin();
+        if (typeof UI !== 'undefined') UI.updateCoins(newTotal, _sessionCoins);
+        if (dc === 0) {
+          // Direct pickup — instant effect
+          if (typeof Renderer !== 'undefined') Renderer.addCoinEffect(playerX, playerY);
+        } else {
+          // Magnet pickup — fly animation to player
+          const coinX = checkCol * CELL + CELL / 2;
+          const coinY = World.rowToY(state.row) + CELL / 2;
+          if (typeof Renderer !== 'undefined') Renderer.addMagnetCoin(coinX, coinY, playerX, playerY, checkCol, state.row);
+        }
+      }
     }
 
     // --- Направление взгляда ---
@@ -1573,11 +1591,48 @@ const Player = (() => {
         kill();
       }
     }
+
+    // --- Магнит: подбираем монеты в радиусе даже без шага ---
+    if (!state.jumping && typeof Shop !== 'undefined' && Shop.hasBoosted('boost_magnet')) {
+      const coinValue = Shop.hasBoosted('boost_double') ? 2 : 1;
+      const playerX = state.col * CELL + CELL / 2;
+      const playerY = World.rowToY(state.row) + CELL / 2;
+      for (let dc = -2; dc <= 2; dc++) {
+        if (dc === 0) continue; // direct pickup handled in move()
+        const checkCol = state.col + dc;
+        if (checkCol < 0 || checkCol >= COLS) continue;
+        if (World.collectCoin(state.row, checkCol)) {
+          const newTotal = Save.addCoins(coinValue);
+          _sessionCoins += coinValue;
+          if (typeof Vibrate !== 'undefined') Vibrate.coin();
+          if (typeof UI !== 'undefined') UI.updateCoins(newTotal, _sessionCoins);
+          const coinX = checkCol * CELL + CELL / 2;
+          const coinY = World.rowToY(state.row) + CELL / 2;
+          if (typeof Renderer !== 'undefined') Renderer.addMagnetCoin(coinX, coinY, playerX, playerY, checkCol, state.row);
+        }
+      }
+    }
   }
 
   // ===== Убить игрока =====
+  let _shieldUsed = false;
+  function resetShield() { _shieldUsed = false; }
+
   function kill() {
     if (!state.alive) return;
+    // Second Chance — shield saves once per game
+    if (!_shieldUsed && typeof Shop !== 'undefined' && Shop.hasBoosted('boost_shield')) {
+      _shieldUsed = true;
+      // Move player back one row safely
+      state.row = Math.max(0, state.row - 1);
+      state.visualY = World.rowToY(state.row) + CELL / 2;
+      state.col = Math.min(Math.max(state.col, 1), COLS - 2);
+      state.visualX = state.col * CELL + CELL / 2;
+      state.onLog = null;
+      state.jumping = false;
+      if (typeof Vibrate !== 'undefined') Vibrate.coin();
+      return; // saved!
+    }
     state.alive   = false;
     state.onLog   = null;
     state.jumping = false;
@@ -1834,6 +1889,10 @@ const Renderer = (() => {
   // ── Coin pickup effects ──────────────────────────────────
   const coinEffects = [];   // { x, y, age }
   const COIN_EFFECT_DUR = 0.7;
+
+  // ── Magnet attract animations ───────────────────────────
+  const magnetCoins = [];   // { fromX, fromY, toX, toY, age, col, rowIdx }
+  const MAGNET_DUR  = 0.25; // seconds for coin to fly to player
 
   // ── Footprint trails ─────────────────────────────────────
   const trails = [];          // { x, y, age, maxAge, rowType }
@@ -3267,7 +3326,48 @@ const Renderer = (() => {
     coinEffects.push({ x, y, age: 0 });
   }
 
+  function addMagnetCoin(fromX, fromY, toX, toY, col, rowIdx) {
+    magnetCoins.push({ fromX, fromY, toX, toY, age: 0, col, rowIdx });
+  }
+
+  function drawMagnetCoins(dt) {
+    for (let i = magnetCoins.length - 1; i >= 0; i--) {
+      const m = magnetCoins[i];
+      m.age += dt;
+      if (m.age >= MAGNET_DUR) {
+        magnetCoins.splice(i, 1);
+        // Trigger "+1" effect at destination
+        addCoinEffect(m.toX, m.toY);
+        continue;
+      }
+      const t = m.age / MAGNET_DUR;
+      // Ease-in curve for acceleration feel
+      const eased = t * t;
+      const x = m.fromX + (m.toX - m.fromX) * eased;
+      const y = m.fromY + (m.toY - m.fromY) * eased;
+      // Arc upward slightly
+      const arc = -CELL * 0.5 * Math.sin(t * Math.PI);
+      const size = CELL * 0.72;
+      const scale = 1 - t * 0.3; // shrink slightly as it flies
+
+      ctx.save();
+      ctx.globalAlpha = 1;
+      ctx.translate(x, y + arc);
+      if (coinImg) {
+        const drawSize = size * scale;
+        ctx.drawImage(coinImg, -drawSize / 2, -drawSize / 2, drawSize, drawSize);
+      } else {
+        ctx.fillStyle = '#FFD700';
+        ctx.beginPath();
+        ctx.arc(0, 0, size * scale * 0.4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+  }
+
   function drawCoinEffects(dt) {
+    drawMagnetCoins(dt);
     for (let i = coinEffects.length - 1; i >= 0; i--) {
       const e = coinEffects[i];
       e.age += dt;
@@ -3498,7 +3598,7 @@ const Renderer = (() => {
   function _dbgWeather(state) { weatherState = state; weatherRatio = 0; if (state===3) { rainInitDone=false; initRain(STORM_RAIN_COUNT); } else if (state===1) { rainInitDone=false; initRain(RAIN_COUNT); } }
   let _dbgNightForce = null;
   function _dbgNight(on) { _dbgNightForce = on; nightTarget = on ? 1 : 0; _nightOn = on; }
-  return { init, resize, updateCamera, draw, setScore, setWeather, triggerDeath, isDying, deathDone, stopDeath, resetWeather, addTrail, addCoinEffect, reloadPlayerSprite, _dbgWeather, _dbgNight };
+  return { init, resize, updateCamera, draw, setScore, setWeather, triggerDeath, isDying, deathDone, stopDeath, resetWeather, addTrail, addCoinEffect, addMagnetCoin, reloadPlayerSprite, _dbgWeather, _dbgNight };
 
 })();
 
@@ -3803,7 +3903,7 @@ const UI = (() => {
 
 /* ===== shop.js ===== */
 const Shop = (() => {
-  // Каталог предметов магазина
+  // ── Скины ──
   const ITEMS = [
     { id: 'skin_cryptokid',    name: 'Crypto Kid',    price: 0,   icon: '🧒', desc: 'Born on-chain',       sprite: '/game/chars/cryptokid.png'     },
     { id: 'skin_street_runner',name: 'Street Runner', price: 150, icon: '🏃', desc: 'Fast on the streets', sprite: '/game/chars/street_runner.png' },
@@ -3812,40 +3912,45 @@ const Shop = (() => {
     { id: 'skin_base_king',    name: 'Base King',     price: 1000,icon: '👑', desc: 'Rule the chain',      sprite: '/game/chars/base_king.png'     },
   ];
 
+  // ── Бустеры (постоянные улучшения) ──
+  const BOOSTERS = [
+    { id: 'boost_magnet', name: 'Coin Magnet',   price: 200,  icon: '🧲', desc: 'Coins pull from 2 tiles away' },
+    { id: 'boost_double', name: 'Double Coins',  price: 350,  icon: '💰', desc: 'Every coin counts as 2'       },
+    { id: 'boost_shield', name: 'Second Chance',  price: 500,  icon: '🛡️', desc: 'Extra life every game'        },
+  ];
+
   const SAVE_KEY = 'shop_v1';
+  let shopTab = 'skins'; // 'skins' | 'boosters'
 
   function loadShopData() {
     try { return JSON.parse(localStorage.getItem(SAVE_KEY) || '{}'); } catch { return {}; }
   }
   function saveShopData(d) {
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(d)); } catch {}
-    // Sync to server
     _syncToServer(d);
   }
 
   function _syncToServer(d) {
     const syncFn = window.__BASE_SHOP_SYNC;
-    if (syncFn) syncFn(d.owned || ['skin_cryptokid'], d.equipped || 'skin_cryptokid');
+    if (syncFn) syncFn(d.owned || ['skin_cryptokid'], d.equipped || 'skin_cryptokid', d.boosters || []);
   }
 
-  // Called from React hook when server data is loaded
-  function applyServerData(owned, equipped) {
+  function applyServerData(owned, equipped, boosters) {
     const local = loadShopData();
-    // Merge: union of owned items (keep both local and server purchases)
     const localOwned = local.owned || ['skin_cryptokid'];
-    const merged = [...new Set([...localOwned, ...owned])];
-    const d = { owned: merged, equipped: equipped || local.equipped || 'skin_cryptokid' };
+    const localBoosters = local.boosters || [];
+    const mergedOwned = [...new Set([...localOwned, ...owned])];
+    const mergedBoosters = [...new Set([...localBoosters, ...(boosters || [])])];
+    const d = { owned: mergedOwned, equipped: equipped || local.equipped || 'skin_cryptokid', boosters: mergedBoosters };
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(d)); } catch {}
-    // Reload sprite if equipped changed
     if (typeof Renderer !== 'undefined') Renderer.reloadPlayerSprite();
   }
-  function getOwned() {
-    const d = loadShopData();
-    return d.owned || ['skin_cryptokid'];
-  }
-  function getEquipped() {
-    return loadShopData().equipped || 'skin_cryptokid';
-  }
+
+  function getOwned() { return loadShopData().owned || ['skin_cryptokid']; }
+  function getEquipped() { return loadShopData().equipped || 'skin_cryptokid'; }
+  function getBoosters() { return loadShopData().boosters || []; }
+  function hasBoosted(id) { return getBoosters().includes(id); }
+
   function own(id) {
     const d = loadShopData();
     const owned = d.owned || ['skin_cryptokid'];
@@ -3858,14 +3963,34 @@ const Shop = (() => {
     d.equipped = id;
     saveShopData(d);
   }
+  function ownBooster(id) {
+    const d = loadShopData();
+    const boosters = d.boosters || [];
+    if (!boosters.includes(id)) boosters.push(id);
+    d.boosters = boosters;
+    saveShopData(d);
+  }
 
-  function render() {
+  // ── Вкладки ──
+  function setTab(tab) {
+    shopTab = tab;
+    const btnS = document.getElementById('shop-tab-skins');
+    const btnB = document.getElementById('shop-tab-boosters');
+    if (btnS) btnS.className = 'shop-tab' + (tab === 'skins' ? ' shop-tab-active' : '');
+    if (btnB) btnB.className = 'shop-tab' + (tab === 'boosters' ? ' shop-tab-active' : '');
+    renderContent();
+  }
+
+  function renderContent() {
+    if (shopTab === 'boosters') renderBoosters();
+    else renderSkins();
+  }
+
+  // ── Рендер скинов ──
+  function renderSkins() {
     const container = document.getElementById('shop-items');
-    const coinEl    = document.getElementById('shop-coin-count');
     if (!container) return;
-    const balance = Save.getCoins();
-    if (coinEl) coinEl.textContent = balance;
-
+    const balance  = Save.getCoins();
     const owned    = getOwned();
     const equipped = getEquipped();
 
@@ -3898,7 +4023,6 @@ const Shop = (() => {
       container.appendChild(el);
     }
 
-    // Button handlers
     container.querySelectorAll('.shop-btn-equip').forEach(btn => {
       btn.addEventListener('click', () => {
         equip(btn.dataset.id);
@@ -3912,23 +4036,69 @@ const Shop = (() => {
         const price = parseInt(btn.dataset.price);
         const cur   = Save.getCoins();
         if (cur < price) return;
-        // Spend coins
         const d = Save.load();
         d.coins -= price;
         Save.save(d);
         own(btn.dataset.id);
         equip(btn.dataset.id);
         if (typeof Renderer !== 'undefined') Renderer.reloadPlayerSprite();
-        if (typeof UI !== 'undefined') {
-          UI.updateCoins(Save.getCoins());
-        }
-        // Синхронизируем новый баланс в Redis после покупки
-        if (typeof window.__BASE_SYNC_COINS === 'function') {
-          window.__BASE_SYNC_COINS(Save.getCoins());
-        }
+        if (typeof UI !== 'undefined') UI.updateCoins(Save.getCoins());
+        if (typeof window.__BASE_SYNC_COINS === 'function') window.__BASE_SYNC_COINS(Save.getCoins());
         render();
       });
     });
+  }
+
+  // ── Рендер бустеров ──
+  function renderBoosters() {
+    const container = document.getElementById('shop-items');
+    if (!container) return;
+    const balance  = Save.getCoins();
+    const boosters = getBoosters();
+
+    container.innerHTML = '';
+    for (const item of BOOSTERS) {
+      const isOwned   = boosters.includes(item.id);
+      const canAfford = balance >= item.price;
+
+      const el = document.createElement('div');
+      el.className = 'shop-item' + (isOwned ? ' shop-item-equipped' : '');
+      el.innerHTML = `
+        <span class="shop-icon">${item.icon}</span>
+        <div class="shop-info">
+          <span class="shop-name">${item.name}</span>
+          <span class="shop-desc">${item.desc}</span>
+        </div>
+        <div class="shop-action">
+          ${isOwned
+            ? '<span class="shop-badge-owned">✓ OWNED</span>'
+            : `<button class="shop-btn shop-btn-buy${canAfford ? '' : ' disabled'}" data-id="${item.id}" data-price="${item.price}" style="display:inline-flex;flex-direction:row;align-items:center;justify-content:center;gap:4px;"><img src="/game/coin.png" style="width:14px;height:14px;object-fit:contain;display:block;flex-shrink:0;"> ${item.price}</button>`
+          }
+        </div>`;
+      container.appendChild(el);
+    }
+
+    container.querySelectorAll('.shop-btn-buy').forEach(btn => {
+      if (btn.classList.contains('disabled')) return;
+      btn.addEventListener('click', () => {
+        const price = parseInt(btn.dataset.price);
+        const cur   = Save.getCoins();
+        if (cur < price) return;
+        const d = Save.load();
+        d.coins -= price;
+        Save.save(d);
+        ownBooster(btn.dataset.id);
+        if (typeof UI !== 'undefined') UI.updateCoins(Save.getCoins());
+        if (typeof window.__BASE_SYNC_COINS === 'function') window.__BASE_SYNC_COINS(Save.getCoins());
+        render();
+      });
+    });
+  }
+
+  function render() {
+    const coinEl = document.getElementById('shop-coin-count');
+    if (coinEl) coinEl.textContent = Save.getCoins();
+    setTab(shopTab);
   }
 
   function getSprite(id) {
@@ -3937,11 +4107,12 @@ const Shop = (() => {
   }
 
   function show() {
+    shopTab = 'skins';
     render();
     if (typeof UI !== 'undefined') UI.show('shop');
   }
 
-  return { show, getEquipped, getSprite, applyServerData };
+  return { show, setTab, getEquipped, getSprite, applyServerData, hasBoosted };
 })();
 
 
@@ -4413,6 +4584,8 @@ function _initUI() {
   _bind('btn-ci',    'click', () => UI.showCheckIn());
   _bind('btn-shop',  'click', () => Shop.show());
   _bind('btn-shop-back', 'click', () => UI.show('menu'));
+  _bind('shop-tab-skins',    'click', () => Shop.setTab('skins'));
+  _bind('shop-tab-boosters', 'click', () => Shop.setTab('boosters'));
 
   // Кнопка звука
   _bind('btn-mute', 'click', () => Sound.toggleMute());

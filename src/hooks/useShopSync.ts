@@ -7,13 +7,13 @@ export function useShopSync() {
   const { address } = useAccount();
 
   // Sync shop data to server
-  const syncShop = useCallback(async (owned: string[], equipped: string) => {
+  const syncShop = useCallback(async (owned: string[], equipped: string, boosters?: string[]) => {
     if (!address) return;
     try {
       await fetch('/api/shop', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address, owned, equipped }),
+        body: JSON.stringify({ address, owned, equipped, boosters: boosters || [] }),
       });
     } catch (err) {
       console.error('shop sync error:', err);
@@ -28,7 +28,7 @@ export function useShopSync() {
       const data = await res.json();
       if (data.owned && data.equipped) {
         const applyFn = (window as any).Shop?.applyServerData;
-        if (applyFn) applyFn(data.owned, data.equipped);
+        if (applyFn) applyFn(data.owned, data.equipped, data.boosters || []);
       }
     } catch (err) {
       console.error('shop load error:', err);

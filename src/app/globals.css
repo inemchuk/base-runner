@@ -434,6 +434,31 @@
     }
     .btn-shop:hover { background: linear-gradient(135deg, #FFA020, #FFE040); }
 
+    /* ===== ВКЛАДКИ МАГАЗИНА ===== */
+    .shop-tab {
+      flex: 1;
+      padding: 10px;
+      background: rgba(255,255,255,0.06);
+      border: 1.5px solid rgba(255,255,255,0.12);
+      color: rgba(255,255,255,0.5);
+      font-family: inherit;
+      font-weight: bold;
+      font-size: 0.85rem;
+      cursor: pointer;
+      letter-spacing: 1px;
+      transition: background 0.2s, border-color 0.2s, color 0.2s;
+    }
+    .shop-tab:first-child { border-radius: 10px 0 0 10px; }
+    .shop-tab:last-child  { border-radius: 0 10px 10px 0; }
+    .shop-tab-active {
+      background: rgba(0,82,255,0.2);
+      border-color: #0052FF;
+      color: #fff;
+    }
+    .shop-badge-owned {
+      color: #69F0AE; font-size: 0.85rem; font-weight: bold; letter-spacing: 1px;
+    }
+
     /* ===== ЭКРАН МАГАЗИНА ===== */
     #shop-items {
       display: flex;

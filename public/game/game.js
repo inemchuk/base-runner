@@ -4199,9 +4199,11 @@ function _initUI() {
         // On-chain: show confirming state, wait for event
         UI.showCheckIn();
       } else {
-        // localStorage fallback
+        // localStorage fallback — sync coins to Redis
         alert(`🎉 Check-in! ${result.message}\nStreak: ${result.streak} days 🔥`);
         UI.showCheckIn();
+        const syncFn = window.__BASE_SYNC_COINS;
+        if (syncFn) syncFn(Save.getCoins());
       }
     } else {
       alert(`⏳ ${result.message}`);
@@ -4221,8 +4223,9 @@ function _initUI() {
     const newTotal = Save.addCoins(reward);
     UI.updateCoins(newTotal);
     UI.showCheckIn();
-    // Заклеймить монеты за чекин on-chain
-    window.dispatchEvent(new CustomEvent('base-claim-coins', { detail: { amount: reward } }));
+    // Sync coins to offchain leaderboard
+    const syncFn = window.__BASE_SYNC_COINS;
+    if (syncFn) syncFn(Save.getCoins());
   });
   _bind('btn-ci-back', 'click', () => UI.show('menu'));
 

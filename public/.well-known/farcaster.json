@@ -1,0 +1,16 @@
+{
+  "accountAssociation": {
+    "header": "",
+    "payload": "",
+    "signature": ""
+  },
+  "frame": {
+    "version": "1",
+    "name": "Base Runner",
+    "iconUrl": "https://baserunnerapp.vercel.app/icon.png",
+    "homeUrl": "https://baserunnerapp.vercel.app",
+    "imageUrl": "https://baserunnerapp.vercel.app/og-image.png",
+    "splashImageUrl": "https://baserunnerapp.vercel.app/icon.png",
+    "splashBackgroundColor": "#0a0e1a"
+  }
+}

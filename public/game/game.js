@@ -3922,6 +3922,10 @@ const Shop = (() => {
         if (typeof UI !== 'undefined') {
           UI.updateCoins(Save.getCoins());
         }
+        // Синхронизируем новый баланс в Redis после покупки
+        if (typeof window.__BASE_SYNC_COINS === 'function') {
+          window.__BASE_SYNC_COINS(Save.getCoins());
+        }
         render();
       });
     });

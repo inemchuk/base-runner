@@ -3521,6 +3521,7 @@ const UI = (() => {
     lb:       document.getElementById('screen-lb'),
     ci:       document.getElementById('screen-ci'),
     shop:     document.getElementById('screen-shop'),
+    quests:   document.getElementById('screen-quests'),
   };
 
   const hud       = document.getElementById('hud');
@@ -3548,6 +3549,18 @@ const UI = (() => {
       }
     } else if (SCREENS[name]) {
       SCREENS[name].classList.remove('hidden');
+    }
+
+    // Quest badge on menu button
+    if (name === 'menu') {
+      const qBtn = document.getElementById('btn-quests');
+      if (qBtn) {
+        if (typeof Quests !== 'undefined' && Quests.hasClaimable()) {
+          qBtn.classList.add('quest-badge');
+        } else {
+          qBtn.classList.remove('quest-badge');
+        }
+      }
     }
   }
 
@@ -3614,6 +3627,12 @@ const UI = (() => {
     } else {
       const coinsRow = document.getElementById('go-coins-row');
       if (coinsRow) coinsRow.style.display = 'none';
+    }
+
+    // Show quest complete notification
+    const questNotify = document.getElementById('go-quest-notify');
+    if (questNotify) {
+      questNotify.style.display = Quests.hasClaimable() ? 'block' : 'none';
     }
 
     show('gameover');
@@ -3921,6 +3940,210 @@ const Shop = (() => {
   return { show, getEquipped, getSprite, applyServerData };
 })();
 
+
+/* ===== quests.js ===== */
+/**
+ * quests.js — Система прогрессивных квестов
+ * 4 типа × 8 уровней. Прогресс суммируется между играми.
+ * Данные хранятся в localStorage + синхронизация через Redis.
+ */
+const Quests = (() => {
+
+  const SAVE_KEY = 'quests_v1';
+
+  const DEFS = [
+    { id: 'rows', name: 'Marathon Runner', icon: '🏃', desc: 'Run rows across all games', type: 'cumulative',
+      levels: [
+        { target: 100,   reward: 20 },  { target: 300,   reward: 40 },
+        { target: 700,   reward: 80 },  { target: 1400,  reward: 120 },
+        { target: 2400,  reward: 180 }, { target: 4000,  reward: 260 },
+        { target: 7000,  reward: 400 }, { target: 12000, reward: 600 },
+      ]},
+    { id: 'coins', name: 'Coin Collector', icon: '🪙', desc: 'Collect coins across all games', type: 'cumulative',
+      levels: [
+        { target: 40,   reward: 20 },  { target: 120,  reward: 40 },
+        { target: 300,  reward: 80 },  { target: 600,  reward: 120 },
+        { target: 1000, reward: 180 }, { target: 1800, reward: 260 },
+        { target: 3000, reward: 400 }, { target: 5000, reward: 600 },
+      ]},
+    { id: 'games', name: 'Dedicated Player', icon: '🎮', desc: 'Play games', type: 'cumulative',
+      levels: [
+        { target: 5,   reward: 20 },  { target: 15,  reward: 40 },
+        { target: 35,  reward: 80 },  { target: 70,  reward: 120 },
+        { target: 120, reward: 180 }, { target: 200, reward: 260 },
+        { target: 350, reward: 400 }, { target: 600, reward: 600 },
+      ]},
+    { id: 'record', name: 'High Scorer', icon: '⭐', desc: 'Reach a high score record', type: 'best',
+      levels: [
+        { target: 20,  reward: 30 },  { target: 40,  reward: 60 },
+        { target: 80,  reward: 120 }, { target: 150, reward: 200 },
+        { target: 250, reward: 300 }, { target: 400, reward: 450 },
+        { target: 600, reward: 600 }, { target: 900, reward: 800 },
+      ]},
+  ];
+
+  function _loadData() {
+    try {
+      const raw = localStorage.getItem(SAVE_KEY);
+      if (!raw) return _defaults();
+      const parsed = JSON.parse(raw);
+      // Ensure all quest IDs exist
+      const d = _defaults();
+      for (const def of DEFS) {
+        if (parsed[def.id]) d[def.id] = parsed[def.id];
+      }
+      return d;
+    } catch { return _defaults(); }
+  }
+
+  function _defaults() {
+    const d = {};
+    for (const def of DEFS) {
+      d[def.id] = { progress: 0, claimed: [false,false,false,false,false,false,false,false] };
+    }
+    return d;
+  }
+
+  function _saveData(data) {
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch {}
+    _syncToServer(data);
+  }
+
+  function _syncToServer(data) {
+    const syncFn = window.__BASE_QUEST_SYNC;
+    if (syncFn) syncFn(data);
+  }
+
+  // Get current level for a quest (0-based, 8 = all done)
+  function _getLevel(questData) {
+    const idx = questData.claimed.indexOf(false);
+    return idx === -1 ? 8 : idx;
+  }
+
+  // Called after each game over
+  function onGameOver(score, sessionCoins) {
+    const data = _loadData();
+    data.rows.progress += score;
+    data.coins.progress += sessionCoins;
+    data.games.progress += 1;
+    data.record.progress = Math.max(data.record.progress, score);
+    _saveData(data);
+  }
+
+  // Check if any quest has a claimable reward
+  function hasClaimable() {
+    const data = _loadData();
+    for (const def of DEFS) {
+      const q = data[def.id];
+      const lvl = _getLevel(q);
+      if (lvl < 8 && q.progress >= def.levels[lvl].target) return true;
+    }
+    return false;
+  }
+
+  // Claim reward for a quest
+  function claim(questId) {
+    const data = _loadData();
+    const def = DEFS.find(d => d.id === questId);
+    if (!def) return;
+    const q = data[questId];
+    const lvl = _getLevel(q);
+    if (lvl >= 8) return;
+    if (q.progress < def.levels[lvl].target) return;
+    if (q.claimed[lvl]) return;
+
+    q.claimed[lvl] = true;
+    const reward = def.levels[lvl].reward;
+    const newTotal = Save.addCoins(reward);
+    _saveData(data);
+
+    // Update UI
+    if (typeof UI !== 'undefined') UI.updateCoins(newTotal);
+    // Sync coins to Redis
+    const syncFn = window.__BASE_SYNC_COINS;
+    if (syncFn) syncFn(Save.getCoins());
+    // Sound
+    if (typeof Sound !== 'undefined') Sound.coin();
+    // Re-render
+    render();
+  }
+
+  // Apply server data (merge with local)
+  function applyServerData(serverData) {
+    if (!serverData) return;
+    const local = _loadData();
+    for (const def of DEFS) {
+      const s = serverData[def.id];
+      const l = local[def.id];
+      if (!s) continue;
+      // Take max progress
+      l.progress = Math.max(l.progress || 0, s.progress || 0);
+      // Union of claimed
+      if (s.claimed && Array.isArray(s.claimed)) {
+        for (let i = 0; i < 8; i++) {
+          if (s.claimed[i]) l.claimed[i] = true;
+        }
+      }
+    }
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(local)); } catch {}
+  }
+
+  // Render quests screen
+  function render() {
+    const container = document.getElementById('quest-list');
+    if (!container) return;
+    const data = _loadData();
+
+    container.innerHTML = '';
+    for (const def of DEFS) {
+      const q = data[def.id];
+      const lvl = _getLevel(q);
+      const isMaxed = lvl >= 8;
+      const levelInfo = isMaxed ? null : def.levels[lvl];
+      const target = levelInfo ? levelInfo.target : def.levels[7].target;
+      const progress = q.progress;
+      const pct = isMaxed ? 100 : Math.min(100, Math.floor((progress / target) * 100));
+      const canClaim = !isMaxed && progress >= target && !q.claimed[lvl];
+
+      const card = document.createElement('div');
+      card.className = 'quest-card' + (canClaim ? ' quest-claimable' : '');
+
+      const COIN_IMG = '<img src="/game/coin.png" style="width:14px;height:14px;object-fit:contain;vertical-align:middle;">';
+
+      card.innerHTML = `
+        <div class="quest-header">
+          <span class="quest-name">${def.icon} ${def.name}</span>
+          <span class="quest-level">${isMaxed ? '✅ MAX' : 'Lv ' + (lvl + 1)}</span>
+        </div>
+        <div class="quest-desc">${def.desc}</div>
+        <div class="quest-bar-bg">
+          <div class="quest-bar-fill${canClaim ? ' complete' : ''}" style="width:${pct}%"></div>
+        </div>
+        <div class="quest-progress">
+          <span class="quest-progress-text">${isMaxed ? target + ' / ' + target : Math.min(progress, target) + ' / ' + target}</span>
+          ${isMaxed
+            ? '<span class="quest-done">✅ COMPLETED</span>'
+            : canClaim
+              ? '<button class="quest-claim-btn" data-id="' + def.id + '">' + COIN_IMG + ' Claim ' + levelInfo.reward + '</button>'
+              : '<span class="quest-progress-text">' + pct + '%</span>'
+          }
+        </div>
+      `;
+      container.appendChild(card);
+    }
+
+    // Bind claim buttons
+    container.querySelectorAll('.quest-claim-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        claim(btn.dataset.id);
+      });
+    });
+  }
+
+  return { onGameOver, hasClaimable, claim, render, applyServerData };
+})();
+
+
 /* ===== main.js ===== */
 /**
  * main.js — Главный файл игры
@@ -4060,6 +4283,8 @@ function onGameOver() {
   currentState = GameState.GAMEOVER;
   const score = Player.getScore();
   const best  = Save.addScore(score);
+  // Quest progress
+  Quests.onGameOver(score, _sessionCoins);
   // Синхронизируем монеты с глобальным лидербордом
   const syncFn = window.__BASE_SYNC_COINS;
   if (syncFn) syncFn(Save.getCoins());
@@ -4247,6 +4472,13 @@ function _initUI() {
     if (syncFn) syncFn(Save.getCoins());
   });
   _bind('btn-ci-back', 'click', () => UI.show('menu'));
+
+  // Quests
+  _bind('btn-quests', 'click', () => { Quests.render(); UI.show('quests'); });
+  _bind('btn-quests-back', 'click', () => UI.show('menu'));
+
+  // Quest notify on game over — tap to go to quests
+  _bind('go-quest-notify', 'click', () => { Quests.render(); UI.show('quests'); });
 
   // Старт
   UI.show('menu');

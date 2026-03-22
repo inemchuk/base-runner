@@ -4,11 +4,26 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: 'Base Runner',
-  description: 'A Crossy Road-style game on Base',
+  description: 'A Crossy Road style endless runner game on Base. Run as far as you can, collect coins, unlock characters and compete on the leaderboard.',
   openGraph: {
     title: 'Base Runner',
-    description: 'How far can you go? A Crossy Road-style game on Base.',
+    description: 'A Crossy Road style endless runner game on Base. Run as far as you can, collect coins and compete on the leaderboard.',
     type: 'website',
+    url: 'https://baserunnerapp.vercel.app',
+    images: [
+      {
+        url: 'https://baserunnerapp.vercel.app/og-image.png',
+        width: 1200,
+        height: 628,
+        alt: 'Base Runner',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Base Runner',
+    description: 'A Crossy Road style endless runner game on Base. Run as far as you can, collect coins and compete on the leaderboard.',
+    images: ['https://baserunnerapp.vercel.app/og-image.png'],
   },
   other: {
     'base:app_id': '69bd15a3945e0bb74a271ff1',
@@ -20,6 +35,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  viewportFit: 'cover',
 };
 
 export default function RootLayout({

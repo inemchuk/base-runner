@@ -7,6 +7,7 @@ import { useLeaderboard } from '@/hooks/useLeaderboard';
 import { useCoinLeaderboard } from '@/hooks/useCoinLeaderboard';
 import { useCoinClaim } from '@/hooks/useCoinClaim';
 import { useShopSync } from '@/hooks/useShopSync';
+import { useQuestSync } from '@/hooks/useQuestSync';
 
 export default function Game() {
   useCheckIn();
@@ -14,6 +15,7 @@ export default function Game() {
   useCoinLeaderboard();
   useCoinClaim();
   useShopSync();
+  useQuestSync();
 
   useEffect(() => {
     // Resize canvas on mount
@@ -103,10 +105,11 @@ export default function Game() {
         <button className="btn btn-shop" id="btn-shop">🛒 Shop</button>
         <button className="btn btn-lb" id="btn-lb">🏆 Leaderboard</button>
         <button className="btn btn-ci" id="btn-ci">📅 Daily Check-in</button>
+        <button className="btn btn-quest" id="btn-quests">🎯 Quests</button>
       </div>
 
       {/* Game Over Screen */}
-      <div id="screen-gameover" className="screen hidden">
+      <div id="screen-gameover" className="screen hidden" style={{justifyContent:'flex-start',paddingTop:'12vh'}}>
         <h2 style={{color:'#fff',fontSize:'clamp(1.5rem,7vw,2.5rem)',marginBottom:'8px',letterSpacing:'3px'}}>GAME OVER</h2>
         <p style={{color:'#4D8FFF',marginBottom:'6px',fontSize:'clamp(0.9rem,4vw,1.2rem)',letterSpacing:'2px'}}>
           SCORE: <span id="go-score">0</span>
@@ -117,12 +120,13 @@ export default function Game() {
         <p id="go-coins-row" style={{color:'#FFD700',marginBottom:'32px',fontSize:'clamp(0.85rem,3.5vw,1.1rem)',letterSpacing:'2px',display:'none',alignItems:'center',justifyContent:'center',gap:'5px'}}>
           <img src="/game/coin.png" alt="coin" style={{width:'18px',height:'18px',objectFit:'contain'}} /> +<span id="go-coins-earned">0</span> COINS
         </p>
+        <p id="go-quest-notify" className="quest-notify" style={{display:'none'}}>🎯 Quest complete! Tap to claim</p>
         <button className="btn btn-restart" id="btn-restart">↺ PLAY AGAIN</button>
         <button className="btn btn-back" id="btn-go-menu">← MENU</button>
       </div>
 
       {/* Leaderboard Screen */}
-      <div id="screen-lb" className="screen hidden">
+      <div id="screen-lb" className="screen hidden" style={{justifyContent:'flex-start',paddingTop:'8vh'}}>
         <h2 style={{color:'#fff',fontSize:'clamp(1.2rem,6vw,2rem)',marginBottom:'16px',letterSpacing:'3px'}}>🏆 LEADERBOARD</h2>
         <div className="lb-tabs">
           <button className="lb-tab lb-tab-active" id="btn-lb-personal">Personal</button>
@@ -134,7 +138,7 @@ export default function Game() {
       </div>
 
       {/* Shop Screen */}
-      <div id="screen-shop" className="screen hidden">
+      <div id="screen-shop" className="screen hidden" style={{justifyContent:'flex-start',paddingTop:'8vh'}}>
         <h2 style={{color:'#fff',fontSize:'clamp(1.2rem,6vw,2rem)',marginBottom:'8px',letterSpacing:'3px'}}>🛒 SHOP</h2>
         <div id="shop-balance" style={{color:'#FFD700',fontSize:'clamp(1rem,4.5vw,1.3rem)',marginBottom:'20px',fontWeight:'bold',display:'flex',alignItems:'center',gap:'6px',justifyContent:'center'}}>
           <img src="/game/coin.png" alt="coin" style={{width:'22px',height:'22px',objectFit:'contain'}} />
@@ -144,8 +148,15 @@ export default function Game() {
         <button className="btn btn-back" id="btn-shop-back">← BACK</button>
       </div>
 
+      {/* Quests Screen */}
+      <div id="screen-quests" className="screen hidden" style={{justifyContent:'flex-start',paddingTop:'8vh'}}>
+        <h2 style={{color:'#fff',fontSize:'clamp(1.2rem,6vw,2rem)',marginBottom:'16px',letterSpacing:'3px'}}>🎯 QUESTS</h2>
+        <div id="quest-list" style={{width:'min(340px,90vw)',marginBottom:'16px'}}></div>
+        <button className="btn btn-back" id="btn-quests-back">← BACK</button>
+      </div>
+
       {/* Check-in Screen */}
-      <div id="screen-ci" className="screen hidden">
+      <div id="screen-ci" className="screen hidden" style={{justifyContent:'flex-start',paddingTop:'8vh'}}>
         <div className="ci-header">
           <h2 className="screen-title">📅 DAILY CHECK-IN</h2>
         </div>

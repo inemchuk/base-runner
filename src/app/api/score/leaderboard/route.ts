@@ -20,14 +20,27 @@ function getReverseNode(address: `0x${string}`): `0x${string}` {
 
 async function resolveNameAndAvatar(address: `0x${string}`): Promise<{ name: string | null; avatar: string | null }> {
   try {
-    const node = getReverseNode(address);
-    const [nameResult, avatarResult] = await Promise.allSettled([
-      client.readContract({ address: RESOLVER, abi: L2ResolverAbi, functionName: 'name', args: [node] }),
-      client.readContract({ address: RESOLVER, abi: L2ResolverAbi, functionName: 'text', args: [node, 'avatar'] }),
-    ]);
-    const name = nameResult.status === 'fulfilled' && nameResult.value ? (nameResult.value as string) : null;
-    const avatar = avatarResult.status === 'fulfilled' && avatarResult.value ? (avatarResult.value as string) : null;
-    return { name, avatar };
+    // Step 1: reverse resolve address → basename
+    const reverseNode = getReverseNode(address);
+    const rawName = await client.readContract({
+      address: RESOLVER, abi: L2ResolverAbi, functionName: 'name', args: [reverseNode],
+    }) as string;
+
+    if (!rawName) return { name: null, avatar: null };
+
+    // Step 2: forward resolve basename → avatar (text record on the name's node)
+    let avatar: string | null = null;
+    try {
+      const forwardNode = namehash(rawName);
+      const avatarText = await client.readContract({
+        address: RESOLVER, abi: L2ResolverAbi, functionName: 'text', args: [forwardNode, 'avatar'],
+      }) as string;
+      avatar = avatarText || null;
+    } catch {
+      // No avatar set
+    }
+
+    return { name: rawName, avatar };
   } catch {
     return { name: null, avatar: null };
   }
@@ -50,7 +63,6 @@ export async function GET() {
         raw.push({ address: result[i] as string, score: result[i + 1] as number });
       }
     } else {
-      // In-memory fallback
       const sorted = [...memStore.entries()].sort((a, b) => b[1] - a[1]).slice(0, 100);
       raw = sorted.map(([address, score]) => ({ address, score }));
     }

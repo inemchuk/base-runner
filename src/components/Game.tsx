@@ -38,19 +38,10 @@ export default function Game() {
     };
     window.addEventListener('base-auto-submit-score', handleAutoSubmit);
 
-    // Listen for coin claim requests from game.js
-    const handleClaimCoins = (e: Event) => {
-      const amount = (e as CustomEvent).detail?.amount;
-      const claimFn = (window as any).__BASE_CLAIM_COINS;
-      if (claimFn && amount) claimFn(amount);
-    };
-    window.addEventListener('base-claim-coins', handleClaimCoins);
-
     return () => {
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('base-checkin-claim', handleClaim);
       window.removeEventListener('base-auto-submit-score', handleAutoSubmit);
-      window.removeEventListener('base-claim-coins', handleClaimCoins);
     };
   }, []);
 
@@ -121,7 +112,9 @@ export default function Game() {
         <p style={{color:'rgba(255,255,255,0.5)',marginBottom:'32px',fontSize:'clamp(0.75rem,3vw,1rem)',letterSpacing:'2px'}}>
           BEST: <span id="go-best">0</span>
         </p>
-        <button className="btn btn-claim-coins" id="btn-claim-coins"><span style={{display:'inline-flex',alignItems:'center',gap:'5px',verticalAlign:'middle'}}>Claim <img src="/game/coin.png" alt="coin" style={{width:'16px',height:'16px',objectFit:'contain',display:'block',position:'relative',top:'-2px'}} /><span id="go-coins-earned">0</span></span></button>
+        <p id="go-coins-row" style={{color:'#FFD700',marginBottom:'16px',fontSize:'clamp(0.85rem,3.5vw,1.1rem)',letterSpacing:'2px',display:'flex',alignItems:'center',justifyContent:'center',gap:'5px'}}>
+          <img src="/game/coin.png" alt="coin" style={{width:'18px',height:'18px',objectFit:'contain'}} /> +<span id="go-coins-earned">0</span> COINS
+        </p>
         <button className="btn btn-restart" id="btn-restart">↺ PLAY AGAIN</button>
         <button className="btn btn-back" id="btn-go-menu">← MENU</button>
       </div>

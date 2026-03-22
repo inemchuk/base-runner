@@ -3601,17 +3601,15 @@ const UI = (() => {
     if (goScore) goScore.textContent = score;
     if (goBest)  goBest.textContent  = best;
 
-    // Claim Coins button: show if coins were collected this run
-    const claimBtn = document.getElementById('btn-claim-coins');
-    if (claimBtn) {
-      if (_sessionCoins > 0) {
-        claimBtn.style.display = '';
-        claimBtn.disabled = false;
-        claimBtn._amount = _sessionCoins;
-        claimBtn.innerHTML = `<span style="display:inline-flex;align-items:center;gap:5px;vertical-align:middle;font-weight:bold;letter-spacing:2px;">Claim <img src="/game/coin.png" style="width:16px;height:16px;object-fit:contain;display:block;position:relative;top:-2px;"><span id="go-coins-earned">${_sessionCoins}</span></span>`;
-      } else {
-        claimBtn.style.display = 'none';
-      }
+    // Show earned coins count
+    if (_sessionCoins > 0) {
+      const coinsEarned = document.getElementById('go-coins-earned');
+      if (coinsEarned) coinsEarned.textContent = _sessionCoins;
+      const coinsRow = document.getElementById('go-coins-row');
+      if (coinsRow) coinsRow.style.display = '';
+    } else {
+      const coinsRow = document.getElementById('go-coins-row');
+      if (coinsRow) coinsRow.style.display = 'none';
     }
 
     show('gameover');
@@ -4173,28 +4171,7 @@ function _initUI() {
     currentState = GameState.MENU;
     UI.show('menu');
   });
-  // Claim Coins button (offchain — instant)
-  _bind('btn-claim-coins', 'click', () => {
-    const btn = document.getElementById('btn-claim-coins');
-    if (!btn || btn.disabled) return;
-    const amount = btn._amount;
-    if (!amount) return;
-    btn.disabled = true;
-    btn.innerHTML = '⏳ Saving...';
-    window.dispatchEvent(new CustomEvent('base-claim-coins', { detail: { amount } }));
-  });
-
-  // Coin claim confirmed (offchain — instant)
-  window.addEventListener('base-coins-claimed', () => {
-    const btn = document.getElementById('btn-claim-coins');
-    if (btn) {
-      btn.innerHTML = '✅ Saved!';
-      btn.disabled = true;
-    }
-    // Синхронизируем лидерборд монет
-    const syncFn = window.__BASE_SYNC_COINS;
-    if (syncFn) syncFn(Save.getCoins());
-  });
+  // Coins are auto-synced at game over, no claim button needed
 
   // Refresh leaderboard when new data loads
   window.addEventListener('base-leaderboard-loaded', () => {

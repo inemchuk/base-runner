@@ -18,16 +18,27 @@ function getReverseNode(address: `0x${string}`): `0x${string}` {
   return keccak256(encodePacked(['bytes32', 'bytes32'], [baseReverseNode, addressNode]));
 }
 
-async function resolveAddress(address: `0x${string}`): Promise<{ name: string | null; avatar: string | null }> {
+async function resolveNameAndAvatar(address: `0x${string}`): Promise<{ name: string | null; avatar: string | null }> {
   try {
-    const node = getReverseNode(address);
-    const [nameResult, avatarResult] = await Promise.allSettled([
-      client.readContract({ address: RESOLVER, abi: L2ResolverAbi, functionName: 'name', args: [node] }),
-      client.readContract({ address: RESOLVER, abi: L2ResolverAbi, functionName: 'text', args: [node, 'avatar'] }),
-    ]);
-    const name = nameResult.status === 'fulfilled' && nameResult.value ? (nameResult.value as string) : null;
-    const avatar = avatarResult.status === 'fulfilled' && avatarResult.value ? (avatarResult.value as string) : null;
-    return { name, avatar };
+    const reverseNode = getReverseNode(address);
+    const rawName = await client.readContract({
+      address: RESOLVER, abi: L2ResolverAbi, functionName: 'name', args: [reverseNode],
+    }) as string;
+
+    if (!rawName) return { name: null, avatar: null };
+
+    let avatar: string | null = null;
+    try {
+      const forwardNode = namehash(rawName);
+      const avatarText = await client.readContract({
+        address: RESOLVER, abi: L2ResolverAbi, functionName: 'text', args: [forwardNode, 'avatar'],
+      }) as string;
+      avatar = avatarText || null;
+    } catch {
+      // No avatar set
+    }
+
+    return { name: rawName, avatar };
   } catch {
     return { name: null, avatar: null };
   }
@@ -49,10 +60,9 @@ export async function GET() {
       }
     }
 
-    // Resolve basenames + avatars
     const entries = await Promise.all(
       raw.map(async (entry, i) => {
-        const { name, avatar } = await resolveAddress(entry.address as `0x${string}`);
+        const { name, avatar } = await resolveNameAndAvatar(entry.address as `0x${string}`);
         return {
           rank: i + 1,
           address: entry.address,

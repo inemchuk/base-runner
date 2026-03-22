@@ -6,12 +6,14 @@ import { useCheckIn } from '@/hooks/useCheckIn';
 import { useLeaderboard } from '@/hooks/useLeaderboard';
 import { useCoinLeaderboard } from '@/hooks/useCoinLeaderboard';
 import { useCoinClaim } from '@/hooks/useCoinClaim';
+import { useShopSync } from '@/hooks/useShopSync';
 
 export default function Game() {
   useCheckIn();
   useLeaderboard();
   useCoinLeaderboard();
   useCoinClaim();
+  useShopSync();
 
   useEffect(() => {
     // Resize canvas on mount

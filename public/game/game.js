@@ -3800,6 +3800,25 @@ const Shop = (() => {
   }
   function saveShopData(d) {
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(d)); } catch {}
+    // Sync to server
+    _syncToServer(d);
+  }
+
+  function _syncToServer(d) {
+    const syncFn = window.__BASE_SHOP_SYNC;
+    if (syncFn) syncFn(d.owned || ['skin_cryptokid'], d.equipped || 'skin_cryptokid');
+  }
+
+  // Called from React hook when server data is loaded
+  function applyServerData(owned, equipped) {
+    const local = loadShopData();
+    // Merge: union of owned items (keep both local and server purchases)
+    const localOwned = local.owned || ['skin_cryptokid'];
+    const merged = [...new Set([...localOwned, ...owned])];
+    const d = { owned: merged, equipped: equipped || local.equipped || 'skin_cryptokid' };
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(d)); } catch {}
+    // Reload sprite if equipped changed
+    if (typeof Renderer !== 'undefined') Renderer.reloadPlayerSprite();
   }
   function getOwned() {
     const d = loadShopData();
@@ -3899,7 +3918,7 @@ const Shop = (() => {
     if (typeof UI !== 'undefined') UI.show('shop');
   }
 
-  return { show, getEquipped, getSprite };
+  return { show, getEquipped, getSprite, applyServerData };
 })();
 
 /* ===== main.js ===== */

@@ -109,7 +109,7 @@ export default function Game() {
       </div>
 
       {/* Game Over Screen */}
-      <div id="screen-gameover" className="screen hidden" style={{justifyContent:'flex-start',paddingTop:'12vh'}}>
+      <div id="screen-gameover" className="screen hidden" style={{justifyContent:'center'}}>
         <h2 style={{color:'#fff',fontSize:'clamp(1.5rem,7vw,2.5rem)',marginBottom:'8px',letterSpacing:'3px'}}>GAME OVER</h2>
         <p style={{color:'#4D8FFF',marginBottom:'6px',fontSize:'clamp(0.9rem,4vw,1.2rem)',letterSpacing:'2px'}}>
           SCORE: <span id="go-score">0</span>

@@ -4,10 +4,10 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: 'Base Runner',
-  description: 'A Crossy Road style endless runner game on Base. Run as far as you can, collect coins, unlock characters and compete on the leaderboard.',
+  description: 'On-chain runner game on Base where you dodge obstacles and beat your record. Check in daily to build your streak and collect coins to unlock characters',
   openGraph: {
     title: 'Base Runner',
-    description: 'A Crossy Road style endless runner game on Base. Run as far as you can, collect coins and compete on the leaderboard.',
+    description: 'On-chain runner game on Base where you dodge obstacles and beat your record. Check in daily to build your streak and collect coins to unlock characters',
     type: 'website',
     url: 'https://baserunnerapp.vercel.app',
     images: [
@@ -22,7 +22,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'Base Runner',
-    description: 'A Crossy Road style endless runner game on Base. Run as far as you can, collect coins and compete on the leaderboard.',
+    description: 'On-chain runner game on Base where you dodge obstacles and beat your record. Check in daily to build your streak and collect coins to unlock characters',
     images: ['https://baserunnerapp.vercel.app/og-image.png'],
   },
   other: {

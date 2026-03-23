@@ -3621,13 +3621,13 @@ const UI = (() => {
     lb:       document.getElementById('screen-lb'),
     ci:       document.getElementById('screen-ci'),
     shop:     document.getElementById('screen-shop'),
+    profile:  document.getElementById('screen-profile'),
     quests:   document.getElementById('screen-quests'),
   };
 
   const hud       = document.getElementById('hud');
   const scoreVal  = document.getElementById('score-val');
   const bestVal   = document.getElementById('best-val');
-
   // ===== Показать нужный экран =====
   function show(name) {
     if (name !== 'ci') _stopCiTimer();
@@ -4577,6 +4577,78 @@ function _bind(id, event, handler) {
   if (el) el.addEventListener(event, handler);
 }
 
+// ===== ПРОФИЛЬ =====
+function _renderProfile() {
+  // Wallet address
+  const addr = window.__BASE_WALLET || '';
+  const nameEl = document.getElementById('profile-name');
+  const addrEl = document.getElementById('profile-address');
+  const avatarImg = document.getElementById('profile-avatar');
+  const avatarPlaceholder = document.getElementById('profile-avatar-placeholder');
+
+  if (addr) {
+    // Show shortened address
+    if (addrEl) addrEl.textContent = addr.slice(0, 6) + '...' + addr.slice(-4);
+    // Try to load basename and avatar
+    _loadProfileData(addr);
+  } else {
+    if (nameEl) nameEl.textContent = 'Not connected';
+    if (addrEl) addrEl.textContent = '';
+    if (avatarImg) avatarImg.style.display = 'none';
+    if (avatarPlaceholder) avatarPlaceholder.style.display = 'flex';
+  }
+
+  // Stats from quest data + save data
+  const questData = (() => {
+    try { return JSON.parse(localStorage.getItem('quests_v1') || '{}'); } catch { return {}; }
+  })();
+  const checkin = Save.getCheckin();
+
+  const el = (id) => document.getElementById(id);
+  if (el('stat-best'))     el('stat-best').textContent     = Save.getBest();
+  if (el('stat-games'))    el('stat-games').textContent    = questData.games?.progress || 0;
+  if (el('stat-rows'))     el('stat-rows').textContent     = questData.rows?.progress || 0;
+  if (el('stat-coins'))    el('stat-coins').textContent    = questData.coins?.progress || 0;
+  if (el('stat-streak'))   el('stat-streak').textContent   = checkin.streak || 0;
+  if (el('stat-checkins')) el('stat-checkins').textContent = checkin.total || 0;
+}
+
+// Load basename + avatar from server
+async function _loadProfileData(addr) {
+  const nameEl = document.getElementById('profile-name');
+  const avatarImg = document.getElementById('profile-avatar');
+  const avatarPlaceholder = document.getElementById('profile-avatar-placeholder');
+  const menuIcon = document.getElementById('menu-profile-icon');
+
+  try {
+    const res = await fetch(`/api/resolve-names?addresses=${addr}`);
+    const data = await res.json();
+    if (data.names && data.names[addr.toLowerCase()]) {
+      if (nameEl) nameEl.textContent = data.names[addr.toLowerCase()];
+    } else {
+      if (nameEl) nameEl.textContent = addr.slice(0, 6) + '...' + addr.slice(-4);
+    }
+  } catch {}
+
+  // Avatar from Neynar
+  try {
+    const res = await fetch(`/api/score/leaderboard`);
+    const data = await res.json();
+    const entry = (data.entries || []).find(e => e.address.toLowerCase() === addr.toLowerCase());
+    if (entry && entry.avatar) {
+      if (avatarImg) {
+        avatarImg.src = entry.avatar;
+        avatarImg.style.display = 'block';
+      }
+      if (avatarPlaceholder) avatarPlaceholder.style.display = 'none';
+      // Update menu icon too
+      if (menuIcon) {
+        menuIcon.innerHTML = `<img src="${entry.avatar}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
+      }
+    }
+  } catch {}
+}
+
 function _initUI() {
   // Кнопки меню
   _bind('btn-start', 'click', () => initGame());
@@ -4648,7 +4720,7 @@ function _initUI() {
     const syncFn = window.__BASE_SYNC_COINS;
     if (syncFn) syncFn(Save.getCoins());
   });
-  _bind('btn-ci-back', 'click', () => UI.show('menu'));
+  _bind('btn-ci-back', 'click', () => { _renderProfile(); UI.show('profile'); });
 
   // Quests
   _bind('btn-quests', 'click', () => { Quests.render(); UI.show('quests'); });
@@ -4656,6 +4728,10 @@ function _initUI() {
 
   // Quest notify on game over — tap to go to quests
   _bind('go-quest-notify', 'click', () => { Quests.render(); UI.show('quests'); });
+
+  // Profile
+  _bind('btn-profile', 'click', () => { _renderProfile(); UI.show('profile'); });
+  _bind('btn-profile-back', 'click', () => UI.show('menu'));
 
   // Старт
   UI.show('menu');

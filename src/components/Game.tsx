@@ -101,11 +101,54 @@ export default function Game() {
         <h1 className="game-title">BASE RUNNER</h1>
         <p className="subtitle">how far can you go?</p>
         <div id="menu-coin-balance"><img src="/game/coin.png" className="coin-icon" alt="coin" /> <span id="menu-coin-count">0</span></div>
-        <button className="btn btn-start" id="btn-start">▶ PLAY</button>
-        <button className="btn btn-shop" id="btn-shop">🛒 Shop</button>
-        <button className="btn btn-lb" id="btn-lb">🏆 Leaderboard</button>
-        <button className="btn btn-ci" id="btn-ci">📅 Daily Check-in</button>
-        <button className="btn btn-quest" id="btn-quests">🎯 Quests</button>
+        <div style={{flex:1}} />
+        <nav className="tab-bar" id="menu-tab-bar">
+          <button className="tab-item" id="btn-shop"><span className="tab-icon">🛒</span><span className="tab-label">Shop</span></button>
+          <button className="tab-item" id="btn-quests"><span className="tab-icon">🎯</span><span className="tab-label">Quests</span></button>
+          <button className="tab-item tab-play" id="btn-start"><span className="tab-icon">▶</span><span className="tab-label">Play</span></button>
+          <button className="tab-item" id="btn-lb"><span className="tab-icon">🏆</span><span className="tab-label">Leaders</span></button>
+          <button className="tab-item" id="btn-profile"><span className="tab-icon" id="menu-profile-icon">👤</span><span className="tab-label">Profile</span></button>
+        </nav>
+      </div>
+
+      {/* Profile Screen */}
+      <div id="screen-profile" className="screen hidden" style={{justifyContent:'flex-start',paddingTop:'6vh'}}>
+        <div className="profile-header">
+          <img id="profile-avatar" className="profile-avatar" src="" alt="" style={{display:'none'}} />
+          <div id="profile-avatar-placeholder" className="profile-avatar" style={{display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.5rem'}}>👤</div>
+          <div className="profile-info">
+            <span className="profile-name" id="profile-name">Not connected</span>
+            <span className="profile-address" id="profile-address"></span>
+          </div>
+        </div>
+        <div className="profile-stats" id="profile-stats">
+          <div className="profile-stat">
+            <span className="profile-stat-value" id="stat-best">0</span>
+            <span className="profile-stat-label">Best Score</span>
+          </div>
+          <div className="profile-stat">
+            <span className="profile-stat-value" id="stat-games">0</span>
+            <span className="profile-stat-label">Games Played</span>
+          </div>
+          <div className="profile-stat">
+            <span className="profile-stat-value" id="stat-rows">0</span>
+            <span className="profile-stat-label">Total Rows</span>
+          </div>
+          <div className="profile-stat">
+            <span className="profile-stat-value" id="stat-coins">0</span>
+            <span className="profile-stat-label">Coins Earned</span>
+          </div>
+          <div className="profile-stat">
+            <span className="profile-stat-value" id="stat-streak">0</span>
+            <span className="profile-stat-label">Check-in Streak</span>
+          </div>
+          <div className="profile-stat">
+            <span className="profile-stat-value" id="stat-checkins">0</span>
+            <span className="profile-stat-label">Total Check-ins</span>
+          </div>
+        </div>
+        <button className="btn btn-ci" id="btn-ci" style={{marginBottom:'12px'}}>📅 Daily Check-in</button>
+        <button className="btn btn-back" id="btn-profile-back">← BACK</button>
       </div>
 
       {/* Game Over Screen */}

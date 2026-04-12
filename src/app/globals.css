@@ -56,9 +56,9 @@
     #screen-menu {
       background: rgba(5, 8, 20, 0.75);
       backdrop-filter: blur(2px);
-      justify-content: flex-start;
+      justify-content: space-between;
       padding-top: 8vh;
-      padding-bottom: 80px;
+      padding-bottom: 0;
     }
 
     h1.game-title {
@@ -500,7 +500,7 @@
       transition: transform 0.1s, opacity 0.2s;
     }
     .shop-btn:active { transform: scale(0.94); }
-    .shop-btn-equip { background: #0052FF; color: #fff; }
+    .shop-btn-equip, .shop-btn-equip-death { background: #0052FF; color: #fff; }
     .shop-btn-buy   { background: #FFD700; color: #1a0a00; display:inline-flex; align-items:center; justify-content:center; gap:4px; }
     .shop-btn-buy.disabled { opacity: 0.4; cursor: not-allowed; }
 
@@ -589,13 +589,12 @@
       justify-content: space-around;
       align-items: center;
       gap: 4px;
-      padding: 6px 8px;
+      padding: 8px 8px 12px;
       background: rgba(5, 8, 20, 0.92);
       border: 1.5px solid rgba(0,82,255,0.25);
-      border-radius: 18px;
-      width: calc(100% - 20px);
-      max-width: 400px;
-      margin-bottom: 12px;
+      border-radius: 24px 24px 0 0;
+      width: 100%;
+      max-width: 100%;
       backdrop-filter: blur(8px);
     }
     .tab-bar.hidden { display: none; }

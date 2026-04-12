@@ -1917,24 +1917,70 @@ const Renderer = (() => {
   }
 
   function buildParticles(x, y, type) {
+    const pack = (typeof Shop !== 'undefined') ? Shop.getEquippedDeath() : 'default';
     const parts = [];
-    const count = type === 'car' ? 14 : 10;
-    for (let i = 0; i < count; i++) {
-      const angle  = (Math.PI * 2 * i / count) + Math.random() * 0.4;
-      const speed  = 55 + Math.random() * 80;
-      const size   = 4 + Math.random() * 7;
-      const colors = type === 'car'
-        ? ['#FF6F00','#FF3D00','#FFD600','#FF8F00','#fff']
-        : ['#64B5F6','#90CAF9','#fff','#B3E5FC','#E1F5FE'];
-      parts.push({
-        x, y,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed - (type === 'car' ? 20 : 60),
-        size,
-        color: colors[Math.floor(Math.random() * colors.length)],
-        gravity: type === 'car' ? 180 : 90,
-        life: 0.6 + Math.random() * 0.4,
-      });
+
+    if (pack === 'death_pixel') {
+      // Pixel pack: square particles
+      const count = type === 'car' ? 20 : 14;
+      for (let i = 0; i < count; i++) {
+        const angle = (Math.PI * 2 * i / count) + Math.random() * 0.3;
+        const speed = 40 + Math.random() * 100;
+        const colors = type === 'car'
+          ? ['#FF0000','#FF4400','#FFAA00','#FFFFFF','#FF6600']
+          : ['#00AAFF','#0066FF','#88DDFF','#FFFFFF','#0088CC'];
+        parts.push({
+          x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 30,
+          size: 3 + Math.random() * 5, color: colors[Math.floor(Math.random() * colors.length)],
+          gravity: 120, life: 0.5 + Math.random() * 0.5, square: true,
+        });
+      }
+    } else if (pack === 'death_dramatic') {
+      // Dramatic: fewer but bigger, slower particles
+      const count = type === 'car' ? 8 : 6;
+      for (let i = 0; i < count; i++) {
+        const angle = (Math.PI * 2 * i / count) + Math.random() * 0.5;
+        const speed = 30 + Math.random() * 50;
+        const colors = type === 'car'
+          ? ['#FFD700','#FFA500','#FF4500','#fff','#FFEC8B']
+          : ['#E0F7FA','#80DEEA','#4DD0E1','#fff','#B2EBF2'];
+        parts.push({
+          x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 40,
+          size: 8 + Math.random() * 10, color: colors[Math.floor(Math.random() * colors.length)],
+          gravity: 60, life: 0.8 + Math.random() * 0.4, square: false,
+        });
+      }
+    } else if (pack === 'death_comic') {
+      // Comic: bouncy, cartoonish
+      const count = type === 'car' ? 16 : 12;
+      for (let i = 0; i < count; i++) {
+        const angle = (Math.PI * 2 * i / count) + Math.random() * 0.6;
+        const speed = 60 + Math.random() * 90;
+        const colors = type === 'car'
+          ? ['#FF1744','#FFEA00','#FF9100','#FFFFFF','#F50057']
+          : ['#40C4FF','#00E5FF','#18FFFF','#FFFFFF','#84FFFF'];
+        parts.push({
+          x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - (type === 'car' ? 50 : 80),
+          size: 5 + Math.random() * 8, color: colors[Math.floor(Math.random() * colors.length)],
+          gravity: type === 'car' ? 250 : 120, life: 0.7 + Math.random() * 0.3, square: false,
+        });
+      }
+    } else {
+      // Default
+      const count = type === 'car' ? 14 : 10;
+      for (let i = 0; i < count; i++) {
+        const angle  = (Math.PI * 2 * i / count) + Math.random() * 0.4;
+        const speed  = 55 + Math.random() * 80;
+        const size   = 4 + Math.random() * 7;
+        const colors = type === 'car'
+          ? ['#FF6F00','#FF3D00','#FFD600','#FF8F00','#fff']
+          : ['#64B5F6','#90CAF9','#fff','#B3E5FC','#E1F5FE'];
+        parts.push({
+          x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - (type === 'car' ? 20 : 60),
+          size, color: colors[Math.floor(Math.random() * colors.length)],
+          gravity: type === 'car' ? 180 : 90, life: 0.6 + Math.random() * 0.4,
+        });
+      }
     }
     return parts;
   }
@@ -3255,7 +3301,15 @@ const Renderer = (() => {
 
   // ── Death Animation ──────────────────────────────────────
   function drawDeathAnimation(dt) {
-    const t = deathTimer / DEATH_DUR;   // 0→1 progress
+    const pack = (typeof Shop !== 'undefined' && Shop.getEquippedDeath) ? Shop.getEquippedDeath() : 'default';
+    if (pack === 'death_comic')    drawDeathComic(dt);
+    else if (pack === 'death_pixel')    drawDeathPixel(dt);
+    else if (pack === 'death_dramatic') drawDeathDramatic(dt);
+    else                                drawDeathDefault(dt);
+  }
+
+  function drawDeathDefault(dt) {
+    const t = deathTimer / DEATH_DUR;
 
     // Flash — bright white/orange circle that fades fast
     if (t < 0.35) {
@@ -3273,7 +3327,7 @@ const Renderer = (() => {
       ctx.fill();
     }
 
-    // Ring shockwave expanding outward
+    // Ring shockwave
     if (t < 0.5) {
       const ringT  = t / 0.5;
       const radius = CELL * (0.3 + ringT * 1.8);
@@ -3287,7 +3341,7 @@ const Renderer = (() => {
       ctx.stroke();
     }
 
-    // Particles — physics simulation
+    // Particles
     for (const p of deathParticles) {
       const age   = deathTimer / p.life;
       if (age > 1) continue;
@@ -3295,7 +3349,6 @@ const Renderer = (() => {
       const px    = p.x + p.vx * deathTimer;
       const py    = p.y + p.vy * deathTimer + 0.5 * p.gravity * deathTimer * deathTimer;
       const size  = p.size * (1 - age * 0.5);
-
       ctx.globalAlpha = alpha;
       ctx.fillStyle   = p.color;
       ctx.beginPath();
@@ -3304,20 +3357,314 @@ const Renderer = (() => {
     }
     ctx.globalAlpha = 1;
 
-    // Water death: sinking ripples
+    // Water ripples
     if (deathType === 'water' && t < 0.7) {
-      const rT = t / 0.7;
       for (let i = 0; i < 3; i++) {
         const delay = i * 0.2;
         const rt    = Math.max(0, (t - delay) / (0.7 - delay));
         if (rt <= 0) continue;
-        const r     = CELL * (0.2 + rt * 0.9);
-        const a     = (1 - rt) * 0.5;
+        const r = CELL * (0.2 + rt * 0.9);
+        const a = (1 - rt) * 0.5;
         ctx.strokeStyle = `rgba(150,220,255,${a})`;
         ctx.lineWidth   = 2;
         ctx.beginPath();
         ctx.ellipse(deathX, deathY, r, r * 0.35, 0, 0, Math.PI * 2);
         ctx.stroke();
+      }
+    }
+  }
+
+  function drawDeathComic(dt) {
+    const t = deathTimer / DEATH_DUR;
+
+    // Comic squish flash (car) or bubble pop (water)
+    if (t < 0.3) {
+      const ft = t / 0.3;
+      const alpha = (1 - ft) * 0.9;
+      if (deathType === 'car') {
+        // Yellow star-burst flash
+        ctx.save();
+        ctx.translate(deathX, deathY);
+        ctx.globalAlpha = alpha;
+        const spikes = 8;
+        const outer = CELL * (0.5 + ft * 1.0);
+        const inner = outer * 0.45;
+        ctx.fillStyle = '#FFE600';
+        ctx.beginPath();
+        for (let i = 0; i < spikes * 2; i++) {
+          const angle = (i * Math.PI) / spikes - Math.PI / 2;
+          const r = i % 2 === 0 ? outer : inner;
+          i === 0 ? ctx.moveTo(Math.cos(angle) * r, Math.sin(angle) * r)
+                  : ctx.lineTo(Math.cos(angle) * r, Math.sin(angle) * r);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      } else {
+        // Blue bubble
+        const r = CELL * (0.3 + ft * 0.9);
+        const grd = ctx.createRadialGradient(deathX, deathY - r * 0.2, r * 0.1, deathX, deathY, r);
+        grd.addColorStop(0, `rgba(200,240,255,${alpha * 0.9})`);
+        grd.addColorStop(0.7, `rgba(100,200,255,${alpha * 0.4})`);
+        grd.addColorStop(1, `rgba(100,200,255,0)`);
+        ctx.fillStyle = grd;
+        ctx.beginPath();
+        ctx.arc(deathX, deathY, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // Bouncy particles (circle, with extra vertical bounce)
+    for (const p of deathParticles) {
+      const age   = deathTimer / p.life;
+      if (age > 1) continue;
+      const bounce = Math.abs(Math.sin(age * Math.PI * 2.5)) * (1 - age) * CELL * 0.3;
+      const alpha  = Math.max(0, 1 - age * 1.2);
+      const px     = p.x + p.vx * deathTimer;
+      const py     = p.y + p.vy * deathTimer + 0.5 * p.gravity * deathTimer * deathTimer - bounce;
+      const size   = p.size * (1 - age * 0.4) * (1 + Math.sin(age * Math.PI) * 0.3);
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle   = p.color;
+      ctx.beginPath();
+      ctx.arc(px, py, size / 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // Comic stars fly off (car death) — 4 spinning ★ symbols
+    if (deathType === 'car' && t < 0.85) {
+      const starOffsets = [[1.2, -1.0], [-1.3, -0.8], [0.7, 1.1], [-0.9, 1.2]];
+      starOffsets.forEach(([ox, oy], i) => {
+        const delay = i * 0.08;
+        const st    = Math.max(0, (t - delay));
+        if (st <= 0) return;
+        const a = Math.max(0, 1 - st * 1.1);
+        const sx = deathX + ox * CELL * st * 1.5;
+        const sy = deathY + oy * CELL * st * 1.5;
+        ctx.save();
+        ctx.translate(sx, sy);
+        ctx.rotate(st * Math.PI * 3);
+        ctx.globalAlpha = a;
+        ctx.fillStyle = '#FFE600';
+        ctx.font = `${CELL * 0.45}px serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('★', 0, 0);
+        ctx.restore();
+      });
+      ctx.globalAlpha = 1;
+    }
+
+    // Water: floating bubbles rise up
+    if (deathType === 'water' && t < 0.8) {
+      const bubbleData = [[0, 0], [-0.5, -0.3], [0.5, -0.2], [-0.3, 0.4], [0.4, 0.3]];
+      bubbleData.forEach(([ox, oy], i) => {
+        const delay = i * 0.1;
+        const bt    = Math.max(0, (t - delay));
+        if (bt <= 0) return;
+        const a = Math.max(0, 1 - bt * 1.2);
+        const bx = deathX + ox * CELL + Math.sin(bt * 5 + i) * CELL * 0.15;
+        const by = deathY + oy * CELL - bt * CELL * 1.4;
+        const r  = CELL * (0.12 + i * 0.04) * (1 - bt * 0.5);
+        ctx.globalAlpha = a * 0.75;
+        ctx.strokeStyle = 'rgba(150,220,255,0.9)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(bx, by, r, 0, Math.PI * 2);
+        ctx.stroke();
+        // Highlight
+        ctx.fillStyle = 'rgba(220,245,255,0.5)';
+        ctx.beginPath();
+        ctx.arc(bx - r * 0.3, by - r * 0.3, r * 0.25, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  function drawDeathPixel(dt) {
+    const t = deathTimer / DEATH_DUR;
+
+    if (deathType === 'car') {
+      // Pixelated flash grid
+      if (t < 0.25) {
+        const ft = t / 0.25;
+        const gridSize = Math.floor(CELL * 0.22);
+        const cols = 5, rows = 5;
+        ctx.globalAlpha = (1 - ft) * 0.85;
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            const hue = (r * cols + c) * 25;
+            ctx.fillStyle = `hsl(${hue},100%,65%)`;
+            ctx.fillRect(
+              deathX - (cols / 2) * gridSize + c * gridSize,
+              deathY - (rows / 2) * gridSize + r * gridSize,
+              gridSize - 1, gridSize - 1
+            );
+          }
+        }
+        ctx.globalAlpha = 1;
+      }
+
+      // Square pixel particles
+      for (const p of deathParticles) {
+        const age   = deathTimer / p.life;
+        if (age > 1) continue;
+        const alpha = Math.max(0, 1 - age);
+        const px    = p.x + p.vx * deathTimer;
+        const py    = p.y + p.vy * deathTimer + 0.5 * p.gravity * deathTimer * deathTimer;
+        const size  = p.size * (1 - age * 0.3);
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle   = p.color;
+        ctx.fillRect(px - size / 2, py - size / 2, size, size);
+      }
+      ctx.globalAlpha = 1;
+
+    } else {
+      // Water: pixel vortex — squares spiral inward then dissolve outward
+      const phase = t < 0.5 ? 'vortex' : 'dissolve';
+      const pt    = phase === 'vortex' ? t / 0.5 : (t - 0.5) / 0.5;
+
+      // Square pixel particles
+      for (const p of deathParticles) {
+        const age   = deathTimer / p.life;
+        if (age > 1) continue;
+        const alpha = Math.max(0, 1 - age);
+        const px    = p.x + p.vx * deathTimer;
+        const py    = p.y + p.vy * deathTimer + 0.5 * p.gravity * deathTimer * deathTimer;
+        const size  = p.size * (1 - age * 0.3);
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle   = p.color;
+        ctx.fillRect(px - size / 2, py - size / 2, size, size);
+      }
+      ctx.globalAlpha = 1;
+
+      // Vortex ring
+      if (phase === 'vortex') {
+        const numDots = 10;
+        const radius  = CELL * (0.5 + pt * 0.4);
+        for (let i = 0; i < numDots; i++) {
+          const angle = (i / numDots) * Math.PI * 2 + pt * Math.PI * 4;
+          const dx = Math.cos(angle) * radius;
+          const dy = Math.sin(angle) * radius * 0.4;
+          const a  = (1 - pt) * 0.8;
+          const sz = CELL * 0.1;
+          ctx.globalAlpha = a;
+          ctx.fillStyle = '#4FC3F7';
+          ctx.fillRect(deathX + dx - sz / 2, deathY + dy - sz / 2, sz, sz);
+        }
+        ctx.globalAlpha = 1;
+      }
+
+      // Dissolve: random pixel scatter fade
+      if (phase === 'dissolve') {
+        for (let i = 0; i < 12; i++) {
+          const seed = i * 137.508;
+          const angle = seed % (Math.PI * 2);
+          const dist  = CELL * (0.3 + (seed % 1.0) * 1.0);
+          const px    = deathX + Math.cos(angle) * dist * pt;
+          const py    = deathY + Math.sin(angle) * dist * pt;
+          const a     = Math.max(0, 1 - pt * 1.2);
+          const sz    = CELL * 0.12;
+          ctx.globalAlpha = a;
+          ctx.fillStyle = i % 2 === 0 ? '#4FC3F7' : '#B3E5FC';
+          ctx.fillRect(px - sz / 2, py - sz / 2, sz, sz);
+        }
+        ctx.globalAlpha = 1;
+      }
+    }
+  }
+
+  function drawDeathDramatic(dt) {
+    const t = deathTimer / DEATH_DUR;
+
+    if (deathType === 'car') {
+      // Spin-away: large arc flash then body spins up and away
+      if (t < 0.4) {
+        const ft = t / 0.4;
+        const alpha = (1 - ft) * 0.9;
+        const radius = CELL * (0.3 + ft * 2.0);
+        const grd = ctx.createRadialGradient(deathX, deathY, 0, deathX, deathY, radius);
+        grd.addColorStop(0,   `rgba(255,255,255,${alpha})`);
+        grd.addColorStop(0.3, `rgba(255,80,0,${alpha * 0.8})`);
+        grd.addColorStop(1,   `rgba(255,0,0,0)`);
+        ctx.fillStyle = grd;
+        ctx.beginPath();
+        ctx.arc(deathX, deathY, radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Slow dramatic particles — bigger, linger longer
+      for (const p of deathParticles) {
+        const age   = deathTimer / p.life;
+        if (age > 1) continue;
+        const alpha = Math.max(0, 1 - age * 0.7);
+        const px    = p.x + p.vx * deathTimer;
+        const py    = p.y + p.vy * deathTimer + 0.5 * p.gravity * deathTimer * deathTimer;
+        const size  = p.size * (1 - age * 0.2);
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle   = p.color;
+        ctx.beginPath();
+        ctx.arc(px, py, size / 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+
+      // Final flash-out at end
+      if (t > 0.75) {
+        const ft = (t - 0.75) / 0.25;
+        ctx.globalAlpha = ft * 0.5;
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(deathX - CELL * 2, deathY - CELL * 2, CELL * 4, CELL * 4);
+        ctx.globalAlpha = 1;
+      }
+
+    } else {
+      // Water: slow sink with heavy ripples
+      // Slow dramatic particles
+      for (const p of deathParticles) {
+        const age   = deathTimer / p.life;
+        if (age > 1) continue;
+        const alpha = Math.max(0, 1 - age * 0.7);
+        const px    = p.x + p.vx * deathTimer;
+        const py    = p.y + p.vy * deathTimer + 0.5 * p.gravity * deathTimer * deathTimer;
+        const size  = p.size * (1 - age * 0.2);
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle   = p.color;
+        ctx.beginPath();
+        ctx.arc(px, py, size / 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+
+      // Heavy slow ripples
+      for (let i = 0; i < 4; i++) {
+        const delay = i * 0.15;
+        const rt    = Math.max(0, (t - delay));
+        if (rt <= 0) continue;
+        const rtN = Math.min(rt / (1 - delay), 1);
+        const r   = CELL * (0.2 + rtN * 1.5);
+        const a   = (1 - rtN) * 0.65;
+        const lw  = 3 * (1 - rtN) + 1;
+        ctx.strokeStyle = `rgba(80,180,255,${a})`;
+        ctx.lineWidth   = lw;
+        ctx.beginPath();
+        ctx.ellipse(deathX, deathY, r, r * 0.3, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      // Sinking dark vignette overlay
+      if (t > 0.5) {
+        const st = (t - 0.5) / 0.5;
+        const r  = CELL * 1.5;
+        const grd = ctx.createRadialGradient(deathX, deathY, 0, deathX, deathY, r);
+        grd.addColorStop(0,   `rgba(0,20,60,${st * 0.7})`);
+        grd.addColorStop(1,   `rgba(0,20,60,0)`);
+        ctx.fillStyle = grd;
+        ctx.beginPath();
+        ctx.arc(deathX, deathY, r, 0, Math.PI * 2);
+        ctx.fill();
       }
     }
   }
@@ -3919,8 +4266,15 @@ const Shop = (() => {
     { id: 'boost_shield', name: 'Second Chance',  price: 500,  icon: '🛡️', desc: 'Extra life every game'        },
   ];
 
+  // ── Паки анимаций смерти ──
+  const DEATH_PACKS = [
+    { id: 'death_comic',    name: 'Comic',    price: 200,  icon: '💥', desc: 'Squish, bubbles and star fly-off' },
+    { id: 'death_pixel',    name: 'Pixel',    price: 400,  icon: '👾', desc: 'Pixel burst, vortex and dissolve' },
+    { id: 'death_dramatic', name: 'Dramatic', price: 600,  icon: '🎬', desc: 'Spin away, slow sink and flash out' },
+  ];
+
   const SAVE_KEY = 'shop_v1';
-  let shopTab = 'skins'; // 'skins' | 'boosters'
+  let shopTab = 'skins'; // 'skins' | 'boosters' | 'effects'
 
   function loadShopData() {
     try { return JSON.parse(localStorage.getItem(SAVE_KEY) || '{}'); } catch { return {}; }
@@ -3970,19 +4324,36 @@ const Shop = (() => {
     d.boosters = boosters;
     saveShopData(d);
   }
+  function getDeathPacks() { return loadShopData().deathPacks || []; }
+  function getEquippedDeath() { return loadShopData().equippedDeath || 'default'; }
+  function ownDeathPack(id) {
+    const d = loadShopData();
+    const packs = d.deathPacks || [];
+    if (!packs.includes(id)) packs.push(id);
+    d.deathPacks = packs;
+    saveShopData(d);
+  }
+  function equipDeath(id) {
+    const d = loadShopData();
+    d.equippedDeath = id;
+    saveShopData(d);
+  }
 
   // ── Вкладки ──
   function setTab(tab) {
     shopTab = tab;
     const btnS = document.getElementById('shop-tab-skins');
     const btnB = document.getElementById('shop-tab-boosters');
+    const btnE = document.getElementById('shop-tab-effects');
     if (btnS) btnS.className = 'shop-tab' + (tab === 'skins' ? ' shop-tab-active' : '');
     if (btnB) btnB.className = 'shop-tab' + (tab === 'boosters' ? ' shop-tab-active' : '');
+    if (btnE) btnE.className = 'shop-tab' + (tab === 'effects' ? ' shop-tab-active' : '');
     renderContent();
   }
 
   function renderContent() {
     if (shopTab === 'boosters') renderBoosters();
+    else if (shopTab === 'effects') renderEffects();
     else renderSkins();
   }
 
@@ -4095,6 +4466,80 @@ const Shop = (() => {
     });
   }
 
+  // ── Рендер паков анимаций ──
+  function renderEffects() {
+    const container = document.getElementById('shop-items');
+    if (!container) return;
+    const balance  = Save.getCoins();
+    const packs    = getDeathPacks();
+    const equipped = getEquippedDeath();
+
+    container.innerHTML = '';
+
+    // Default (free)
+    const defEl = document.createElement('div');
+    defEl.className = 'shop-item' + (equipped === 'default' ? ' shop-item-equipped' : '');
+    defEl.innerHTML = `
+      <span class="shop-icon">✨</span>
+      <div class="shop-info">
+        <span class="shop-name">Default</span>
+        <span class="shop-desc">Basic flash and particles</span>
+      </div>
+      <div class="shop-action">
+        ${equipped === 'default'
+          ? '<span class="shop-badge-on">✓ ON</span>'
+          : '<button class="shop-btn shop-btn-equip-death" data-id="default">Equip</button>'}
+      </div>`;
+    container.appendChild(defEl);
+
+    for (const item of DEATH_PACKS) {
+      const isOwned    = packs.includes(item.id);
+      const isEquipped = equipped === item.id;
+      const canAfford  = balance >= item.price;
+
+      const el = document.createElement('div');
+      el.className = 'shop-item' + (isEquipped ? ' shop-item-equipped' : '');
+      el.innerHTML = `
+        <span class="shop-icon">${item.icon}</span>
+        <div class="shop-info">
+          <span class="shop-name">${item.name}</span>
+          <span class="shop-desc">${item.desc}</span>
+        </div>
+        <div class="shop-action">
+          ${isEquipped
+            ? '<span class="shop-badge-on">✓ ON</span>'
+            : isOwned
+              ? `<button class="shop-btn shop-btn-equip-death" data-id="${item.id}">Equip</button>`
+              : `<button class="shop-btn shop-btn-buy${canAfford ? '' : ' disabled'}" data-id="${item.id}" data-price="${item.price}" style="display:inline-flex;flex-direction:row;align-items:center;justify-content:center;gap:4px;"><img src="/game/coin.png" style="width:14px;height:14px;object-fit:contain;display:block;flex-shrink:0;"> ${item.price}</button>`
+          }
+        </div>`;
+      container.appendChild(el);
+    }
+
+    container.querySelectorAll('.shop-btn-equip-death').forEach(btn => {
+      btn.addEventListener('click', () => {
+        equipDeath(btn.dataset.id);
+        render();
+      });
+    });
+    container.querySelectorAll('.shop-btn-buy').forEach(btn => {
+      if (btn.classList.contains('disabled')) return;
+      btn.addEventListener('click', () => {
+        const price = parseInt(btn.dataset.price);
+        const cur   = Save.getCoins();
+        if (cur < price) return;
+        const d = Save.load();
+        d.coins -= price;
+        Save.save(d);
+        ownDeathPack(btn.dataset.id);
+        equipDeath(btn.dataset.id);
+        if (typeof UI !== 'undefined') UI.updateCoins(Save.getCoins());
+        if (typeof window.__BASE_SYNC_COINS === 'function') window.__BASE_SYNC_COINS(Save.getCoins());
+        render();
+      });
+    });
+  }
+
   function render() {
     const coinEl = document.getElementById('shop-coin-count');
     if (coinEl) coinEl.textContent = Save.getCoins();
@@ -4112,7 +4557,7 @@ const Shop = (() => {
     if (typeof UI !== 'undefined') UI.show('shop');
   }
 
-  return { show, setTab, getEquipped, getSprite, applyServerData, hasBoosted };
+  return { show, setTab, getEquipped, getSprite, applyServerData, hasBoosted, getEquippedDeath };
 })();
 
 
@@ -4658,6 +5103,7 @@ function _initUI() {
   _bind('btn-shop-back', 'click', () => UI.show('menu'));
   _bind('shop-tab-skins',    'click', () => Shop.setTab('skins'));
   _bind('shop-tab-boosters', 'click', () => Shop.setTab('boosters'));
+  _bind('shop-tab-effects',  'click', () => Shop.setTab('effects'));
 
   // Кнопка звука
   _bind('btn-mute', 'click', () => Sound.toggleMute());

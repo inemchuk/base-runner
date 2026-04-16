@@ -58,7 +58,7 @@
       backdrop-filter: blur(2px);
       justify-content: space-between;
       padding-top: 8vh;
-      padding-bottom: 0;
+      padding-bottom: 60px;
     }
 
     h1.game-title {

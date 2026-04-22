@@ -1917,9 +1917,15 @@ const Renderer = (() => {
   const magnetCoins = [];   // { fromX, fromY, toX, toY, age, col, rowIdx }
   const MAGNET_DUR  = 0.25; // seconds for coin to fly to player
 
-  // ── Footprint trails ─────────────────────────────────────
-  const trails = [];          // { x, y, age, maxAge, rowType }
-  const TRAIL_MAX_AGE = 0.7;  // seconds before fading out
+  // ── Footprint / landing trails ───────────────────────────
+  // Each trail: { x, y, age, maxAge, type, seed }
+  // type: 'footprint' (grass) | 'dust' (road/train) | 'ripple' (water/log)
+  const trails = [];
+  const TRAIL_LIFE = {
+    footprint: 0.75,
+    dust:      0.55,
+    ripple:    0.85,
+  };
 
   // ── Death animation state ────────────────────────────────
   let deathActive    = false;
@@ -2319,7 +2325,7 @@ const Renderer = (() => {
     // Age and prune trails
     for (let i = trails.length - 1; i >= 0; i--) {
       trails[i].age += dt_approx;
-      if (trails[i].age >= TRAIL_MAX_AGE) trails.splice(i, 1);
+      if (trails[i].age >= trails[i].maxAge) trails.splice(i, 1);
     }
 
     // Advance death animation timer
@@ -3200,33 +3206,82 @@ const Renderer = (() => {
   }
 
 
-  // ── Footprint Trail ──────────────────────────────────────
+  // ── Landing Trails ───────────────────────────────────────
+  // Called once per jump-landing. Chooses the right visual for the surface.
   function addTrail(x, y, rowType) {
-    // Only leave footprints on grass
-    if (rowType !== 'grass') return;
-    trails.push({ x, y, age: 0, maxAge: TRAIL_MAX_AGE });
+    let type;
+    if      (rowType === 'grass') type = 'footprint';
+    else if (rowType === 'water') type = 'ripple';
+    else                          type = 'dust';   // road, train, fallback
+
+    trails.push({
+      x, y,
+      age:    0,
+      maxAge: TRAIL_LIFE[type],
+      type,
+      seed:   Math.random(),   // little randomness for dust variation
+    });
   }
 
   function drawTrails() {
+    ctx.save();
     for (const t of trails) {
-      const progress = t.age / t.maxAge;        // 0→1
-      const alpha    = (1 - progress) * 0.22;   // fade out
-      const size     = CELL * 0.12 * (1 - progress * 0.4);
+      const progress = t.age / t.maxAge;       // 0 → 1
+      const fade     = 1 - progress;
 
-      ctx.save();
-      ctx.globalAlpha = alpha * 0.45;  // extra subtle
-      ctx.fillStyle   = '#1a3a0a';
-
-      // Two small ovals — left and right footprint
-      ctx.beginPath();
-      ctx.ellipse(t.x - CELL * 0.1, t.y + CELL * 0.08, size * 0.5, size * 0.85, 0.3, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.ellipse(t.x + CELL * 0.1, t.y - CELL * 0.08, size * 0.5, size * 0.85, -0.3, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.restore();
+      if (t.type === 'footprint') {
+        // Grass: two dark oval footprints, shrink + fade
+        ctx.globalAlpha = fade * 0.35;
+        ctx.fillStyle   = '#1a3a0a';
+        const size = CELL * 0.13 * (1 - progress * 0.3);
+        ctx.beginPath();
+        ctx.ellipse(t.x - CELL * 0.1, t.y + CELL * 0.08, size * 0.5, size * 0.85, 0.3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(t.x + CELL * 0.1, t.y - CELL * 0.08, size * 0.5, size * 0.85, -0.3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      else if (t.type === 'dust') {
+        // Road / train: light dust puff that expands upward and dissipates
+        ctx.globalAlpha = fade * 0.55;
+        // Brighten at night so it's visible against dark asphalt
+        ctx.fillStyle = nightRatio > 0.5 ? 'rgba(220,225,240,1)' : 'rgba(245,245,235,1)';
+        const rise   = -progress * CELL * 0.18;
+        const baseR  = CELL * 0.11 * (0.6 + progress * 1.1);   // expands
+        const offX   = (t.seed - 0.5) * CELL * 0.05;
+        // Three overlapping puffs for a soft cloud shape
+        ctx.beginPath();
+        ctx.arc(t.x - CELL * 0.09 + offX, t.y + rise + CELL * 0.03, baseR * 0.95, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(t.x + CELL * 0.10 + offX, t.y + rise - CELL * 0.02, baseR * 0.85, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(t.x + offX,                t.y + rise - CELL * 0.08, baseR * 0.65, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      else if (t.type === 'ripple') {
+        // Water / log: expanding ellipse ring
+        ctx.globalAlpha = fade * 0.7;
+        ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+        ctx.lineWidth   = 2;
+        const rx = CELL * 0.14 + progress * CELL * 0.38;
+        const ry = rx * 0.45;
+        ctx.beginPath();
+        ctx.ellipse(t.x, t.y + CELL * 0.05, rx, ry, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        // A faint inner ring for depth
+        if (progress > 0.15) {
+          ctx.globalAlpha = fade * 0.35;
+          const rx2 = CELL * 0.08 + (progress - 0.15) * CELL * 0.28;
+          ctx.beginPath();
+          ctx.ellipse(t.x, t.y + CELL * 0.05, rx2, rx2 * 0.45, 0, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
     }
+    ctx.globalAlpha = 1;
+    ctx.restore();
   }
 
   // ── Train Row ─────────────────────────────────────────────
@@ -3967,7 +4022,7 @@ const Renderer = (() => {
     ctx.closePath();
   }
 
-  function stopDeath() { deathActive = false; deathTimer = 0; deathParticles = []; }
+  function stopDeath() { deathActive = false; deathTimer = 0; deathParticles = []; trails.length = 0; }
   function resetWeather() { _lastWeatherScore = -1; weatherState = 0; weatherRatio = 0; lightningFlash = 0; lightningTimer = 4; }
   // Debug: force a specific weather state (0=clear,1=rain,2=fog,3=storm,4=windy)
   function _dbgWeather(state) { weatherState = state; weatherRatio = 0; if (state===3) { rainInitDone=false; initRain(STORM_RAIN_COUNT); } else if (state===1) { rainInitDone=false; initRain(RAIN_COUNT); } }

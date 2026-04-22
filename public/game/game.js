@@ -1456,6 +1456,11 @@ const Player = (() => {
     state.visualY  = World.rowToY(state.row) + CELL / 2;
     state.jumpFrom = { x: state.visualX, y: state.visualY };
     resetShield();
+    // Списать заряды активных бустеров на начало игры
+    if (typeof Shop !== 'undefined') {
+      Shop.useBooster('boost_magnet');
+      Shop.useBooster('boost_double');
+    }
   }
 
   // ===== Движение в направлении (dRow, dCol) =====
@@ -1556,6 +1561,8 @@ const Player = (() => {
   // ===== Обновление каждый кадр =====
   function update(dt) {
     if (!state.alive) return;
+    // Уменьшаем таймер инвиза
+    if (_invincibleTimer > 0) _invincibleTimer = Math.max(0, _invincibleTimer - dt);
 
     // --- Анимация шага ---
     if (state.jumping) {
@@ -1586,9 +1593,9 @@ const Player = (() => {
       state.visualX += state.onLog.speed * dt;
       state.col = Math.round((state.visualX - CELL / 2) / CELL);
 
-      // Уплыл за края → тонем
+      // Уплыл за края → тонем (инвиз не спасает)
       if (state.visualX < -CELL * 0.5 || state.visualX > COLS * CELL + CELL * 0.5) {
-        kill();
+        kill('water');
       }
     }
 
@@ -1615,23 +1622,28 @@ const Player = (() => {
   }
 
   // ===== Убить игрока =====
-  let _shieldUsed = false;
-  function resetShield() { _shieldUsed = false; }
+  let _shieldUsed      = false;
+  let _invincibleTimer = 0;
+  const INVINCIBLE_DUR = 3.0; // секунды инвиза
 
-  function kill() {
+  function resetShield() {
+    _shieldUsed      = false;
+    _invincibleTimer = 0;
+  }
+  function isInvincible() { return _invincibleTimer > 0; }
+
+  // type: 'car' | 'water' — вода и падение всегда убивают
+  function kill(type) {
     if (!state.alive) return;
-    // Second Chance — shield saves once per game
-    if (!_shieldUsed && typeof Shop !== 'undefined' && Shop.hasBoosted('boost_shield')) {
-      _shieldUsed = true;
-      // Move player back one row safely
-      state.row = Math.max(0, state.row - 1);
-      state.visualY = World.rowToY(state.row) + CELL / 2;
-      state.col = Math.min(Math.max(state.col, 1), COLS - 2);
-      state.visualX = state.col * CELL + CELL / 2;
-      state.onLog = null;
-      state.jumping = false;
+    // Инвиз от предыдущего срабатывания щита — только от машин
+    if (type !== 'water' && _invincibleTimer > 0) return;
+    // Second Chance — даёт инвиз 3 сек, только от машин
+    if (type !== 'water' && !_shieldUsed && typeof Shop !== 'undefined' && Shop.hasBoosted('boost_shield')) {
+      _shieldUsed      = true;
+      _invincibleTimer = INVINCIBLE_DUR;
+      Shop.useBooster('boost_shield');
       if (typeof Vibrate !== 'undefined') Vibrate.coin();
-      return; // saved!
+      return; // saved — активирован инвиз
     }
     state.alive   = false;
     state.onLog   = null;
@@ -1650,7 +1662,7 @@ const Player = (() => {
     init, update, kill,
     jump, move,
     moveForward, moveBackward, moveLeft, moveRight,
-    getState, isAlive, getScore, setOnLog,
+    getState, isAlive, getScore, setOnLog, isInvincible,
   };
 
 })();
@@ -1720,10 +1732,12 @@ const Collision = (() => {
   // ===== Проверка столкновения с машиной =====
   function checkCars(ps, row) {
     Player.setOnLog(null);
+    // Инвиз — машины не убивают
+    if (Player.isInvincible()) return;
 
     for (const car of row.obstacles) {
       if (overlapsX(ps.visualX, PLAYER_RADIUS, car.x, car.width)) {
-        Player.kill();
+        Player.kill('car');
         return;
       }
     }
@@ -1750,9 +1764,9 @@ const Collision = (() => {
       // Игрок на бревне — двигаемся вместе
       Player.setOnLog(foundLog);
     } else {
-      // Нет бревна под игроком — тонем
+      // Нет бревна под игроком — тонем (инвиз не спасает)
       Player.setOnLog(null);
-      Player.kill();
+      Player.kill('water');
     }
   }
 
@@ -3765,11 +3779,16 @@ const Renderer = (() => {
       ctx.ellipse(x, y + CELL * 0.2, CELL * 0.28 * shadowScale, CELL * 0.09 * shadowScale, 0, 0, Math.PI * 2);
       ctx.fill();
 
+      // Мигание при инвизе (щит активен)
+      const invincible = Player.isInvincible();
+      const blinkAlpha = invincible ? (Math.sin(Date.now() / 80) > 0 ? 1.0 : 0.15) : 1.0;
       ctx.save();
+      ctx.globalAlpha = blinkAlpha;
       ctx.translate(x, baseY + bobY);
       ctx.scale(flip, 1);
       ctx.drawImage(playerImg, -size / 2, -size * 0.72, size, size);
       ctx.restore();
+      ctx.globalAlpha = 1;
       return;
     }
 
@@ -4259,11 +4278,11 @@ const Shop = (() => {
     { id: 'skin_base_king',    name: 'Base King',     price: 1000,icon: '👑', desc: 'Rule the chain',      sprite: '/game/chars/base_king.png'     },
   ];
 
-  // ── Бустеры (постоянные улучшения) ──
+  // ── Бустеры (расходуемые, покупаются паками) ──
   const BOOSTERS = [
-    { id: 'boost_magnet', name: 'Coin Magnet',   price: 200,  icon: '🧲', desc: 'Coins pull from 2 tiles away' },
-    { id: 'boost_double', name: 'Double Coins',  price: 350,  icon: '💰', desc: 'Every coin counts as 2'       },
-    { id: 'boost_shield', name: 'Second Chance',  price: 500,  icon: '🛡️', desc: 'Extra life every game'        },
+    { id: 'boost_magnet', name: 'Coin Magnet',   packPrice: 60,  packSize: 3, icon: '🧲', desc: 'Coins pull from 2 tiles away' },
+    { id: 'boost_double', name: 'Double Coins',  packPrice: 90,  packSize: 3, icon: '💰', desc: 'Every coin counts as 2'       },
+    { id: 'boost_shield', name: 'Second Chance', packPrice: 100, packSize: 3, icon: '🛡️', desc: 'Extra life — triggers on death'  },
   ];
 
   // ── Паки анимаций смерти ──
@@ -4286,24 +4305,64 @@ const Shop = (() => {
 
   function _syncToServer(d) {
     const syncFn = window.__BASE_SHOP_SYNC;
-    if (syncFn) syncFn(d.owned || ['skin_cryptokid'], d.equipped || 'skin_cryptokid', d.boosters || []);
+    if (syncFn) syncFn(d.owned || ['skin_cryptokid'], d.equipped || 'skin_cryptokid', d.boosterCharges || {});
   }
 
-  function applyServerData(owned, equipped, boosters) {
-    const local = loadShopData();
+  function applyServerData(owned, equipped, boosterCharges) {
+    const local = _migrateCharges(loadShopData());
     const localOwned = local.owned || ['skin_cryptokid'];
-    const localBoosters = local.boosters || [];
-    const mergedOwned = [...new Set([...localOwned, ...owned])];
-    const mergedBoosters = [...new Set([...localBoosters, ...(boosters || [])])];
-    const d = { owned: mergedOwned, equipped: equipped || local.equipped || 'skin_cryptokid', boosters: mergedBoosters };
+    const mergedOwned = [...new Set([...localOwned, ...(owned || [])])];
+    // Merge charges: take max of local and server for each id
+    const localCharges = local.boosterCharges || {};
+    const serverCharges = (typeof boosterCharges === 'object' && !Array.isArray(boosterCharges)) ? boosterCharges : {};
+    const mergedCharges = { ...localCharges };
+    for (const id of Object.keys(serverCharges)) {
+      mergedCharges[id] = Math.max(mergedCharges[id] || 0, serverCharges[id] || 0);
+    }
+    const d = { owned: mergedOwned, equipped: equipped || local.equipped || 'skin_cryptokid', boosterCharges: mergedCharges };
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(d)); } catch {}
     if (typeof Renderer !== 'undefined') Renderer.reloadPlayerSprite();
   }
 
   function getOwned() { return loadShopData().owned || ['skin_cryptokid']; }
   function getEquipped() { return loadShopData().equipped || 'skin_cryptokid'; }
-  function getBoosters() { return loadShopData().boosters || []; }
-  function hasBoosted(id) { return getBoosters().includes(id); }
+
+  // ── Расходуемые бустеры ──
+  function _migrateCharges(d) {
+    // Миграция из старого формата boosters:[id] в boosterCharges:{id:N}
+    if (d.boosters && !d.boosterCharges) {
+      const charges = {};
+      (d.boosters || []).forEach(id => { charges[id] = 1; });
+      d.boosterCharges = charges;
+      delete d.boosters;
+    }
+    return d;
+  }
+  function getBoosterCharges() {
+    const d = _migrateCharges(loadShopData());
+    return d.boosterCharges || {};
+  }
+  function getBoosterCount(id) { return getBoosterCharges()[id] || 0; }
+  function hasBoosted(id) { return getBoosterCount(id) > 0; }
+  function addBoosterCharges(id, amount) {
+    const d = _migrateCharges(loadShopData());
+    const charges = d.boosterCharges || {};
+    charges[id] = (charges[id] || 0) + amount;
+    d.boosterCharges = charges;
+    delete d.boosters;
+    saveShopData(d);
+  }
+  function useBooster(id) {
+    const d = _migrateCharges(loadShopData());
+    const charges = d.boosterCharges || {};
+    if ((charges[id] || 0) > 0) {
+      charges[id]--;
+      d.boosterCharges = charges;
+      saveShopData(d);
+      return true;
+    }
+    return false;
+  }
 
   function own(id) {
     const d = loadShopData();
@@ -4315,13 +4374,6 @@ const Shop = (() => {
   function equip(id) {
     const d = loadShopData();
     d.equipped = id;
-    saveShopData(d);
-  }
-  function ownBooster(id) {
-    const d = loadShopData();
-    const boosters = d.boosters || [];
-    if (!boosters.includes(id)) boosters.push(id);
-    d.boosters = boosters;
     saveShopData(d);
   }
   function getDeathPacks() { return loadShopData().deathPacks || []; }
@@ -4420,31 +4472,29 @@ const Shop = (() => {
     });
   }
 
-  // ── Рендер бустеров ──
+  // ── Рендер бустеров (расходуемые) ──
   function renderBoosters() {
     const container = document.getElementById('shop-items');
     if (!container) return;
-    const balance  = Save.getCoins();
-    const boosters = getBoosters();
+    const balance = Save.getCoins();
 
     container.innerHTML = '';
     for (const item of BOOSTERS) {
-      const isOwned   = boosters.includes(item.id);
-      const canAfford = balance >= item.price;
+      const charges   = getBoosterCount(item.id);
+      const hasActive = charges > 0;
+      const canAfford = balance >= item.packPrice;
 
       const el = document.createElement('div');
-      el.className = 'shop-item' + (isOwned ? ' shop-item-equipped' : '');
+      el.className = 'shop-item' + (hasActive ? ' shop-item-equipped' : '');
       el.innerHTML = `
         <span class="shop-icon">${item.icon}</span>
         <div class="shop-info">
           <span class="shop-name">${item.name}</span>
           <span class="shop-desc">${item.desc}</span>
         </div>
-        <div class="shop-action">
-          ${isOwned
-            ? '<span class="shop-badge-owned">✓ OWNED</span>'
-            : `<button class="shop-btn shop-btn-buy${canAfford ? '' : ' disabled'}" data-id="${item.id}" data-price="${item.price}" style="display:inline-flex;flex-direction:row;align-items:center;justify-content:center;gap:4px;"><img src="/game/coin.png" style="width:14px;height:14px;object-fit:contain;display:block;flex-shrink:0;"> ${item.price}</button>`
-          }
+        <div class="shop-action" style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+          ${hasActive ? `<span class="shop-badge-owned" style="font-size:0.6rem;padding:2px 8px;">${charges} left</span>` : ''}
+          <button class="shop-btn shop-btn-buy${canAfford ? '' : ' disabled'}" data-id="${item.id}" data-price="${item.packPrice}" data-pack="${item.packSize}" style="display:inline-flex;flex-direction:row;align-items:center;justify-content:center;gap:4px;white-space:nowrap;">+${item.packSize} uses · <img src="/game/coin.png" style="width:14px;height:14px;object-fit:contain;display:block;flex-shrink:0;vertical-align:middle;"> ${item.packPrice}</button>
         </div>`;
       container.appendChild(el);
     }
@@ -4453,12 +4503,13 @@ const Shop = (() => {
       if (btn.classList.contains('disabled')) return;
       btn.addEventListener('click', () => {
         const price = parseInt(btn.dataset.price);
+        const pack  = parseInt(btn.dataset.pack);
         const cur   = Save.getCoins();
         if (cur < price) return;
         const d = Save.load();
         d.coins -= price;
         Save.save(d);
-        ownBooster(btn.dataset.id);
+        addBoosterCharges(btn.dataset.id, pack);
         if (typeof UI !== 'undefined') UI.updateCoins(Save.getCoins());
         if (typeof window.__BASE_SYNC_COINS === 'function') window.__BASE_SYNC_COINS(Save.getCoins());
         render();
@@ -4557,7 +4608,7 @@ const Shop = (() => {
     if (typeof UI !== 'undefined') UI.show('shop');
   }
 
-  return { show, setTab, getEquipped, getSprite, applyServerData, hasBoosted, getEquippedDeath };
+  return { show, setTab, getEquipped, getSprite, applyServerData, hasBoosted, useBooster, getBoosterCount, getEquippedDeath };
 })();
 
 

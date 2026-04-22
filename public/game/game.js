@@ -1632,6 +1632,15 @@ const Player = (() => {
   }
   function isInvincible() { return _invincibleTimer > 0; }
 
+  // Оживить игрока после Continue — даём краткий инвиз чтобы не умер сразу
+  function revive() {
+    state.alive      = true;
+    state.jumping    = false;
+    state.onLog      = null;
+    _shieldUsed      = false;
+    _invincibleTimer = 2.5;  // 2.5s invincibility so player isn't immediately killed
+  }
+
   // type: 'car' | 'water' — вода и падение всегда убивают
   function kill(type) {
     if (!state.alive) return;
@@ -1659,7 +1668,7 @@ const Player = (() => {
   function setOnLog(log)  { state.onLog = log; }
 
   return {
-    init, update, kill,
+    init, update, kill, revive,
     jump, move,
     moveForward, moveBackward, moveLeft, moveRight,
     getState, isAlive, getScore, setOnLog, isInvincible,
@@ -4838,6 +4847,7 @@ const Vibrate = {
 const GameState = {
   MENU:     'menu',
   PLAYING:  'playing',
+  CONTINUE: 'continue',
   GAMEOVER: 'gameover',
 };
 
@@ -4883,8 +4893,40 @@ function menuLoop(timestamp) {
 // ===== ИНИЦИАЛИЗАЦИЯ ИГРЫ =====
 let _sessionCoins = 0;
 
+const CONTINUE_COST   = 100;
+let _continueUsed     = false;
+let _continueInterval = null;
+
+function showContinueOverlay() {
+  currentState = GameState.CONTINUE;
+  let _countdownSec = 5;
+  const timerEl = document.getElementById('continue-timer');
+  const costEl  = document.getElementById('continue-cost');
+  const el      = document.getElementById('screen-continue');
+  if (costEl)  costEl.textContent  = CONTINUE_COST;
+  if (timerEl) timerEl.textContent = _countdownSec;
+  if (el) el.classList.remove('hidden');
+  _continueInterval = setInterval(() => {
+    _countdownSec--;
+    if (timerEl) timerEl.textContent = Math.max(0, _countdownSec);
+    if (_countdownSec <= 0) {
+      hideContinueOverlay();
+      onGameOver();
+    }
+  }, 1000);
+}
+
+function hideContinueOverlay() {
+  if (_continueInterval) { clearInterval(_continueInterval); _continueInterval = null; }
+  const el = document.getElementById('screen-continue');
+  if (el) el.classList.add('hidden');
+}
+
 function initGame() {
   _sessionCoins = 0;
+  _continueUsed = false;
+  if (_continueInterval) { clearInterval(_continueInterval); _continueInterval = null; }
+  hideContinueOverlay();
   Renderer.init();
   World.init();
   Player.init();
@@ -4935,11 +4977,16 @@ function gameLoop(timestamp) {
           else                  Sound.death();
         }
       }
-      // Wait for animation to finish, then show game over
+      // Wait for animation to finish, then show continue or game over
       if (Renderer.deathDone()) {
         Renderer.stopDeath();
-        onGameOver();
-        return;
+        if (!_continueUsed && Save.getCoins() >= CONTINUE_COST) {
+          showContinueOverlay();
+          // Don't return — keep rendering frozen world behind the overlay
+        } else {
+          onGameOver();
+          return;
+        }
       }
     }
   }
@@ -5166,6 +5213,25 @@ function _initUI() {
     UI.show('menu');
   });
   // Coins are auto-synced at game over, no claim button needed
+
+  // Continue screen
+  _bind('btn-do-continue', 'click', () => {
+    if (currentState !== GameState.CONTINUE) return;
+    hideContinueOverlay();
+    Save.addCoins(-CONTINUE_COST);
+    UI.updateCoins(Save.getCoins(), _sessionCoins);
+    _continueUsed  = true;
+    deathTriggered = false;
+    Renderer.stopDeath();
+    Player.revive();
+    currentState = GameState.PLAYING;
+    lastTime     = performance.now();
+  });
+  _bind('btn-skip-continue', 'click', () => {
+    if (currentState !== GameState.CONTINUE) return;
+    hideContinueOverlay();
+    onGameOver();
+  });
 
   // Refresh leaderboard when new data loads
   window.addEventListener('base-leaderboard-loaded', () => {

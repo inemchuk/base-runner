@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useRef } from 'react';
-import { useAccount, useReadContract, useWaitForTransactionReceipt, useSwitchChain, useWalletClient } from 'wagmi';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, useSwitchChain, useWalletClient } from 'wagmi';
 import { base } from 'wagmi/chains';
 import { encodeFunctionData, numberToHex } from 'viem';
 import { Attribution } from 'ox/erc8021';
@@ -15,7 +15,7 @@ export function useCheckIn() {
   const { switchChainAsync } = useSwitchChain();
   const { data: walletClient } = useWalletClient();
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const txHashRef = useRef<`0x${string}` | null>(null);
+  const [paymasterPending, setPaymasterPending] = useState(false);
 
   const { data: stateData, refetch } = useReadContract({
     address: CHECKIN_ADDRESS,
@@ -25,14 +25,17 @@ export function useCheckIn() {
     query: { enabled: !!address },
   });
 
+  // Fallback: regular tx via useWriteContract (original logic, untouched)
+  const { writeContract, data: txHash, isPending: isWritePending } = useWriteContract();
+
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
-    hash: txHashRef.current ?? undefined,
+    hash: txHash,
     chainId: base.id,
     pollingInterval: 2000,
     confirmations: 1,
   });
 
-  // Refetch state after successful tx
+  // Refetch after confirmed fallback tx
   useEffect(() => {
     if (isSuccess) {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -43,28 +46,29 @@ export function useCheckIn() {
   }, [isSuccess, refetch]);
 
   const todayUTC = Math.floor(Date.now() / 86400000);
-  const lastDay = stateData ? Number(stateData[0]) : 0;
-  const streak = stateData ? Number(stateData[1]) : 0;
-  const total = stateData ? Number(stateData[2]) : 0;
+  const lastDay  = stateData ? Number(stateData[0]) : 0;
+  const streak   = stateData ? Number(stateData[1]) : 0;
+  const total    = stateData ? Number(stateData[2]) : 0;
   const isAvailable = lastDay < todayUTC;
-  const isPending = isConfirming;
+  const isPending = isWritePending || isConfirming || paymasterPending;
 
   const claim = useCallback(async () => {
-    if (!address || !walletClient) return;
+    if (!address) return;
 
     if (chainId !== base.id) {
       await switchChainAsync({ chainId: base.id });
     }
 
-    try {
-      // Try gasless via Paymaster first
-      if (PAYMASTER_URL) {
+    // Try gasless via Paymaster (only if wallet supports wallet_sendCalls)
+    if (PAYMASTER_URL && walletClient) {
+      try {
         const callData = encodeFunctionData({
           abi: CHECKIN_ABI,
           functionName: 'checkIn',
         });
 
-        const result = await walletClient.request({
+        setPaymasterPending(true);
+        await walletClient.request({
           method: 'wallet_sendCalls' as any,
           params: [{
             version: '1.0',
@@ -80,31 +84,30 @@ export function useCheckIn() {
           }],
         } as any);
 
-        // wallet_sendCalls returns a bundle id or tx hash
-        if (result) {
-          timeoutRef.current = setTimeout(() => {
-            refetch().then(() => {
-              window.dispatchEvent(new CustomEvent('base-checkin-confirmed'));
-            });
-          }, 30000);
-          return;
-        }
+        // Paymaster succeeded — poll for confirmation
+        timeoutRef.current = setTimeout(() => {
+          setPaymasterPending(false);
+          refetch().then(() => {
+            window.dispatchEvent(new CustomEvent('base-checkin-confirmed'));
+          });
+        }, 30000);
+        return;
+
+      } catch {
+        // wallet_sendCalls not supported or paymaster rejected — fall through to regular tx
+        setPaymasterPending(false);
       }
-    } catch (e) {
-      // Paymaster not supported or failed — fall back to regular tx
-      console.warn('Paymaster failed, falling back to regular tx:', e);
     }
 
-    // Fallback: regular transaction (user pays gas)
-    const hash = await walletClient.writeContract({
+    // Fallback: original regular transaction (user pays gas)
+    writeContract({
       address: CHECKIN_ADDRESS,
       abi: CHECKIN_ABI,
       functionName: 'checkIn',
       dataSuffix: DATA_SUFFIX,
     });
-    txHashRef.current = hash;
 
-  }, [address, walletClient, chainId, switchChainAsync, refetch]);
+  }, [address, walletClient, chainId, switchChainAsync, writeContract, refetch]);
 
   // Expose to game.js via window
   useEffect(() => {

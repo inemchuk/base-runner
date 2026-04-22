@@ -172,7 +172,11 @@ export default function Game() {
       <div id="screen-continue" className="screen hidden" style={{justifyContent:'center',background:'rgba(0,0,0,0.82)'}}>
         <div style={{textAlign:'center',padding:'36px 28px',background:'rgba(5,8,30,0.97)',borderRadius:'22px',border:'1px solid rgba(77,143,255,0.35)',maxWidth:'280px',width:'85vw'}}>
           <h2 style={{color:'#fff',fontSize:'clamp(1.3rem,6vw,2rem)',marginBottom:'6px',letterSpacing:'3px'}}>CONTINUE?</h2>
-          <p style={{color:'rgba(255,255,255,0.5)',fontSize:'clamp(0.8rem,3.5vw,0.95rem)',marginBottom:'22px'}}>Keep your progress going</p>
+          <p style={{color:'rgba(255,255,255,0.5)',fontSize:'clamp(0.8rem,3.5vw,0.95rem)',marginBottom:'16px'}}>Keep your progress going</p>
+          {/* Player's current balance */}
+          <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:'5px',marginBottom:'18px',color:'rgba(255,255,255,0.45)',fontSize:'clamp(0.75rem,3vw,0.9rem)'}}>
+            Your balance:&nbsp;<img src="/game/coin.png" style={{width:'14px',height:'14px',objectFit:'contain'}} alt="coin" /><span id="continue-balance" style={{color:'rgba(255,255,255,0.7)'}}>0</span>
+          </div>
           <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:'8px',marginBottom:'26px'}}>
             <img src="/game/coin.png" style={{width:'30px',height:'30px',objectFit:'contain'}} alt="coin" />
             <span style={{color:'#FFD700',fontSize:'clamp(1.6rem,7vw,2.4rem)',fontWeight:'bold'}} id="continue-cost">100</span>

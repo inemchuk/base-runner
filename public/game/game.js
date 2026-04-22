@@ -4900,11 +4900,13 @@ let _continueInterval = null;
 function showContinueOverlay() {
   currentState = GameState.CONTINUE;
   let _countdownSec = 5;
-  const timerEl = document.getElementById('continue-timer');
-  const costEl  = document.getElementById('continue-cost');
-  const el      = document.getElementById('screen-continue');
-  if (costEl)  costEl.textContent  = CONTINUE_COST;
-  if (timerEl) timerEl.textContent = _countdownSec;
+  const timerEl   = document.getElementById('continue-timer');
+  const costEl    = document.getElementById('continue-cost');
+  const balanceEl = document.getElementById('continue-balance');
+  const el        = document.getElementById('screen-continue');
+  if (costEl)    costEl.textContent    = CONTINUE_COST;
+  if (balanceEl) balanceEl.textContent = Save.getCoins();
+  if (timerEl)   timerEl.textContent   = _countdownSec;
   if (el) el.classList.remove('hidden');
   _continueInterval = setInterval(() => {
     _countdownSec--;
@@ -5217,6 +5219,7 @@ function _initUI() {
   // Continue screen
   _bind('btn-do-continue', 'click', () => {
     if (currentState !== GameState.CONTINUE) return;
+    if (Save.getCoins() < CONTINUE_COST) { hideContinueOverlay(); onGameOver(); return; }
     hideContinueOverlay();
     Save.addCoins(-CONTINUE_COST);
     UI.updateCoins(Save.getCoins(), _sessionCoins);

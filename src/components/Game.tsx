@@ -212,6 +212,7 @@ export default function Game() {
         <div id="shop-tabs" style={{display:'flex',gap:'0',marginBottom:'16px',width:'min(320px,90vw)'}}>
           <button id="shop-tab-skins" className="shop-tab shop-tab-active">Skins</button>
           <button id="shop-tab-boosters" className="shop-tab">Boosters</button>
+          <button id="shop-tab-trails" className="shop-tab">Trails</button>
           {/* <button id="shop-tab-effects" className="shop-tab">Effects</button> */}
         </div>
         <div id="shop-items" style={{width:'min(320px,90vw)',marginBottom:'24px'}}></div>

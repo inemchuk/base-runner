@@ -1918,14 +1918,21 @@ const Renderer = (() => {
   const MAGNET_DUR  = 0.25; // seconds for coin to fly to player
 
   // ── Footprint / landing trails ───────────────────────────
-  // Each trail: { x, y, age, maxAge, type, seed }
-  // type: 'footprint' (grass) | 'dust' (road/train) | 'ripple' (water/log)
+  // Each trail: { x, y, age, maxAge, type, seed, particles? }
+  // Surface-aware (default): 'footprint' (grass) | 'dust' (road/train) | 'ripple' (water/log)
+  // Custom (shop variant):   'sparkle' | 'hearts' | 'fire' | 'coins' | 'rainbow'
   const trails = [];
   const TRAIL_LIFE = {
     footprint: 0.75,
     dust:      0.55,
     ripple:    0.85,
+    sparkle:   0.85,
+    hearts:    0.95,
+    fire:      0.70,
+    coins:     0.80,
+    rainbow:   0.85,
   };
+  const RAINBOW_COLORS = ['#FF3B3B', '#FF8C1F', '#FFD700', '#2ECC40', '#3AAFFF', '#B026FF'];
 
   // ── Death animation state ────────────────────────────────
   let deathActive    = false;
@@ -3207,20 +3214,138 @@ const Renderer = (() => {
 
 
   // ── Landing Trails ───────────────────────────────────────
-  // Called once per jump-landing. Chooses the right visual for the surface.
+  // Called once per jump-landing. Picks visual by equipped shop trail,
+  // falling back to a surface-aware default.
   function addTrail(x, y, rowType) {
-    let type;
-    if      (rowType === 'grass') type = 'footprint';
-    else if (rowType === 'water') type = 'ripple';
-    else                          type = 'dust';   // road, train, fallback
+    const variant = (typeof Shop !== 'undefined' && Shop.getEquippedTrail)
+                      ? Shop.getEquippedTrail()
+                      : 'default';
 
+    if (!variant || variant === 'default') {
+      let type;
+      if      (rowType === 'grass') type = 'footprint';
+      else if (rowType === 'water') type = 'ripple';
+      else                          type = 'dust';
+      trails.push({
+        x, y,
+        age:    0,
+        maxAge: TRAIL_LIFE[type],
+        type,
+        seed:   Math.random(),
+      });
+      return;
+    }
+
+    // Custom trail — pre-compute particle burst so it doesn't jitter
+    // Strip 'trail_' prefix so type matches the draw-branch keys ('hearts', 'fire', …)
+    const shortType = variant.replace(/^trail_/, '');
     trails.push({
       x, y,
-      age:    0,
-      maxAge: TRAIL_LIFE[type],
-      type,
-      seed:   Math.random(),   // little randomness for dust variation
+      age:       0,
+      maxAge:    TRAIL_LIFE[shortType] || 0.85,
+      type:      shortType,
+      seed:      Math.random(),
+      particles: _makeTrailParticles(shortType),
     });
+  }
+
+  // Pre-generate randomized particles for a custom trail variant.
+  // Each particle has world-relative offset (dx,dy), velocity, and per-variant fields.
+  function _makeTrailParticles(variant) {
+    const parts = [];
+    const rnd = (min, max) => min + Math.random() * (max - min);
+
+    if (variant === 'sparkle') {
+      for (let i = 0; i < 6; i++) {
+        parts.push({
+          dx: rnd(-0.25, 0.25) * CELL,
+          dy: rnd(-0.12, 0.12) * CELL,
+          vx: rnd(-0.15, 0.15) * CELL,
+          vy: rnd(-0.45, -0.15) * CELL,
+          size: rnd(0.06, 0.11) * CELL,
+          phase: Math.random() * Math.PI * 2,
+        });
+      }
+    } else if (variant === 'fire') {
+      for (let i = 0; i < 7; i++) {
+        parts.push({
+          dx: rnd(-0.18, 0.18) * CELL,
+          dy: rnd(-0.08, 0.08) * CELL,
+          vx: rnd(-0.1, 0.1) * CELL,
+          vy: rnd(-0.55, -0.3) * CELL,
+          size: rnd(0.09, 0.16) * CELL,
+        });
+      }
+    } else if (variant === 'hearts') {
+      for (let i = 0; i < 4; i++) {
+        parts.push({
+          dx: rnd(-0.22, 0.22) * CELL,
+          dy: rnd(-0.1, 0.08) * CELL,
+          vx: rnd(-0.08, 0.08) * CELL,
+          vy: rnd(-0.35, -0.2) * CELL,
+          size: rnd(0.1, 0.14) * CELL,
+          tilt: rnd(-0.4, 0.4),
+        });
+      }
+    } else if (variant === 'coins') {
+      for (let i = 0; i < 4; i++) {
+        parts.push({
+          dx: rnd(-0.2, 0.2) * CELL,
+          dy: rnd(-0.08, 0.08) * CELL,
+          vx: rnd(-0.12, 0.12) * CELL,
+          vy: rnd(-0.5, -0.3) * CELL,
+          size: rnd(0.11, 0.15) * CELL,
+          phase: Math.random() * Math.PI * 2,
+          spin:  rnd(4, 10) * (Math.random() < 0.5 ? -1 : 1),
+        });
+      }
+    } else if (variant === 'rainbow') {
+      for (let i = 0; i < RAINBOW_COLORS.length; i++) {
+        const a = (i / RAINBOW_COLORS.length) * Math.PI * 2 + rnd(-0.25, 0.25);
+        parts.push({
+          dx: Math.cos(a) * CELL * 0.12,
+          dy: Math.sin(a) * CELL * 0.08 - CELL * 0.02,
+          vx: Math.cos(a) * CELL * 0.22,
+          vy: Math.sin(a) * CELL * 0.10 - CELL * 0.2,
+          size: CELL * 0.09,
+          color: RAINBOW_COLORS[i],
+        });
+      }
+    }
+    return parts;
+  }
+
+  // Draw a small filled heart (centered on origin, given halfSize)
+  function _drawHeart(cx, cy, s, tilt) {
+    ctx.save();
+    ctx.translate(cx, cy);
+    if (tilt) ctx.rotate(tilt);
+    ctx.beginPath();
+    ctx.moveTo(0, s * 0.35);
+    ctx.bezierCurveTo(s * 1.1, -s * 0.45, s * 0.55, -s * 1.15, 0, -s * 0.4);
+    ctx.bezierCurveTo(-s * 0.55, -s * 1.15, -s * 1.1, -s * 0.45, 0, s * 0.35);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // Draw a 4-point sparkle (centered on origin)
+  function _drawSparkle(cx, cy, s, phase) {
+    const tw = 0.5 + 0.5 * Math.abs(Math.sin(phase));
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.beginPath();
+    ctx.moveTo(0, -s * tw);
+    ctx.lineTo(s * 0.2, -s * 0.2);
+    ctx.lineTo(s * tw, 0);
+    ctx.lineTo(s * 0.2, s * 0.2);
+    ctx.lineTo(0, s * tw);
+    ctx.lineTo(-s * 0.2, s * 0.2);
+    ctx.lineTo(-s * tw, 0);
+    ctx.lineTo(-s * 0.2, -s * 0.2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
   }
 
   function drawTrails() {
@@ -3277,6 +3402,122 @@ const Renderer = (() => {
           ctx.beginPath();
           ctx.ellipse(t.x, t.y + CELL * 0.05, rx2, rx2 * 0.45, 0, 0, Math.PI * 2);
           ctx.stroke();
+        }
+      }
+      // ↓↓↓ CUSTOM SHOP TRAILS ↓↓↓
+      else if (t.type === 'sparkle') {
+        // Golden twinkling stars that rise and fade
+        if (!t.particles) continue;
+        const tAge = t.age;
+        for (const p of t.particles) {
+          const px = t.x + p.dx + p.vx * tAge;
+          const py = t.y + p.dy + p.vy * tAge + CELL * 0.4 * tAge * tAge; // slight gravity
+          const twinkle = 0.6 + 0.4 * Math.abs(Math.sin(p.phase + tAge * 9));
+          ctx.globalAlpha = fade * 0.95 * twinkle;
+          ctx.fillStyle   = '#FFE25E';
+          _drawSparkle(px, py, p.size, p.phase + tAge * 9);
+          // Bright core
+          ctx.globalAlpha = fade * 0.7 * twinkle;
+          ctx.fillStyle   = '#FFF6C2';
+          ctx.beginPath();
+          ctx.arc(px, py, p.size * 0.18, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      else if (t.type === 'fire') {
+        // Flame puffs — color shifts red → orange → yellow over life
+        if (!t.particles) continue;
+        const tAge = t.age;
+        for (const p of t.particles) {
+          const px = t.x + p.dx + p.vx * tAge;
+          const py = t.y + p.dy + p.vy * tAge;
+          // Color interpolation
+          let color;
+          if      (progress < 0.33) color = '#FFE15E';
+          else if (progress < 0.66) color = '#FF8A1F';
+          else                      color = '#D13A1F';
+          ctx.globalAlpha = fade * 0.8;
+          ctx.fillStyle   = color;
+          const size = p.size * (1 - progress * 0.5);
+          ctx.beginPath();
+          // Teardrop-ish flame: circle with slight vertical stretch
+          ctx.ellipse(px, py, size * 0.85, size * 1.15, 0, 0, Math.PI * 2);
+          ctx.fill();
+          // Bright inner core
+          ctx.globalAlpha = fade * 0.6;
+          ctx.fillStyle   = '#FFEFA0';
+          ctx.beginPath();
+          ctx.arc(px, py + size * 0.1, size * 0.35, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      else if (t.type === 'hearts') {
+        // Pink/red hearts floating up
+        if (!t.particles) continue;
+        const tAge = t.age;
+        for (const p of t.particles) {
+          const px = t.x + p.dx + p.vx * tAge;
+          const py = t.y + p.dy + p.vy * tAge;
+          // Soft wobble
+          const wobble = Math.sin(tAge * 6 + p.dx) * CELL * 0.02;
+          ctx.globalAlpha = fade * 0.9;
+          ctx.fillStyle   = '#FF4D7A';
+          _drawHeart(px + wobble, py, p.size, p.tilt);
+          // Highlight
+          ctx.globalAlpha = fade * 0.5;
+          ctx.fillStyle   = '#FFC6D6';
+          ctx.beginPath();
+          ctx.arc(px + wobble - p.size * 0.25, py - p.size * 0.45, p.size * 0.22, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      else if (t.type === 'coins') {
+        // Small spinning gold coins
+        if (!t.particles) continue;
+        const tAge = t.age;
+        for (const p of t.particles) {
+          const px = t.x + p.dx + p.vx * tAge;
+          const py = t.y + p.dy + p.vy * tAge + CELL * 0.5 * tAge * tAge; // gravity pulls down
+          // Spin: horizontal squash for edge-on effect
+          const squash = Math.abs(Math.cos(p.phase + tAge * p.spin));
+          const w = p.size * (0.15 + squash * 0.85);
+          ctx.globalAlpha = fade * 0.95;
+          // Outer ring
+          ctx.fillStyle = '#C48A10';
+          ctx.beginPath();
+          ctx.ellipse(px, py, w, p.size, 0, 0, Math.PI * 2);
+          ctx.fill();
+          // Face
+          ctx.fillStyle = '#FFD740';
+          ctx.beginPath();
+          ctx.ellipse(px, py, w * 0.78, p.size * 0.82, 0, 0, Math.PI * 2);
+          ctx.fill();
+          // Highlight shine
+          ctx.globalAlpha = fade * 0.55;
+          ctx.fillStyle = '#FFF2B0';
+          ctx.beginPath();
+          ctx.ellipse(px - w * 0.25, py - p.size * 0.25, w * 0.18, p.size * 0.2, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      else if (t.type === 'rainbow') {
+        // Six colored circles spraying in arc
+        if (!t.particles) continue;
+        const tAge = t.age;
+        for (const p of t.particles) {
+          const px = t.x + p.dx + p.vx * tAge;
+          const py = t.y + p.dy + p.vy * tAge + CELL * 0.6 * tAge * tAge; // gravity
+          ctx.globalAlpha = fade * 0.9;
+          ctx.fillStyle   = p.color;
+          ctx.beginPath();
+          ctx.arc(px, py, p.size * (1 - progress * 0.3), 0, Math.PI * 2);
+          ctx.fill();
+          // White highlight
+          ctx.globalAlpha = fade * 0.45;
+          ctx.fillStyle   = '#FFFFFF';
+          ctx.beginPath();
+          ctx.arc(px - p.size * 0.25, py - p.size * 0.25, p.size * 0.3, 0, Math.PI * 2);
+          ctx.fill();
         }
       }
     }
@@ -4356,8 +4597,17 @@ const Shop = (() => {
     { id: 'death_dramatic', name: 'Dramatic', price: 600,  icon: '🎬', desc: 'Spin away, slow sink and flash out' },
   ];
 
+  // ── Следы персонажа (trail skins) ──
+  const TRAIL_PACKS = [
+    { id: 'trail_sparkle', name: 'Sparkle', price: 150, icon: '✨', desc: 'Golden twinkling stars'   },
+    { id: 'trail_hearts',  name: 'Hearts',  price: 200, icon: '💖', desc: 'Floating heart burst'     },
+    { id: 'trail_fire',    name: 'Fire',    price: 300, icon: '🔥', desc: 'Blazing flame puffs'      },
+    { id: 'trail_coins',   name: 'Coins',   price: 400, icon: '🪙', desc: 'Shiny spinning coins'     },
+    { id: 'trail_rainbow', name: 'Rainbow', price: 600, icon: '🌈', desc: 'Six-color rainbow burst'  },
+  ];
+
   const SAVE_KEY = 'shop_v1';
-  let shopTab = 'skins'; // 'skins' | 'boosters' | 'effects'
+  let shopTab = 'skins'; // 'skins' | 'boosters' | 'trails' | 'effects'
 
   function loadShopData() {
     try { return JSON.parse(localStorage.getItem(SAVE_KEY) || '{}'); } catch { return {}; }
@@ -4455,22 +4705,41 @@ const Shop = (() => {
     saveShopData(d);
   }
 
+  // ── Trails (следы персонажа) ──
+  function getTrailPacks() { return loadShopData().trailPacks || []; }
+  function getEquippedTrail() { return loadShopData().equippedTrail || 'default'; }
+  function ownTrailPack(id) {
+    const d = loadShopData();
+    const packs = d.trailPacks || [];
+    if (!packs.includes(id)) packs.push(id);
+    d.trailPacks = packs;
+    saveShopData(d);
+  }
+  function equipTrail(id) {
+    const d = loadShopData();
+    d.equippedTrail = id;
+    saveShopData(d);
+  }
+
   // ── Вкладки ──
   function setTab(tab) {
     shopTab = tab;
     const btnS = document.getElementById('shop-tab-skins');
     const btnB = document.getElementById('shop-tab-boosters');
+    const btnT = document.getElementById('shop-tab-trails');
     const btnE = document.getElementById('shop-tab-effects');
     if (btnS) btnS.className = 'shop-tab' + (tab === 'skins' ? ' shop-tab-active' : '');
     if (btnB) btnB.className = 'shop-tab' + (tab === 'boosters' ? ' shop-tab-active' : '');
+    if (btnT) btnT.className = 'shop-tab' + (tab === 'trails' ? ' shop-tab-active' : '');
     if (btnE) btnE.className = 'shop-tab' + (tab === 'effects' ? ' shop-tab-active' : '');
     renderContent();
   }
 
   function renderContent() {
-    if (shopTab === 'boosters') renderBoosters();
+    if (shopTab === 'boosters')     renderBoosters();
+    else if (shopTab === 'trails')  renderTrails();
     else if (shopTab === 'effects') renderEffects();
-    else renderSkins();
+    else                            renderSkins();
   }
 
   // ── Рендер скинов ──
@@ -4655,6 +4924,80 @@ const Shop = (() => {
     });
   }
 
+  // ── Рендер следов ──
+  function renderTrails() {
+    const container = document.getElementById('shop-items');
+    if (!container) return;
+    const balance  = Save.getCoins();
+    const packs    = getTrailPacks();
+    const equipped = getEquippedTrail();
+
+    container.innerHTML = '';
+
+    // Default (free)
+    const defEl = document.createElement('div');
+    defEl.className = 'shop-item' + (equipped === 'default' ? ' shop-item-equipped' : '');
+    defEl.innerHTML = `
+      <span class="shop-icon">👣</span>
+      <div class="shop-info">
+        <span class="shop-name">Default</span>
+        <span class="shop-desc">Footprints, dust and ripples</span>
+      </div>
+      <div class="shop-action">
+        ${equipped === 'default'
+          ? '<span class="shop-badge-on">✓ ON</span>'
+          : '<button class="shop-btn shop-btn-equip-trail" data-id="default">Equip</button>'}
+      </div>`;
+    container.appendChild(defEl);
+
+    for (const item of TRAIL_PACKS) {
+      const isOwned    = packs.includes(item.id);
+      const isEquipped = equipped === item.id;
+      const canAfford  = balance >= item.price;
+
+      const el = document.createElement('div');
+      el.className = 'shop-item' + (isEquipped ? ' shop-item-equipped' : '');
+      el.innerHTML = `
+        <span class="shop-icon">${item.icon}</span>
+        <div class="shop-info">
+          <span class="shop-name">${item.name}</span>
+          <span class="shop-desc">${item.desc}</span>
+        </div>
+        <div class="shop-action">
+          ${isEquipped
+            ? '<span class="shop-badge-on">✓ ON</span>'
+            : isOwned
+              ? `<button class="shop-btn shop-btn-equip-trail" data-id="${item.id}">Equip</button>`
+              : `<button class="shop-btn shop-btn-buy${canAfford ? '' : ' disabled'}" data-id="${item.id}" data-price="${item.price}" style="display:inline-flex;flex-direction:row;align-items:center;justify-content:center;gap:4px;"><img src="/game/coin.png" style="width:14px;height:14px;object-fit:contain;display:block;flex-shrink:0;"> ${item.price}</button>`
+          }
+        </div>`;
+      container.appendChild(el);
+    }
+
+    container.querySelectorAll('.shop-btn-equip-trail').forEach(btn => {
+      btn.addEventListener('click', () => {
+        equipTrail(btn.dataset.id);
+        render();
+      });
+    });
+    container.querySelectorAll('.shop-btn-buy').forEach(btn => {
+      if (btn.classList.contains('disabled')) return;
+      btn.addEventListener('click', () => {
+        const price = parseInt(btn.dataset.price);
+        const cur   = Save.getCoins();
+        if (cur < price) return;
+        const d = Save.load();
+        d.coins -= price;
+        Save.save(d);
+        ownTrailPack(btn.dataset.id);
+        equipTrail(btn.dataset.id);
+        if (typeof UI !== 'undefined') UI.updateCoins(Save.getCoins());
+        if (typeof window.__BASE_SYNC_COINS === 'function') window.__BASE_SYNC_COINS(Save.getCoins());
+        render();
+      });
+    });
+  }
+
   function render() {
     const coinEl = document.getElementById('shop-coin-count');
     if (coinEl) coinEl.textContent = Save.getCoins();
@@ -4672,7 +5015,7 @@ const Shop = (() => {
     if (typeof UI !== 'undefined') UI.show('shop');
   }
 
-  return { show, setTab, getEquipped, getSprite, applyServerData, hasBoosted, useBooster, getBoosterCount, getEquippedDeath };
+  return { show, setTab, getEquipped, getSprite, applyServerData, hasBoosted, useBooster, getBoosterCount, getEquippedDeath, getEquippedTrail };
 })();
 
 
@@ -5258,6 +5601,7 @@ function _initUI() {
   _bind('btn-shop-back', 'click', () => UI.show('menu'));
   _bind('shop-tab-skins',    'click', () => Shop.setTab('skins'));
   _bind('shop-tab-boosters', 'click', () => Shop.setTab('boosters'));
+  _bind('shop-tab-trails',   'click', () => Shop.setTab('trails'));
   _bind('shop-tab-effects',  'click', () => Shop.setTab('effects'));
 
   // Кнопка звука

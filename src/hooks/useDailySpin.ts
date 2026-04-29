@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useSwitchChain, useWalletClient } from 'wagmi';
 import { base } from 'wagmi/chains';
-import { numberToHex } from 'viem';
+import { numberToHex, encodeFunctionData } from 'viem';
 import { SPIN_ABI, SPIN_ADDRESS, spinCost } from '@/config/spin-contract';
 
 export interface SpinPrize {
@@ -105,7 +105,7 @@ export function useDailySpin() {
               version:  '1.0',
               chainId:  numberToHex(base.id),
               from:     address,
-              calls:    [{ to: SPIN_ADDRESS }],
+              calls:    [{ to: SPIN_ADDRESS, data: encodeFunctionData({ abi: SPIN_ABI, functionName: 'spin' }) }],
               capabilities: { paymasterService: { url: PAYMASTER_URL } },
             }],
           } as any);

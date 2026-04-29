@@ -352,12 +352,23 @@ const Leaderboard = (() => {
 const Sound = (() => {
 
   let ctx = null;
-  let muted = false;
+  let muted   = false;
+  let sfxVol  = 0.8; // 0.0 – 1.0
 
-  // Load mute preference
+  // Load preferences
   function init() {
-    muted = localStorage.getItem('baserunner_muted') === 'true';
+    muted  = localStorage.getItem('baserunner_muted') === 'true';
+    const saved = parseFloat(localStorage.getItem('baserunner_sfxvol'));
+    if (!isNaN(saved)) sfxVol = Math.max(0, Math.min(1, saved));
     updateMuteBtn();
+  }
+
+  function getVolume()  { return sfxVol; }
+  function setVolume(v) {
+    sfxVol = Math.max(0, Math.min(1, v));
+    localStorage.setItem('baserunner_sfxvol', sfxVol);
+    // Auto-unmute if volume raised from 0
+    if (sfxVol > 0 && muted) { muted = false; updateMuteBtn(); }
   }
 
   function getCtx() {
@@ -402,8 +413,9 @@ const Sound = (() => {
       }
       osc.detune.setValueAtTime(detune, c.currentTime);
 
+      const v = vol * sfxVol;
       gain.gain.setValueAtTime(0, c.currentTime);
-      gain.gain.linearRampToValueAtTime(vol, c.currentTime + attack);
+      gain.gain.linearRampToValueAtTime(v, c.currentTime + attack);
       gain.gain.exponentialRampToValueAtTime(0.001, c.currentTime + duration);
 
       osc.start(c.currentTime);
@@ -433,8 +445,9 @@ const Sound = (() => {
       filter.connect(gain);
       gain.connect(c.destination);
 
+      const nv = vol * sfxVol;
       gain.gain.setValueAtTime(0, c.currentTime);
-      gain.gain.linearRampToValueAtTime(vol, c.currentTime + attack);
+      gain.gain.linearRampToValueAtTime(nv, c.currentTime + attack);
       gain.gain.exponentialRampToValueAtTime(0.001, c.currentTime + duration);
 
       src.start(c.currentTime);
@@ -497,8 +510,71 @@ const Sound = (() => {
                duration: 0.12, vol: 0.22, attack: 0.003 });
   }
 
-  return { init, toggleMute, isMuted,
+  return { init, toggleMute, isMuted, getVolume, setVolume,
            jump, step, log, death, splash, trainHorn, newRecord, coin };
+})();
+
+
+/* ===== music.js ===== */
+const Music = (() => {
+  const TRACKS  = ['/game/music.mp3', '/game/music2.mp3'];
+  let _audio    = null;
+  let _vol      = 0.5;
+  let _enabled  = true;
+  let _trackIdx = -1;
+
+  function _load() {
+    const saved = parseFloat(localStorage.getItem('baserunner_musicvol'));
+    if (!isNaN(saved)) _vol = Math.max(0, Math.min(1, saved));
+  }
+
+  function _next() {
+    // Pick a different track than current
+    let idx;
+    do { idx = Math.floor(Math.random() * TRACKS.length); } while (idx === _trackIdx && TRACKS.length > 1);
+    _trackIdx = idx;
+    return TRACKS[_trackIdx];
+  }
+
+  function init() {
+    _load();
+    _audio = new Audio();
+    _audio.volume = _vol;
+    _audio.loop   = false;
+    _audio.addEventListener('ended', () => {
+      // Auto-advance to next track
+      _audio.src = _next();
+      if (_enabled) _audio.play().catch(() => {});
+    });
+  }
+
+  function play() {
+    if (!_audio) init();
+    if (!_enabled) return;
+    if (_audio.paused) {
+      if (!_audio.src || _audio.ended || _audio.src === window.location.href) {
+        _audio.src = _next();
+      }
+      _audio.play().catch(() => {});
+    }
+  }
+
+  function pause() {
+    if (_audio && !_audio.paused) _audio.pause();
+  }
+
+  function getVolume()  { return _vol; }
+  function setVolume(v) {
+    _vol = Math.max(0, Math.min(1, v));
+    localStorage.setItem('baserunner_musicvol', _vol);
+    if (_audio) _audio.volume = _vol;
+    _enabled = _vol > 0;
+    if (_enabled) play(); else pause();
+  }
+
+  function isEnabled() { return _enabled; }
+
+  return { init, play, pause, getVolume, setVolume, isEnabled };
 })();
 
 
@@ -4294,16 +4370,27 @@ const UI = (() => {
     shop:     document.getElementById('screen-shop'),
     profile:  document.getElementById('screen-profile'),
     quests:   document.getElementById('screen-quests'),
+    spin:     document.getElementById('screen-spin'),
+    settings: document.getElementById('screen-settings'),
   };
 
   const hud       = document.getElementById('hud');
   const scoreVal  = document.getElementById('score-val');
   const bestVal   = document.getElementById('best-val');
   // ===== Показать нужный экран =====
+  // Screens where music plays
+  const MUSIC_SCREENS = new Set(['menu','profile','lb','shop','quests','spin','ci','settings']);
+
   function show(name) {
     if (name !== 'ci') _stopCiTimer();
     Object.values(SCREENS).forEach(s => { if (s) s.classList.add('hidden'); });
     if (hud) hud.classList.add('hidden');
+
+    // Music: play on UI screens, pause during gameplay / gameover
+    if (typeof Music !== 'undefined') {
+      if (MUSIC_SCREENS.has(name)) Music.play();
+      else                         Music.pause();
+    }
 
     const hint = document.getElementById('swipe-hint');
     if (hint) hint.classList.add('hidden');
@@ -4332,6 +4419,9 @@ const UI = (() => {
           qBtn.classList.remove('quest-badge');
         }
       }
+      // Update daily spin banner visibility
+      if (typeof DailySpin !== 'undefined') DailySpin.updateBanner();
+      _updateCiBanner();
     }
   }
 
@@ -4383,24 +4473,44 @@ const UI = (() => {
   }
 
   // ===== Показать экран Game Over =====
-  function showGameOver(score, best) {
+  function showGameOver(score, best, xpEarned, xpBreakdown) {
     const goScore = document.getElementById('go-score');
     const goBest  = document.getElementById('go-best');
     if (goScore) goScore.textContent = score;
     if (goBest)  goBest.textContent  = best;
 
-    // Show earned coins count
+    // Coins row
+    const coinsRow    = document.getElementById('go-coins-row');
+    const coinsEarned = document.getElementById('go-coins-earned');
     if (_sessionCoins > 0) {
-      const coinsEarned = document.getElementById('go-coins-earned');
       if (coinsEarned) coinsEarned.textContent = _sessionCoins;
-      const coinsRow = document.getElementById('go-coins-row');
-      if (coinsRow) coinsRow.style.display = 'flex';
+      if (coinsRow)    coinsRow.style.display   = 'flex';
     } else {
-      const coinsRow = document.getElementById('go-coins-row');
       if (coinsRow) coinsRow.style.display = 'none';
     }
 
-    // Show quest complete notification
+    // XP row with breakdown
+    const xpRow      = document.getElementById('go-xp-row');
+    const xpEarnedEl = document.getElementById('go-xp-earned');
+    const xpMultiEl  = document.getElementById('go-xp-multi');
+    const xpBonusEl  = document.getElementById('go-xp-bonus');
+    if (xpEarned > 0 && xpBreakdown) {
+      if (xpEarnedEl) xpEarnedEl.textContent = xpEarned;
+      if (xpMultiEl) xpMultiEl.style.display = 'none';
+      // Bonus chips
+      const bonuses = [];
+      if (xpBreakdown.recordBonus)  bonuses.push(`🏆 +${xpBreakdown.recordBonus}`);
+      if (xpBreakdown.streakBonus)  bonuses.push(`🔥 +${xpBreakdown.streakBonus}`);
+      if (xpBonusEl) {
+        xpBonusEl.textContent   = bonuses.join('  ');
+        xpBonusEl.style.display = bonuses.length ? '' : 'none';
+      }
+      if (xpRow) xpRow.style.display = 'flex';
+    } else {
+      if (xpRow) xpRow.style.display = 'none';
+    }
+
+    // Quest notification
     const questNotify = document.getElementById('go-quest-notify');
     if (questNotify) {
       questNotify.style.display = Quests.hasClaimable() ? 'block' : 'none';
@@ -4422,7 +4532,7 @@ const UI = (() => {
     { coins: 10, icon: '💰' },
     { coins: 10, icon: '💰' },
     { coins: 20, icon: '💎' },
-    { coins: 30, icon: '👑' },
+    { coins: 30, icon: '👑', booster: true },
   ];
 
   function _msUntilUTCMidnight() {
@@ -4471,12 +4581,26 @@ const UI = (() => {
       const isDone    = dayNum <= doneDays && !(available && dayNum > doneDays);
 
       let cls = 'ci-day';
+      if (dayNum === 7) cls += ' ci-day-final';
       if (dayNum <= doneDays && !available) cls += ' claimed';
       else if (dayNum < todaySlot && available) cls += ' claimed';
       if (isToday) cls += ' today';
 
       const checkMark = (cls.includes('claimed')) ? '<span class="ci-check">✓</span>' : '';
-      const opacity   = isFuture && !isToday ? 'opacity:0.45;' : '';
+      const opacity   = isFuture && !isToday ? 'opacity:0.4;' : '';
+
+      if (dayNum === 7) {
+        return `<div class="${cls}" style="${opacity}">
+          ${checkMark}
+          <div class="ci-day-icon">${day.icon}</div>
+          <div class="ci-day-final-text">
+            <span class="ci-day-final-badge">Weekly Reward</span>
+            <span class="ci-day-coins">+${day.coins} <span style="font-size:0.65em;opacity:0.8">coins</span></span>
+            <span class="ci-day-final-extra">+ Random Booster</span>
+            <span class="ci-day-label">Day 7</span>
+          </div>
+        </div>`;
+      }
 
       return `<div class="${cls}" style="${opacity}">
         ${checkMark}
@@ -4520,7 +4644,7 @@ const UI = (() => {
     } else if (available) {
       if (statusEl) {
         statusEl.className = 'ci-status';
-        statusEl.innerHTML = `✅ Claim <strong>+${todayReward.coins} coins</strong> today!`;
+        statusEl.innerHTML = '';
       }
       if (claimBtn) {
         claimBtn.disabled      = false;
@@ -5015,7 +5139,7 @@ const Shop = (() => {
     if (typeof UI !== 'undefined') UI.show('shop');
   }
 
-  return { show, setTab, getEquipped, getSprite, applyServerData, hasBoosted, useBooster, getBoosterCount, getEquippedDeath, getEquippedTrail };
+  return { show, setTab, getEquipped, getOwned, getSprite, applyServerData, hasBoosted, useBooster, getBoosterCount, getEquippedDeath, getEquippedTrail, getTrailPacks, own, ownTrailPack, addBoosterCharges };
 })();
 
 
@@ -5222,6 +5346,710 @@ const Quests = (() => {
 })();
 
 
+/* ===== dailyspin.js ===== */
+/**
+ * DailySpin — колесо ежедневного спина.
+ * Реальный приз определяется сервером (через useDailySpin → /api/spin).
+ * Здесь: анимация колеса + применение приза локально.
+ */
+const DailySpin = (() => {
+
+  // ── Display segments (wheel visuals; actual prize decided server-side) ──
+  const DISPLAY_POOL = [
+    { coin: true,        label: '10'   },
+    { shirtImg: true,    label: 'Skin' },
+    { boosterImg: true,  label: 'Trail'},
+    { coin: true,        label: '50'   },
+    { boosterBagImg: true, label: 'Boost' },
+    { coin: true,        label: '25'   },
+    { coin: true,        label: '100'  },
+    { icon: '🔥',        label: 'Fire' },
+  ];
+  const SEG_COUNT  = 8;
+  const SEG_ANGLE  = (Math.PI * 2) / SEG_COUNT;
+  const SEG_COLORS = ['#0A2456', '#1A1050'];
+
+  // ── State ────────────────────────────────────────────────────────────────
+  let _canvas = null, _ctx = null;
+  let _coinImg   = null;   // preloaded /game/coin.png
+  let _hubImg    = null;   // preloaded /icon.png (game logo for wheel hub)
+  let _shirtImg   = null;   // preloaded /game/shirt.png (random skin segment)
+  let _boosterImg    = null;   // preloaded /game/trails.png (random trail segment)
+  let _boosterBagImg = null;   // preloaded /game/boosters.png (random booster segment)
+  let _segments  = [...DISPLAY_POOL];
+  let _winIndex  = 0;
+  let _prize     = null;
+
+  let _animRaf   = 0;
+  let _animPhase = 'idle'; // 'idle' | 'spinning' | 'landing' | 'done'
+  let _rot       = 0;
+  let _animStart = 0;
+  let _lastTs    = 0;
+  let _landStart = 0;
+  let _landFrom  = 0;
+  let _landVel   = 0;
+  let _landDur   = 0;   // ms — computed per-spin so initial landing speed = SPIN_SPEED
+  let _targetRot = 0;
+
+  let _timerInterval  = null;
+  let _safetyTimeout  = null;
+
+  // ── Canvas init / resize ─────────────────────────────────────────────────
+  function _initCanvas() {
+    // Preload coin image once
+    if (!_coinImg) {
+      _coinImg = new Image();
+      _coinImg.src = '/game/coin.png';
+      _coinImg.onload = () => { if (_animPhase === 'idle') _drawWheel(); };
+    }
+    // Preload hub logo once
+    if (!_hubImg) {
+      _hubImg = new Image();
+      _hubImg.src = '/icon.png';
+      _hubImg.onload = () => { if (_animPhase === 'idle') _drawWheel(); };
+    }
+    // Preload shirt icon once
+    if (!_shirtImg) {
+      _shirtImg = new Image();
+      _shirtImg.src = '/game/shirt.png';
+      _shirtImg.onload = () => { if (_animPhase === 'idle') _drawWheel(); };
+    }
+    // Preload trail icon once
+    if (!_boosterImg) {
+      _boosterImg = new Image();
+      _boosterImg.src = '/game/trails.png';
+      _boosterImg.onload = () => { if (_animPhase === 'idle') _drawWheel(); };
+    }
+    // Preload booster bag icon once
+    if (!_boosterBagImg) {
+      _boosterBagImg = new Image();
+      _boosterBagImg.src = '/game/boosters.png';
+      _boosterBagImg.onload = () => { if (_animPhase === 'idle') _drawWheel(); };
+    }
+    _canvas = document.getElementById('spin-wheel-canvas');
+    if (!_canvas) return;
+    _ctx = _canvas.getContext('2d');
+    _sizeCanvas();
+    _drawWheel();
+  }
+
+  function _sizeCanvas() {
+    if (!_canvas) return;
+    const size = Math.min(Math.floor(Math.min(window.innerWidth, 360) * 0.82), 300);
+    _canvas.width  = size;
+    _canvas.height = size;
+  }
+
+  // ── Wheel drawing ─────────────────────────────────────────────────────────
+  function _drawWheel() {
+    if (!_ctx || !_canvas) return;
+    const W  = _canvas.width;
+    const H  = _canvas.height;
+    const cx = W / 2;
+    const cy = H / 2;
+    const r  = cx * 0.88;
+
+    _ctx.clearRect(0, 0, W, H);
+
+    // Shadows only when wheel is static — shadowBlur in RAF causes flicker & lag
+    const _glow = (_animPhase === 'idle' || _animPhase === 'done');
+
+    // Gold outer ring (with glow only when static)
+    if (_glow) { _ctx.shadowColor = 'rgba(255,200,0,0.75)'; _ctx.shadowBlur = 18; }
+    _ctx.beginPath();
+    _ctx.arc(cx, cy, r + 5, 0, Math.PI * 2);
+    _ctx.fillStyle = '#FFD700';
+    _ctx.fill();
+    _ctx.shadowBlur  = 0;
+    _ctx.shadowColor = 'transparent';
+
+    // Segments
+    // --- Pre-calculate shared layout constants (same for every segment) ---
+    const tr      = r * 0.52;
+    const iconSz  = Math.round(r * 0.26);
+    const iconY   = -iconSz * 0.58;
+    const labelY  =  iconSz * 0.58;
+
+    // Uniform label font size: find the widest label among all segments,
+    // then shrink ONE common font size so it fits with comfortable padding.
+    const maxLabelSz  = Math.round(r * 0.10);
+    const maxLabelW   = r * 0.26; // comfortable width (leaves ~18% padding each side)
+    _ctx.font = `bold ${maxLabelSz}px sans-serif`;
+    let widestW = 0;
+    for (let i = 0; i < SEG_COUNT; i++) {
+      const seg = _segments[i] || DISPLAY_POOL[i % DISPLAY_POOL.length];
+      if (seg.label) widestW = Math.max(widestW, _ctx.measureText(seg.label).width);
+    }
+    const uniformLabelSz = widestW > maxLabelW
+      ? Math.floor(maxLabelSz * maxLabelW / widestW)
+      : maxLabelSz;
+
+    for (let i = 0; i < SEG_COUNT; i++) {
+      const seg   = _segments[i] || DISPLAY_POOL[i % DISPLAY_POOL.length];
+      const start = _rot + i * SEG_ANGLE - Math.PI / 2;
+      const end   = start + SEG_ANGLE;
+
+      _ctx.save();
+
+      // Draw + clip to segment shape so text can never escape
+      _ctx.beginPath();
+      _ctx.moveTo(cx, cy);
+      _ctx.arc(cx, cy, r, start, end);
+      _ctx.closePath();
+      const grad = _ctx.createRadialGradient(cx, cy, r * 0.08, cx, cy, r);
+      if (i % 2 === 0) {
+        grad.addColorStop(0, '#1E4F9A');
+        grad.addColorStop(1, '#0A2456');
+      } else {
+        grad.addColorStop(0, '#2E1E88');
+        grad.addColorStop(1, '#1A1050');
+      }
+      _ctx.fillStyle = grad;
+      _ctx.fill();
+      _ctx.strokeStyle = 'rgba(255,215,0,0.9)';
+      _ctx.lineWidth   = 3;
+      if (_glow) { _ctx.shadowColor = 'rgba(255,215,0,0.55)'; _ctx.shadowBlur = 8; }
+      _ctx.stroke();
+      _ctx.shadowBlur  = 0;
+      _ctx.shadowColor = 'transparent';
+      _ctx.clip();
+
+      // Icon + label — centred at tr from centre, rotated to read outward
+      const mid = start + SEG_ANGLE / 2;
+      _ctx.translate(cx + Math.cos(mid) * tr, cy + Math.sin(mid) * tr);
+      _ctx.rotate(mid + Math.PI / 2);
+      _ctx.textAlign    = 'center';
+      _ctx.textBaseline = 'middle';
+
+      // All image icons at the same iconSz
+      if (seg.coin && _coinImg && _coinImg.complete && _coinImg.naturalWidth) {
+        _ctx.drawImage(_coinImg, -iconSz / 2, iconY - iconSz / 2, iconSz, iconSz);
+      } else if (seg.shirtImg && _shirtImg && _shirtImg.complete && _shirtImg.naturalWidth) {
+        const ss = iconSz * 1.25; // shirt.png has slight transparent padding
+        _ctx.drawImage(_shirtImg, -ss / 2, iconY - ss / 2, ss, ss);
+      } else if (seg.boosterImg && _boosterImg && _boosterImg.complete && _boosterImg.naturalWidth) {
+        const ts = iconSz * 1.7; // trails.png has large internal padding
+        _ctx.drawImage(_boosterImg, -ts / 2, iconY - ts / 2, ts, ts);
+      } else if (seg.boosterBagImg && _boosterBagImg && _boosterBagImg.complete && _boosterBagImg.naturalWidth) {
+        const bs = iconSz * 1.2; // boosters.png has slight transparent padding
+        _ctx.drawImage(_boosterBagImg, -bs / 2, iconY - bs / 2, bs, bs);
+      } else if (seg.icon) {
+        _ctx.shadowColor = 'rgba(0,0,0,0.75)';
+        _ctx.shadowBlur  = 6;
+        _ctx.font      = `${iconSz}px sans-serif`;
+        _ctx.fillStyle = '#ffffff';
+        _ctx.fillText(seg.icon, 0, iconY);
+        _ctx.shadowBlur  = 0;
+        _ctx.shadowColor = 'transparent';
+      }
+
+      // Uniform label — same font size across all segments
+      _ctx.shadowColor  = 'rgba(0,0,0,0.85)';
+      _ctx.shadowBlur   = 5;
+      _ctx.shadowOffsetX = 0;
+      _ctx.shadowOffsetY = 1;
+      _ctx.font      = `bold ${uniformLabelSz}px sans-serif`;
+      _ctx.fillStyle = '#ffffff';
+      _ctx.fillText(seg.label, 0, labelY);
+      _ctx.shadowBlur    = 0;
+      _ctx.shadowOffsetY = 0;
+      _ctx.shadowColor   = 'transparent';
+
+      _ctx.restore();
+    }
+
+    // Hub — gold ring + game logo clipped to circle
+    const hr = r * 0.155; // hub radius
+    if (_glow) { _ctx.shadowColor = 'rgba(255,200,0,0.7)'; _ctx.shadowBlur = 12; }
+    _ctx.beginPath();
+    _ctx.arc(cx, cy, hr, 0, Math.PI * 2);
+    _ctx.fillStyle = '#FFD700';
+    _ctx.fill();
+    _ctx.shadowBlur  = 0;
+    _ctx.shadowColor = 'transparent';
+
+    _ctx.save();
+    _ctx.beginPath();
+    _ctx.arc(cx, cy, hr - 2.5, 0, Math.PI * 2);
+    _ctx.clip();
+    if (_hubImg && _hubImg.complete && _hubImg.naturalWidth) {
+      const d = (hr - 2.5) * 2;
+      _ctx.drawImage(_hubImg, cx - (hr - 2.5), cy - (hr - 2.5), d, d);
+    } else {
+      _ctx.fillStyle = '#0052FF';
+      _ctx.fill();
+    }
+    _ctx.restore();
+  }
+
+  // ── Map server prize to display segment ───────────────────────────────────
+  function _prizeToDisplay(prize) {
+    if (!prize) return DISPLAY_POOL[0];
+    if (prize.type === 'coins') {
+      return { coin: true, label: String(Number(prize.value)) };
+    }
+    if (prize.type === 'booster') {
+      return { boosterBagImg: true, label: 'Boost' };
+    }
+    if (prize.type === 'trail') {
+      return { boosterImg: true, label: 'Trail' };
+    }
+    if (prize.type === 'skin') {
+      return { shirtImg: true, label: 'Skin' };
+    }
+    return { icon: '🎁', label: prize.label || '?' };
+  }
+
+  function _buildSegments(prize) {
+    // Keep DISPLAY_POOL visually unchanged during animation — no mid-spin glitch.
+    // Only set _winIndex to whichever fixed slot matches the prize type.
+    _segments = [...DISPLAY_POOL];
+    const slotsByType = {
+      coins:   [0, 3, 5, 6],
+      skin:    [1],
+      trail:   [2, 7],
+      booster: [4],
+    };
+    const slots = (prize && slotsByType[prize.type]) || [0];
+    _winIndex = slots[Math.floor(Math.random() * slots.length)];
+  }
+
+  // ── Animation ─────────────────────────────────────────────────────────────
+  const SPIN_SPEED  = 8;   // rad/s at full speed
+  const ACCEL_MS    = 250; // ms to reach full speed
+  const MIN_SPIN_MS = 300; // ms minimum free-spin before landing
+
+  // easeOutSine — derivative at t=0 is π/2.
+  // _landDur is set so that (π/2)*d/_landDur = SPIN_SPEED → zero velocity jolt.
+  function _easeOut(t) { return Math.sin(t * Math.PI / 2); }
+
+  function _animFrame(ts) {
+    if (_animPhase === 'idle') return;
+
+    const dt = Math.min((ts - (_lastTs || ts)) / 1000, 0.05);
+    _lastTs  = ts;
+
+    if (_animPhase === 'spinning') {
+      const elapsed = ts - _animStart;
+      const speed   = elapsed < ACCEL_MS ? SPIN_SPEED * (elapsed / ACCEL_MS) : SPIN_SPEED;
+      _rot         += speed * dt;
+      if (_prize && elapsed >= MIN_SPIN_MS) _startLanding(ts);
+    } else if (_animPhase === 'landing') {
+      const t = Math.min(1, (ts - _landStart) / _landDur);
+      _rot    = _landFrom + (_targetRot - _landFrom) * _easeOut(t);
+      if (t >= 1) {
+        _rot       = _targetRot;
+        _animPhase = 'done';
+        _drawWheel();
+        _onSpinComplete();
+        return;
+      }
+    }
+
+    _drawWheel();
+    _animRaf = requestAnimationFrame(_animFrame);
+  }
+
+  function _startLanding(ts) {
+    if (_animPhase !== 'spinning') return;
+    _animPhase = 'landing';
+    _landStart = ts;
+    _landFrom  = _rot;
+    // At least 0.75 extra turns before stopping
+    const base   = -(_winIndex + 0.5) * SEG_ANGLE;
+    const minRot = _rot + 2 * Math.PI * 0.75;
+    const N      = Math.ceil((minRot - base) / (2 * Math.PI));
+    _targetRot   = N * 2 * Math.PI + base;
+    // Duration derived from distance so initial landing speed = SPIN_SPEED (no jolt):
+    // easeOutSine'(0) = π/2  →  T = (π/2) × d / SPIN_SPEED
+    _landDur = (Math.PI / 2) * (_targetRot - _landFrom) / SPIN_SPEED * 1000;
+  }
+
+  // ── Apply prize locally ───────────────────────────────────────────────────
+  function _applyPrize(prize) {
+    if (!prize) return;
+    if (prize.type === 'coins') {
+      // Server already credited Redis; mirror to localStorage
+      const newBal = Save.addCoins(Number(prize.value));
+      if (typeof UI   !== 'undefined') UI.updateCoins(newBal);
+      if (typeof window.__BASE_SYNC_COINS === 'function') window.__BASE_SYNC_COINS(Save.getCoins());
+    } else if (prize.type === 'booster') {
+      if (typeof Shop !== 'undefined') {
+        const ALL_BOOSTERS = ['boost_magnet', 'boost_double', 'boost_shield'];
+        // Prefer the server-picked booster, but if it's already stocked pick random
+        const boosterId = ALL_BOOSTERS.includes(prize.value)
+          ? prize.value
+          : ALL_BOOSTERS[Math.floor(Math.random() * ALL_BOOSTERS.length)];
+        Shop.addBoosterCharges(boosterId, 1);
+        const BOOSTER_NAMES = { boost_magnet: 'Coin Magnet', boost_double: 'Double Coins', boost_shield: 'Second Chance' };
+        if (_prize) _prize._resolvedBoosterName = BOOSTER_NAMES[boosterId] || boosterId;
+      }
+    } else if (prize.type === 'trail') {
+      if (typeof Shop !== 'undefined') {
+        const ALL_TRAILS = ['trail_sparkle', 'trail_hearts', 'trail_fire', 'trail_coins', 'trail_rainbow'];
+        const ownedTrails = Shop.getTrailPacks ? Shop.getTrailPacks() : [];
+        const unowned = ALL_TRAILS.filter(id => !ownedTrails.includes(id));
+        const trailId = unowned.length > 0
+          ? unowned[Math.floor(Math.random() * unowned.length)]
+          : ALL_TRAILS[Math.floor(Math.random() * ALL_TRAILS.length)];
+        Shop.ownTrailPack(trailId);
+        const TRAIL_NAMES = { trail_sparkle: 'Sparkle', trail_hearts: 'Hearts', trail_fire: 'Fire', trail_coins: 'Coins', trail_rainbow: 'Rainbow' };
+        if (_prize) _prize._resolvedTrailName = TRAIL_NAMES[trailId] || trailId;
+      }
+    } else if (prize.type === 'skin') {
+      // Server picks a specific skin; if it's already owned, pick a random unowned one
+      if (typeof Shop !== 'undefined') {
+        const ALL_SKINS = ['skin_street_runner', 'skin_default', 'skin_founder', 'skin_base_king'];
+        const owned     = Shop.getOwned ? Shop.getOwned() : [];
+        let   skinId    = prize.value;
+        if (owned.includes(skinId)) {
+          const unowned = ALL_SKINS.filter(id => !owned.includes(id));
+          skinId = unowned.length > 0
+            ? unowned[Math.floor(Math.random() * unowned.length)]
+            : ALL_SKINS[Math.floor(Math.random() * ALL_SKINS.length)];
+        }
+        Shop.own(skinId);
+        // Update prize label shown in result box
+        const SKIN_NAMES = { skin_street_runner: 'Street Runner', skin_default: 'Builder', skin_founder: 'Founder', skin_base_king: 'Base King' };
+        if (_prize) _prize._resolvedSkinName = SKIN_NAMES[skinId] || skinId;
+      }
+    }
+  }
+
+  // ── After animation completes ─────────────────────────────────────────────
+  function _onSpinComplete() {
+    if (_safetyTimeout) { clearTimeout(_safetyTimeout); _safetyTimeout = null; }
+    _applyPrize(_prize);
+
+    const resultEl = document.getElementById('spin-result');
+    const iconEl   = document.getElementById('spin-result-icon');
+    const labelEl  = document.getElementById('spin-result-label');
+    if (resultEl && iconEl && labelEl && _prize) {
+      // For skin prizes show the shirt image; for others use emoji
+      if (_prize.type === 'skin' && _shirtImg && _shirtImg.complete && _shirtImg.naturalWidth) {
+        iconEl.innerHTML = `<img src="/game/shirt.png" style="width:2.2rem;height:2.2rem;object-fit:contain;display:block;margin:0 auto 4px;">`;
+        labelEl.textContent = _prize._resolvedSkinName ? `${_prize._resolvedSkinName} skin!` : 'New skin!';
+      } else if (_prize.type === 'trail' && _boosterImg && _boosterImg.complete && _boosterImg.naturalWidth) {
+        iconEl.innerHTML = `<img src="/game/trails.png" style="width:2.2rem;height:2.2rem;object-fit:contain;display:block;margin:0 auto 4px;">`;
+        labelEl.textContent = _prize._resolvedTrailName ? `${_prize._resolvedTrailName} trail!` : 'New trail!';
+      } else if (_prize.type === 'booster' && _boosterBagImg && _boosterBagImg.complete && _boosterBagImg.naturalWidth) {
+        iconEl.innerHTML = `<img src="/game/boosters.png" style="width:2.2rem;height:2.2rem;object-fit:contain;display:block;margin:0 auto 4px;">`;
+        labelEl.textContent = _prize._resolvedBoosterName ? `${_prize._resolvedBoosterName}!` : 'New booster!';
+      } else {
+        iconEl.textContent = _prize.icon || '🎁';
+        labelEl.textContent = _prize.label || 'Prize!';
+      }
+      resultEl.classList.remove('hidden');
+    }
+    _updateDoBtn();
+    _startCountdown();
+  }
+
+  // ── Public: doSpin ────────────────────────────────────────────────────────
+  function doSpin() {
+    if (_animPhase !== 'idle') return;
+    const spinFn = window.__SPIN_DO;
+    if (!spinFn) return;
+
+    _prize     = null;
+    _segments  = [...DISPLAY_POOL];
+    _lastTs    = 0;
+    _animPhase = 'spinning';
+    _animStart = performance.now();
+    cancelAnimationFrame(_animRaf);
+    _animRaf   = requestAnimationFrame(_animFrame);
+
+    const doBtn = document.getElementById('btn-do-spin');
+    if (doBtn) { doBtn.disabled = true; doBtn.textContent = '⏳ Spinning…'; }
+    const resultEl = document.getElementById('spin-result');
+    if (resultEl) resultEl.classList.add('hidden');
+
+    spinFn();
+
+    // Safety net: if no prize within 4 s, try Redis fallback; abort after 6 s regardless
+    _safetyTimeout = setTimeout(() => {
+      if (_animPhase !== 'spinning' && _animPhase !== 'landing') return;
+      const fetchFn = window.__SPIN_FETCH;
+      if (fetchFn) fetchFn();
+      // Hard abort 2 s later in case fetch also fails
+      setTimeout(() => {
+        if (_animPhase !== 'spinning' && _animPhase !== 'landing') return;
+        cancelAnimationFrame(_animRaf);
+        _animPhase = 'idle';
+        _drawWheel();
+        _updateDoBtn();
+      }, 2000);
+    }, 4000);
+  }
+
+  // ── Called when 'spin-prize' event fires from the React hook ─────────────
+  function onPrize(prize) {
+    _prize = prize;
+    _buildSegments(prize); // fix segment layout so winner sits at _winIndex
+    // _animFrame's spinning branch will call _startLanding() on its next check
+  }
+
+  // ── Button state ──────────────────────────────────────────────────────────
+  function _updateDoBtn() {
+    const doBtn = document.getElementById('btn-do-spin');
+    if (!doBtn) return;
+    const info      = window.__SPIN || {};
+    const pending   = info.isPending || false;
+    const busy      = _animPhase === 'spinning' || _animPhase === 'landing';
+    const nextCost  = info.nextCost  || 0;
+    const balance   = typeof Save !== 'undefined' ? Save.getCoins() : 0;
+    const canAfford = nextCost === 0 || balance >= nextCost;
+
+    if (busy || pending) {
+      doBtn.disabled    = true;
+      doBtn.textContent = '⏳ Spinning…';
+    } else if (!canAfford) {
+      doBtn.disabled    = true;
+      doBtn.innerHTML   = `Need ${nextCost - balance} more coins`;
+    } else if (nextCost === 0) {
+      doBtn.disabled    = false;
+      doBtn.innerHTML   = '🎰 FREE SPIN';
+    } else {
+      doBtn.disabled    = false;
+      doBtn.innerHTML   = `🎰 SPIN &nbsp;·&nbsp; <img src="/game/coin.png" style="width:14px;height:14px;object-fit:contain;vertical-align:middle;display:inline-block;"> ${nextCost}`;
+    }
+  }
+
+  // ── Menu banner visibility ────────────────────────────────────────────────
+  function updateBanner() {
+    const banner = document.getElementById('btn-spin');
+    const sub    = document.getElementById('spin-banner-sub');
+    if (!banner) return;
+    const info     = window.__SPIN || {};
+    const nextCost = info.nextCost || 0;
+    const balance  = typeof Save !== 'undefined' ? Save.getCoins() : 0;
+
+    banner.classList.remove('hidden');
+    if (sub) {
+      sub.textContent = nextCost === 0
+        ? 'Free spin available!'
+        : `Spin for ${nextCost} coins`;
+    }
+  }
+
+  // ── Countdown timer on spin screen ───────────────────────────────────────
+  function _startCountdown() {
+    if (_timerInterval) clearInterval(_timerInterval);
+    const timerEl = document.getElementById('spin-timer');
+    if (!timerEl) return;
+    const nextAt = (window.__SPIN || {}).nextAt || 0;
+    if (!nextAt) { timerEl.classList.add('hidden'); return; }
+    function tick() {
+      const ms = nextAt - Date.now();
+      if (ms <= 0) {
+        clearInterval(_timerInterval);
+        timerEl.classList.add('hidden');
+        _updateDoBtn();
+        updateBanner();
+        return;
+      }
+      const s   = Math.floor(ms / 1000);
+      const h   = Math.floor(s / 3600);
+      const m   = Math.floor((s % 3600) / 60);
+      const sec = s % 60;
+      timerEl.textContent = `Next spin in ${[h, m, sec].map(v => String(v).padStart(2, '0')).join(':')}`;
+      timerEl.classList.remove('hidden');
+    }
+    tick();
+    _timerInterval = setInterval(tick, 1000);
+  }
+
+  // ── Show spin screen ──────────────────────────────────────────────────────
+  function show() {
+    if (!_canvas) _initCanvas();
+    else { _sizeCanvas(); _drawWheel(); }
+
+    _updateDoBtn();
+
+    const info     = window.__SPIN || {};
+    const avail    = info.isAvailable !== false;
+    const timerEl  = document.getElementById('spin-timer');
+    const resultEl = document.getElementById('spin-result');
+
+    if (resultEl) resultEl.classList.toggle('hidden', _animPhase !== 'done');
+
+    if (!avail) {
+      _startCountdown();
+    } else if (timerEl) {
+      timerEl.classList.add('hidden');
+    }
+
+    if (typeof UI !== 'undefined') UI.show('spin');
+  }
+
+  // ── Called when server returns 402 (not enough coins) ────────────────────
+  function onInsufficient() {
+    cancelAnimationFrame(_animRaf);
+    _animPhase = 'idle';
+    _drawWheel();
+    _updateDoBtn();
+    // Flash "not enough coins" on the result area briefly
+    const resultEl = document.getElementById('spin-result');
+    const iconEl   = document.getElementById('spin-result-icon');
+    const labelEl  = document.getElementById('spin-result-label');
+    if (resultEl && iconEl && labelEl) {
+      iconEl.textContent  = '😔';
+      labelEl.textContent = 'Not enough coins';
+      resultEl.classList.remove('hidden');
+      setTimeout(() => resultEl.classList.add('hidden'), 2500);
+    }
+  }
+
+  return { show, doSpin, onPrize, onInsufficient, updateBanner };
+})();
+
+
+/* ===== xp.js ===== */
+const Xp = (() => {
+  const SAVE_KEY = 'xp_v1';
+
+  // XP needed to advance FROM level N (i.e. N→N+1 costs 100*N)
+  function xpNeeded(level) { return 100 * level; }
+
+  const LEVEL_REWARDS = {
+    2:  { type: 'coins', value: 100,  icon: '🪙', label: '+100 Coins' },
+    3:  { type: 'skin',  value: 'skin_street_runner', sprite: '/game/chars/street_runner.png', label: 'Street Runner unlocked!' },
+    5:  { type: 'coins', value: 200,  icon: '🪙', label: '+200 Coins' },
+    7:  { type: 'trail', value: 'trail_sparkle', icon: '✨', label: 'Sparkle Trail unlocked!' },
+    10: { type: 'coins', value: 500,  icon: '🪙', label: '+500 Coins' },
+    12: { type: 'trail', value: 'trail_hearts',  icon: '💖', label: 'Hearts Trail unlocked!' },
+    15: { type: 'coins', value: 750,  icon: '🪙', label: '+750 Coins' },
+    18: { type: 'trail', value: 'trail_fire',    icon: '🔥', label: 'Fire Trail unlocked!' },
+    20: { type: 'skin',  value: 'skin_founder',  sprite: '/game/chars/founder.png',       label: 'Founder unlocked!' },
+    25: { type: 'trail', value: 'trail_coins',   icon: '🪙', label: 'Coins Trail unlocked!' },
+    30: { type: 'skin',  value: 'skin_base_king', sprite: '/game/chars/base_king.png',    label: 'Base King unlocked!' },
+    35: { type: 'trail', value: 'trail_rainbow', icon: '🌈', label: 'Rainbow Trail unlocked!' },
+  };
+
+  function _load() {
+    try { return JSON.parse(localStorage.getItem(SAVE_KEY) || '{}'); } catch { return {}; }
+  }
+  function _save(d) {
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(d)); } catch {}
+  }
+
+  function getLevel()   { return _load().level    || 1; }
+  function getTotalXp() { return _load().totalXp  || 0; }
+
+  function getProgress() {
+    const d = _load();
+    const level     = d.level     || 1;
+    const xpInLevel = d.xpInLevel || 0;
+    const needed    = xpNeeded(level);
+    return { level, xpInLevel, needed, pct: Math.min(100, (xpInLevel / needed) * 100) };
+  }
+
+  // Add XP → handle level-ups → return [{level, reward}, …]
+  function add(xp) {
+    if (!xp || xp <= 0) return [];
+    const d = _load();
+    const levelUps  = [];
+    let level     = d.level     || 1;
+    let xpInLevel = (d.xpInLevel || 0) + xp;
+    let totalXp   = (d.totalXp  || 0) + xp;
+
+    while (xpInLevel >= xpNeeded(level)) {
+      xpInLevel -= xpNeeded(level);
+      level++;
+      const reward = LEVEL_REWARDS[level] || null;
+      levelUps.push({ level, reward });
+      if (reward) _applyReward(reward);
+    }
+
+    _save({ level, xpInLevel, totalXp });
+    _updateBadge(level);
+    return levelUps;
+  }
+
+  function _applyReward(reward) {
+    if (reward.type === 'coins') {
+      Save.addCoins(reward.value);
+      if (typeof window.__BASE_SYNC_COINS === 'function') window.__BASE_SYNC_COINS(Save.getCoins());
+    } else if (reward.type === 'skin'  && typeof Shop !== 'undefined') {
+      Shop.own(reward.value);
+    } else if (reward.type === 'trail' && typeof Shop !== 'undefined') {
+      Shop.ownTrailPack(reward.value);
+    }
+  }
+
+  function _updateBadge(level) {
+    const lv    = level || getLevel();
+    const badge = document.getElementById('profile-level-badge');
+    if (badge) badge.textContent = `Lv.${lv}`;
+  }
+
+  function renderProfile() {
+    const { level, xpInLevel, needed, pct } = getProgress();
+    const lvlEl  = document.getElementById('xp-level-display');
+    const numEl  = document.getElementById('xp-nums');
+    const fillEl = document.getElementById('xp-bar-fill');
+    if (lvlEl)  lvlEl.textContent  = `Lv.${level}`;
+    if (numEl)  numEl.textContent  = `${xpInLevel} / ${needed} XP`;
+    if (fillEl) fillEl.style.width = `${pct}%`;
+    _updateBadge(level);
+  }
+
+  function showRewards() {
+    const { level, xpInLevel, needed, pct } = getProgress();
+    const list = document.getElementById('xp-rewards-list');
+    if (!list) return;
+
+    // Current level progress header
+    let html = `
+      <div class="xpr-progress">
+        <div class="xpr-progress-label">
+          <span class="xpr-cur-level">Lv.${level}</span>
+          <span class="xpr-xp-nums">${xpInLevel} / ${needed} XP</span>
+        </div>
+        <div class="xpr-track"><div class="xpr-fill" style="width:${pct}%"></div></div>
+      </div>
+      <div class="xpr-divider"></div>`;
+
+    // All milestone levels
+    const milestones = Object.keys(LEVEL_REWARDS).map(Number).sort((a, b) => a - b);
+    for (const lvl of milestones) {
+      const r       = LEVEL_REWARDS[lvl];
+      const done    = level >= lvl;
+      const current = level === lvl - 1;
+      const cls     = done ? 'xpr-row done' : current ? 'xpr-row next' : 'xpr-row';
+      const badge   = done
+        ? '<span class="xpr-check">✓</span>'
+        : current
+          ? '<span class="xpr-lock next-lock">▶</span>'
+          : '<span class="xpr-lock">🔒</span>';
+      const iconHtml = r.type === 'skin'
+        ? `<img src="${r.sprite}" class="xpr-skin-img" alt="${r.label}">`
+        : r.type === 'coins'
+          ? `<img src="/game/coin.png" class="xpr-coin-img" alt="coins">`
+          : `<div class="xpr-icon">${r.icon}</div>`;
+      html += `
+        <div class="${cls}">
+          <div class="xpr-level-num">Lv.${lvl}</div>
+          ${iconHtml}
+          <div class="xpr-label">${r.label}</div>
+          ${badge}
+        </div>`;
+    }
+
+    list.innerHTML = html;
+    const modal = document.getElementById('xp-rewards-modal');
+    if (modal) modal.classList.remove('hidden');
+  }
+
+  function hideRewards() {
+    const modal = document.getElementById('xp-rewards-modal');
+    if (modal) modal.classList.add('hidden');
+  }
+
+  return { add, getLevel, getTotalXp, getProgress, renderProfile, showRewards, hideRewards };
+})();
+
+
 /* ===== main.js ===== */
 /**
  * main.js — Главный файл игры
@@ -5233,13 +6061,24 @@ const Quests = (() => {
  */
 
 // ===== ВИБРАЦИЯ =====
-const Vibrate = {
-  tap:   () => navigator.vibrate && navigator.vibrate(18),   // лёгкий прыжок
-  log:   () => navigator.vibrate && navigator.vibrate(35),   // бревно
-  coin:  () => navigator.vibrate && navigator.vibrate(25),   // монета
-  death: () => navigator.vibrate && navigator.vibrate([60, 40, 80]),  // смерть: удар-пауза-удар
-  water: () => navigator.vibrate && navigator.vibrate([30, 20, 30, 20, 40]), // тонет
-};
+const Vibrate = (() => {
+  let _on = localStorage.getItem('baserunner_vibrate') !== 'false'; // default true
+
+  function _v(p) { if (_on && navigator.vibrate) navigator.vibrate(p); }
+
+  function isEnabled()   { return _on; }
+  function setEnabled(v) { _on = !!v; localStorage.setItem('baserunner_vibrate', _on); }
+
+  return {
+    tap:   () => _v(18),
+    log:   () => _v(35),
+    coin:  () => _v(25),
+    death: () => _v([60, 40, 80]),
+    water: () => _v([30, 20, 30, 20, 40]),
+    isEnabled,
+    setEnabled,
+  };
+})();
 
 // ===== СОСТОЯНИЕ ИГРЫ =====
 const GameState = {
@@ -5289,7 +6128,8 @@ function menuLoop(timestamp) {
 }
 
 // ===== ИНИЦИАЛИЗАЦИЯ ИГРЫ =====
-let _sessionCoins = 0;
+let _sessionCoins     = 0;
+let _recordBonusUsed  = false; // only first record break per game awards XP bonus
 
 const CONTINUE_COST   = 100;
 let _continueUsed     = false;
@@ -5323,8 +6163,9 @@ function hideContinueOverlay() {
 }
 
 function initGame() {
-  _sessionCoins = 0;
-  _continueUsed = false;
+  _sessionCoins    = 0;
+  _continueUsed    = false;
+  _recordBonusUsed = false;
   if (_continueInterval) { clearInterval(_continueInterval); _continueInterval = null; }
   hideContinueOverlay();
   Renderer.init();
@@ -5334,6 +6175,7 @@ function initGame() {
   deathTriggered = false;
   Renderer.stopDeath();
   if (typeof Sound !== 'undefined') Sound.init();
+  if (typeof Music !== 'undefined') Music.init();
 
   currentState = GameState.PLAYING;
   UI.show('game');
@@ -5397,18 +6239,62 @@ function gameLoop(timestamp) {
 }
 
 // ===== КОНЕЦ ИГРЫ =====
+let _levelUpQueue = [];
+
+function _showNextLevelUp() {
+  if (_levelUpQueue.length === 0) return;
+  const item   = _levelUpQueue.shift();
+  const modal  = document.getElementById('levelup-modal');
+  const iconEl = document.getElementById('levelup-icon');
+  const lvlEl  = document.getElementById('levelup-level');
+  const rwdEl  = document.getElementById('levelup-reward');
+  if (!modal) return;
+  if (iconEl) iconEl.textContent  = item.reward ? item.reward.icon : '⭐';
+  if (lvlEl)  lvlEl.textContent   = `Lv.${item.level}`;
+  if (rwdEl)  rwdEl.textContent   = item.reward ? item.reward.label : '';
+  rwdEl.style.display = item.reward ? '' : 'none';
+  modal.classList.remove('hidden');
+}
+
+function _closeLevelUp() {
+  const modal = document.getElementById('levelup-modal');
+  if (modal) modal.classList.add('hidden');
+  if (_levelUpQueue.length > 0) setTimeout(_showNextLevelUp, 300);
+}
+
 function onGameOver() {
   currentState = GameState.GAMEOVER;
-  const score = Player.getScore();
-  const best  = Save.addScore(score);
+  const score   = Player.getScore();
+  const prevBest = Save.getBest();
+  const best    = Save.addScore(score);
+  const isNewRecord = score > 0 && score === best && score > prevBest;
+
   // Quest progress
   Quests.onGameOver(score, _sessionCoins);
-  // Синхронизируем монеты с глобальным лидербордом
+  // Sync coins
   const syncFn = window.__BASE_SYNC_COINS;
   if (syncFn) syncFn(Save.getCoins());
-  // Auto-submit score to offchain leaderboard
+  // Auto-submit score
   window.dispatchEvent(new CustomEvent('base-auto-submit-score', { detail: { score } }));
-  setTimeout(() => UI.showGameOver(score, best), 600);
+
+  // XP — new formula
+  const baseXp        = score * 1 + _sessionCoins * 2;
+  const multi         = score >= 150 ? 1.2 : score >= 75 ? 1.0 : score >= 30 ? 0.7 : 0.5;
+  const multiplied    = Math.round(baseXp * multi);
+  const checkinStreak = (Save.getCheckin().streak || 0);
+  const streakBonus   = Math.min(checkinStreak * 2, 20); // max +20 XP, не доминирует
+  const recordBonus   = (isNewRecord && !_recordBonusUsed)
+    ? (_recordBonusUsed = true, Math.round(multiplied * 0.5)) // 50% от базы, масштабируется
+    : 0;
+  const xpEarned      = multiplied + streakBonus + recordBonus;
+
+  const xpBreakdown = { base: Math.round(baseXp * multi), multi, streakBonus, recordBonus };
+  _levelUpQueue  = typeof Xp !== 'undefined' ? Xp.add(xpEarned) : [];
+
+  setTimeout(() => {
+    UI.showGameOver(score, best, xpEarned, xpBreakdown);
+    if (_levelUpQueue.length > 0) setTimeout(_showNextLevelUp, 900);
+  }, 600);
 }
 
 // ===================================================
@@ -5521,6 +6407,38 @@ function _bind(id, event, handler) {
 }
 
 // ===== ПРОФИЛЬ =====
+function _updateCiBanner() {
+  const banner = document.getElementById('btn-ci-banner');
+  const sub    = document.getElementById('ci-banner-sub');
+  if (!banner || !sub) return;
+  const state = typeof CheckIn !== 'undefined' ? CheckIn.getState() : null;
+  if (!state) return;
+
+  if (state.available) {
+    banner.classList.add('ci-banner-available');
+    const DAY_COINS = [5, 5, 5, 10, 10, 20, 30];
+    const daySlot   = state.streak % 7;
+    const coins     = DAY_COINS[daySlot] || 5;
+    const isDay7    = daySlot === 6;
+    sub.textContent = isDay7
+      ? `Day 7 · +${coins} coins + Booster!`
+      : `Day ${state.streak + 1} · +${coins} coins`;
+  } else {
+    banner.classList.remove('ci-banner-available');
+    // Show live countdown until next check-in
+    if (typeof CheckIn !== 'undefined' && CheckIn._msUntilMidnight) {
+      const ms = CheckIn._msUntilMidnight();
+      const s  = Math.floor(ms / 1000);
+      const h  = Math.floor(s / 3600);
+      const m  = Math.floor((s % 3600) / 60);
+      const sc = s % 60;
+      sub.textContent = `Next in ${h}h ${String(m).padStart(2,'0')}m ${String(sc).padStart(2,'0')}s`;
+    } else {
+      sub.textContent = 'Come back tomorrow';
+    }
+  }
+}
+
 function _renderProfile() {
   // Wallet address
   const addr = window.__BASE_WALLET || '';
@@ -5548,12 +6466,85 @@ function _renderProfile() {
   const checkin = Save.getCheckin();
 
   const el = (id) => document.getElementById(id);
+
+  // Global rank from leaderboard entries
+  const _updateRank = () => {
+    const entries = window.__BASE_LEADERBOARD_ENTRIES || [];
+    const addr    = (window.__BASE_WALLET || '').toLowerCase();
+    let rankText  = '#—';
+    if (addr && entries.length > 0) {
+      const entry = entries.find(e => e.address.toLowerCase() === addr);
+      if (entry) rankText = `#${entry.rank ?? (entries.indexOf(entry) + 1)}`;
+    }
+    if (el('stat-rank')) el('stat-rank').textContent = rankText;
+  };
+  _updateRank();
+
   if (el('stat-best'))     el('stat-best').textContent     = Save.getBest();
   if (el('stat-games'))    el('stat-games').textContent    = questData.games?.progress || 0;
   if (el('stat-rows'))     el('stat-rows').textContent     = questData.rows?.progress || 0;
   if (el('stat-coins'))    el('stat-coins').textContent    = questData.coins?.progress || 0;
   if (el('stat-streak'))   el('stat-streak').textContent   = checkin.streak || 0;
   if (el('stat-checkins')) el('stat-checkins').textContent = checkin.total || 0;
+
+  // XP bar
+  if (typeof Xp !== 'undefined') Xp.renderProfile();
+
+  // Booster charges
+  if (typeof Shop !== 'undefined') {
+    for (const key of ['magnet', 'double', 'shield']) {
+      const count  = Shop.getBoosterCount(`boost_${key}`);
+      const pillEl = el(`profile-boost-${key}`);
+      const cntEl  = el(`profile-boost-${key}-count`);
+      if (cntEl)  cntEl.textContent = `×${count}`;
+      if (pillEl) pillEl.classList.toggle('empty', count === 0);
+    }
+  }
+
+  // Equipped skin + trail preview
+  if (typeof Shop !== 'undefined') {
+    const SKIN_META = [
+      { id: 'skin_cryptokid',     name: 'Crypto Kid',    sprite: '/game/chars/cryptokid.png'     },
+      { id: 'skin_street_runner', name: 'Street Runner', sprite: '/game/chars/street_runner.png' },
+      { id: 'skin_default',       name: 'Builder',       sprite: '/game/player.png'              },
+      { id: 'skin_founder',       name: 'Founder',       sprite: '/game/chars/founder.png'       },
+      { id: 'skin_base_king',     name: 'Base King',     sprite: '/game/chars/base_king.png'     },
+    ];
+    const TRAIL_META = [
+      { id: 'trail_sparkle', name: 'Sparkle', icon: '✨', color: 'rgba(255,215,0,0.22)',    glow: 'rgba(255,215,0,0.5)'   },
+      { id: 'trail_hearts',  name: 'Hearts',  icon: '💖', color: 'rgba(255,100,170,0.22)',  glow: 'rgba(255,100,170,0.5)' },
+      { id: 'trail_fire',    name: 'Fire',    icon: '🔥', color: 'rgba(255,110,0,0.22)',    glow: 'rgba(255,110,0,0.5)'   },
+      { id: 'trail_coins',   name: 'Coins',   icon: '🪙', color: 'rgba(255,200,0,0.22)',    glow: 'rgba(255,200,0,0.5)'   },
+      { id: 'trail_rainbow', name: 'Rainbow', icon: '🌈', color: 'rgba(140,100,255,0.22)',  glow: 'rgba(140,100,255,0.5)' },
+    ];
+
+    const skinId  = Shop.getEquipped();
+    const trailId = Shop.getEquippedTrail();
+    const skin    = SKIN_META.find(s => s.id === skinId)   || SKIN_META[0];
+    const trail   = TRAIL_META.find(t => t.id === trailId) || null;
+
+    // Skin sprite
+    const spriteEl = el('equipped-skin-sprite');
+    if (spriteEl) spriteEl.src = skin.sprite;
+    if (el('equipped-skin-name')) el('equipped-skin-name').textContent = skin.name;
+
+    // Trail bubble
+    const bubbleEl = el('equipped-trail-bubble');
+    const iconEl   = el('equipped-trail-icon');
+    if (iconEl) iconEl.textContent = trail ? trail.icon : '👣';
+    if (el('equipped-trail-name')) el('equipped-trail-name').textContent = trail ? trail.name : 'None';
+    if (bubbleEl) {
+      if (trail) {
+        bubbleEl.style.background   = trail.color;
+        bubbleEl.style.borderColor  = trail.glow.replace('0.5)', '0.35)');
+        bubbleEl.style.boxShadow    = `0 0 14px ${trail.glow}`;
+      } else {
+        bubbleEl.style.background  = 'rgba(255,255,255,0.07)';
+        bubbleEl.style.borderColor = 'rgba(255,255,255,0.12)';
+        bubbleEl.style.boxShadow   = 'none';
+      }
+    }
+  }
 }
 
 // Load basename + avatar from server
@@ -5592,11 +6583,31 @@ async function _loadProfileData(addr) {
   } catch {}
 }
 
+function _initSettingsScreen() {
+  const musicSlider = document.getElementById('settings-music-vol');
+  const musicLabel  = document.getElementById('settings-music-label');
+  const sfxSlider   = document.getElementById('settings-sfx-vol');
+  const sfxLabel    = document.getElementById('settings-sfx-label');
+  const vibToggle   = document.getElementById('settings-vibrate-toggle');
+
+  if (musicSlider) {
+    const pct = Math.round(Music.getVolume() * 100);
+    musicSlider.value = pct;
+    if (musicLabel) musicLabel.textContent = pct + '%';
+  }
+  if (sfxSlider) {
+    const pct = Math.round(Sound.getVolume() * 100);
+    sfxSlider.value = pct;
+    if (sfxLabel) sfxLabel.textContent = pct + '%';
+  }
+  if (vibToggle) vibToggle.checked = Vibrate.isEnabled();
+}
+
 function _initUI() {
   // Кнопки меню
   _bind('btn-start', 'click', () => initGame());
   _bind('btn-lb',    'click', () => UI.showLeaderboard());
-  _bind('btn-ci',    'click', () => UI.showCheckIn());
+  // btn-ci removed from profile — check-in is now on the main menu
   _bind('btn-shop',  'click', () => Shop.show());
   _bind('btn-shop-back', 'click', () => UI.show('menu'));
   _bind('shop-tab-skins',    'click', () => Shop.setTab('skins'));
@@ -5604,8 +6615,61 @@ function _initUI() {
   _bind('shop-tab-trails',   'click', () => Shop.setTab('trails'));
   _bind('shop-tab-effects',  'click', () => Shop.setTab('effects'));
 
+  // Profile — equipped item Change buttons
+  _bind('btn-change-skin',  'click', () => { Shop.show(); Shop.setTab('skins'); });
+  _bind('btn-change-trail', 'click', () => { Shop.show(); Shop.setTab('trails'); });
+
+  // Level-up modal
+  _bind('btn-levelup-ok', 'click', _closeLevelUp);
+
+  // XP rewards sheet — open on tap of XP bar or level label
+  _bind('profile-xp-clickable', 'click', () => { if (typeof Xp !== 'undefined') Xp.showRewards(); });
+  _bind('btn-xp-rewards-close', 'click', () => { if (typeof Xp !== 'undefined') Xp.hideRewards(); });
+  // Close on backdrop tap
+  const xprModal = document.getElementById('xp-rewards-modal');
+  if (xprModal) xprModal.addEventListener('click', (e) => {
+    if (e.target === xprModal && typeof Xp !== 'undefined') Xp.hideRewards();
+  });
+
+  // Init level badge
+  if (typeof Xp !== 'undefined') {
+    const badge = document.getElementById('profile-level-badge');
+    if (badge) badge.textContent = `Lv.${Xp.getLevel()}`;
+  }
+
   // Кнопка звука
-  _bind('btn-mute', 'click', () => Sound.toggleMute());
+  _bind('btn-mute',      'click', () => Sound.toggleMute());
+  _bind('btn-settings',      'click', () => { _initSettingsScreen(); UI.show('settings'); });
+  _bind('btn-settings-back', 'click', () => UI.show('menu'));
+
+  // Music volume slider — bind once
+  const musicSlider = document.getElementById('settings-music-vol');
+  if (musicSlider) {
+    musicSlider.addEventListener('input', () => {
+      Music.setVolume(musicSlider.value / 100);
+      const lbl = document.getElementById('settings-music-label');
+      if (lbl) lbl.textContent = musicSlider.value + '%';
+    });
+  }
+
+  // SFX volume slider — bind once
+  const sfxSlider = document.getElementById('settings-sfx-vol');
+  if (sfxSlider) {
+    sfxSlider.addEventListener('input', () => {
+      Sound.setVolume(sfxSlider.value / 100);
+      const lbl = document.getElementById('settings-sfx-label');
+      if (lbl) lbl.textContent = sfxSlider.value + '%';
+    });
+  }
+
+  // Vibration toggle — bind once
+  const vibToggle = document.getElementById('settings-vibrate-toggle');
+  if (vibToggle) {
+    vibToggle.addEventListener('change', () => {
+      Vibrate.setEnabled(vibToggle.checked);
+      if (vibToggle.checked) Vibrate.tap();
+    });
+  }
 
   // Кнопки game over
   _bind('btn-restart', 'click', () => initGame());
@@ -5641,6 +6705,17 @@ function _initUI() {
     if (lbScreen && !lbScreen.classList.contains('hidden')) {
       Leaderboard.render();
     }
+    // Also refresh rank badge on profile if it's visible
+    const profScreen = document.getElementById('screen-profile');
+    if (profScreen && !profScreen.classList.contains('hidden')) {
+      const entries = window.__BASE_LEADERBOARD_ENTRIES || [];
+      const addr    = (window.__BASE_WALLET || '').toLowerCase();
+      const rankEl  = document.getElementById('stat-rank');
+      if (rankEl) {
+        const entry = entries.find(e => e.address.toLowerCase() === addr);
+        rankEl.textContent = entry ? `#${entry.rank ?? (entries.indexOf(entry) + 1)}` : '#—';
+      }
+    }
   });
 
   // Кнопки leaderboard
@@ -5670,22 +6745,29 @@ function _initUI() {
 
   // Listen for on-chain check-in confirmation from React
   window.addEventListener('base-checkin-confirmed', () => {
-    // Начислить монеты за on-chain чекин
     const DAY_COINS = [5, 5, 5, 10, 10, 20, 30];
-    const ci = Save.getCheckin();
+    const ci        = Save.getCheckin();
     const newStreak = ci.streak + 1;
-    const daySlot = (newStreak - 1) % 7;
-    const reward = DAY_COINS[daySlot];
-    const today = new Date().toISOString().slice(0, 10);
+    const daySlot   = (newStreak - 1) % 7;
+    const reward    = DAY_COINS[daySlot];
+    const today     = new Date().toISOString().slice(0, 10);
     Save.saveCheckin({ lastDate: today, streak: newStreak, total: (ci.total || 0) + 1 });
     const newTotal = Save.addCoins(reward);
     UI.updateCoins(newTotal);
+
+    // Day 7 bonus: award a random booster
+    if (daySlot === 6 && typeof Shop !== 'undefined') {
+      const ALL_BOOSTERS = ['boost_magnet', 'boost_double', 'boost_shield'];
+      const randomBooster = ALL_BOOSTERS[Math.floor(Math.random() * ALL_BOOSTERS.length)];
+      Shop.addBoosterCharges(randomBooster, 1);
+    }
+
     UI.showCheckIn();
-    // Sync coins to offchain leaderboard
+    _updateCiBanner();
     const syncFn = window.__BASE_SYNC_COINS;
     if (syncFn) syncFn(Save.getCoins());
   });
-  _bind('btn-ci-back', 'click', () => { _renderProfile(); UI.show('profile'); });
+  _bind('btn-ci-back', 'click', () => UI.show('menu'));
 
   // Quests
   _bind('btn-quests', 'click', () => { Quests.render(); UI.show('quests'); });
@@ -5697,6 +6779,17 @@ function _initUI() {
   // Profile
   _bind('btn-profile', 'click', () => { _renderProfile(); UI.show('profile'); });
   _bind('btn-profile-back', 'click', () => UI.show('menu'));
+
+  // Daily Spin
+  _bind('btn-ci-banner', 'click', () => UI.showCheckIn());
+  _bind('btn-spin',      'click', () => DailySpin.show());
+  _bind('btn-do-spin',   'click', () => DailySpin.doSpin());
+  _bind('btn-spin-back', 'click', () => UI.show('menu'));
+  window.addEventListener('spin-prize',        e => DailySpin.onPrize(e.detail));
+  window.addEventListener('spin-insufficient', () => {
+    // Abort animation if running, show "not enough coins"
+    DailySpin.onInsufficient();
+  });
 
   // Старт
   UI.show('menu');

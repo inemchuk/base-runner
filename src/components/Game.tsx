@@ -8,6 +8,7 @@ import { useCoinLeaderboard } from '@/hooks/useCoinLeaderboard';
 import { useCoinClaim } from '@/hooks/useCoinClaim';
 import { useShopSync } from '@/hooks/useShopSync';
 import { useQuestSync } from '@/hooks/useQuestSync';
+import { useDailySpin } from '@/hooks/useDailySpin';
 
 export default function Game() {
   useCheckIn();
@@ -16,6 +17,7 @@ export default function Game() {
   useCoinClaim();
   useShopSync();
   useQuestSync();
+  useDailySpin();
 
   useEffect(() => {
     // Resize canvas on mount
@@ -98,57 +100,140 @@ export default function Game() {
 
       {/* Menu Screen */}
       <div id="screen-menu" className="screen">
+        <button id="btn-settings" className="settings-gear-btn" aria-label="Settings"><span style={{display:'block',lineHeight:1,marginTop:'3px'}}>⚙️</span></button>
         <h1 className="game-title">BASE RUNNER</h1>
         <p className="subtitle">how far can you go?</p>
         <div id="menu-coin-balance"><img src="/game/coin.png" className="coin-icon" alt="coin" /> <span id="menu-coin-count">0</span></div>
+        {/* Daily banners row */}
+        <div className="daily-banners">
+          <button id="btn-spin" className="spin-banner hidden">
+            <span className="spin-banner-icon">🎰</span>
+            <div className="spin-banner-text">
+              <span className="spin-banner-title">Daily Spin</span>
+              <span className="spin-banner-sub" id="spin-banner-sub">Free spin available!</span>
+            </div>
+            <span className="spin-banner-arrow">›</span>
+          </button>
+          <button id="btn-ci-banner" className="spin-banner">
+            <span className="spin-banner-icon">📅</span>
+            <div className="spin-banner-text">
+              <span className="spin-banner-title">Daily Check-in</span>
+              <span className="spin-banner-sub" id="ci-banner-sub">Claim your reward!</span>
+            </div>
+            <span className="spin-banner-arrow">›</span>
+          </button>
+        </div>
         <div style={{flex:1}} />
         <nav className="tab-bar" id="menu-tab-bar">
           <button className="tab-item" id="btn-shop"><span className="tab-icon">🛒</span><span className="tab-label">Shop</span></button>
           <button className="tab-item" id="btn-quests"><span className="tab-icon">🎯</span><span className="tab-label">Quests</span></button>
           <button className="tab-item tab-play" id="btn-start"><span className="tab-icon">▶</span><span className="tab-label">Play</span></button>
           <button className="tab-item" id="btn-lb"><span className="tab-icon">🏆</span><span className="tab-label">Leaders</span></button>
-          <button className="tab-item" id="btn-profile"><span className="tab-icon" id="menu-profile-icon">👤</span><span className="tab-label">Profile</span></button>
+          <button className="tab-item" id="btn-profile" style={{position:'relative'}}><span className="tab-icon" id="menu-profile-icon">👤</span><span className="tab-label">Profile</span><span className="level-badge" id="profile-level-badge">Lv.1</span></button>
         </nav>
       </div>
 
       {/* Profile Screen */}
-      <div id="screen-profile" className="screen hidden" style={{justifyContent:'flex-start',paddingTop:'6vh'}}>
-        <div className="profile-header">
-          <img id="profile-avatar" className="profile-avatar" src="" alt="" style={{display:'none'}} />
-          <div id="profile-avatar-placeholder" className="profile-avatar" style={{display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.5rem'}}>👤</div>
-          <div className="profile-info">
-            <span className="profile-name" id="profile-name">Not connected</span>
-            <span className="profile-address" id="profile-address"></span>
+      <div id="screen-profile" className="screen hidden profile-screen">
+        {/* Scrollable content */}
+        <div className="profile-scroll">
+          <div className="profile-header">
+            <img id="profile-avatar" className="profile-avatar" src="" alt="" style={{display:'none'}} />
+            <div id="profile-avatar-placeholder" className="profile-avatar" style={{display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.5rem'}}>👤</div>
+            <div className="profile-info">
+              <span className="profile-name" id="profile-name">Not connected</span>
+              <span className="profile-address" id="profile-address"></span>
+            </div>
+          </div>
+
+          {/* XP Progress Bar — tap opens rewards sheet */}
+          <div className="profile-xp" id="profile-xp-clickable" style={{cursor:'pointer'}}>
+            <div className="profile-xp-row">
+              <span className="profile-xp-level" id="xp-level-display">Lv.1</span>
+              <span className="profile-xp-hint">Tap to see rewards ›</span>
+              <span className="profile-xp-nums" id="xp-nums">0 / 100 XP</span>
+            </div>
+            <div className="profile-xp-track">
+              <div className="profile-xp-fill" id="xp-bar-fill" />
+            </div>
+          </div>
+
+          <div className="profile-stats" id="profile-stats">
+            <div className="profile-stat profile-stat-rank">
+              <span className="profile-stat-value" id="stat-rank">#—</span>
+              <span className="profile-stat-label">Global Rank</span>
+            </div>
+            <div className="profile-stat">
+              <span className="profile-stat-value" id="stat-best">0</span>
+              <span className="profile-stat-label">Best Score</span>
+            </div>
+            <div className="profile-stat">
+              <span className="profile-stat-value" id="stat-games">0</span>
+              <span className="profile-stat-label">Games Played</span>
+            </div>
+            <div className="profile-stat">
+              <span className="profile-stat-value" id="stat-rows">0</span>
+              <span className="profile-stat-label">Total Rows</span>
+            </div>
+            <div className="profile-stat">
+              <span className="profile-stat-value" id="stat-coins">0</span>
+              <span className="profile-stat-label">Coins Earned</span>
+            </div>
+            <div className="profile-stat">
+              <span className="profile-stat-value" id="stat-streak">0</span>
+              <span className="profile-stat-label">Check-in Streak</span>
+            </div>
+            <div className="profile-stat">
+              <span className="profile-stat-value" id="stat-checkins">0</span>
+              <span className="profile-stat-label">Total Check-ins</span>
+            </div>
+          </div>
+
+          {/* Booster charges */}
+          <div className="profile-boosters">
+            <p className="profile-section-title">Boosters</p>
+            <div className="profile-booster-row">
+              <div className="booster-pill" id="profile-boost-magnet">
+                <span className="booster-pill-icon">🧲</span>
+                <span className="booster-pill-count" id="profile-boost-magnet-count">×0</span>
+              </div>
+              <div className="booster-pill" id="profile-boost-double">
+                <span className="booster-pill-icon">💰</span>
+                <span className="booster-pill-count" id="profile-boost-double-count">×0</span>
+              </div>
+              <div className="booster-pill" id="profile-boost-shield">
+                <span className="booster-pill-icon">🛡️</span>
+                <span className="booster-pill-count" id="profile-boost-shield-count">×0</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Equipped skin + trail */}
+          <div className="profile-equipped">
+            <p className="profile-section-title">Equipped</p>
+            <div className="profile-equipped-row">
+              <div className="equipped-card">
+                <span className="equipped-type-label">Skin</span>
+                <img className="equipped-sprite" id="equipped-skin-sprite" src="/game/chars/cryptokid.png" alt="skin" />
+                <span className="equipped-name" id="equipped-skin-name">Crypto Kid</span>
+                <button className="equipped-change-btn" id="btn-change-skin">Change</button>
+              </div>
+              <div className="equipped-card">
+                <span className="equipped-type-label">Trail</span>
+                <span className="equipped-trail-bubble" id="equipped-trail-bubble">
+                  <span id="equipped-trail-icon">👣</span>
+                </span>
+                <span className="equipped-name" id="equipped-trail-name">None</span>
+                <button className="equipped-change-btn" id="btn-change-trail">Change</button>
+              </div>
+            </div>
           </div>
         </div>
-        <div className="profile-stats" id="profile-stats">
-          <div className="profile-stat">
-            <span className="profile-stat-value" id="stat-best">0</span>
-            <span className="profile-stat-label">Best Score</span>
-          </div>
-          <div className="profile-stat">
-            <span className="profile-stat-value" id="stat-games">0</span>
-            <span className="profile-stat-label">Games Played</span>
-          </div>
-          <div className="profile-stat">
-            <span className="profile-stat-value" id="stat-rows">0</span>
-            <span className="profile-stat-label">Total Rows</span>
-          </div>
-          <div className="profile-stat">
-            <span className="profile-stat-value" id="stat-coins">0</span>
-            <span className="profile-stat-label">Coins Earned</span>
-          </div>
-          <div className="profile-stat">
-            <span className="profile-stat-value" id="stat-streak">0</span>
-            <span className="profile-stat-label">Check-in Streak</span>
-          </div>
-          <div className="profile-stat">
-            <span className="profile-stat-value" id="stat-checkins">0</span>
-            <span className="profile-stat-label">Total Check-ins</span>
-          </div>
+
+        {/* Fixed back button — always visible */}
+        <div className="profile-back-bar">
+          <button className="btn btn-back" id="btn-profile-back">← BACK</button>
         </div>
-        <button className="btn btn-ci" id="btn-ci" style={{marginBottom:'12px'}}>📅 Daily Check-in</button>
-        <button className="btn btn-back" id="btn-profile-back">← BACK</button>
       </div>
 
       {/* Game Over Screen */}
@@ -160,12 +245,39 @@ export default function Game() {
         <p style={{color:'rgba(255,255,255,0.5)',marginBottom:'8px',fontSize:'clamp(0.75rem,3vw,1rem)',letterSpacing:'2px'}}>
           BEST: <span id="go-best">0</span>
         </p>
-        <p id="go-coins-row" style={{color:'#FFD700',marginBottom:'32px',fontSize:'clamp(0.85rem,3.5vw,1.1rem)',letterSpacing:'2px',display:'none',alignItems:'center',justifyContent:'center',gap:'5px'}}>
+        <p id="go-coins-row" style={{color:'#FFD700',marginBottom:'8px',fontSize:'clamp(0.85rem,3.5vw,1.1rem)',letterSpacing:'2px',display:'none',alignItems:'center',justifyContent:'center',gap:'5px'}}>
           <img src="/game/coin.png" alt="coin" style={{width:'18px',height:'18px',objectFit:'contain'}} /> +<span id="go-coins-earned">0</span> COINS
         </p>
+        <div id="go-xp-row" className="go-xp-row" style={{display:'none'}}>
+          <span className="go-xp-main">⭐ +<span id="go-xp-earned">0</span> XP</span>
+          <span id="go-xp-multi" className="go-xp-multi" style={{display:'none'}}></span>
+          <span id="go-xp-bonus" className="go-xp-bonus" style={{display:'none'}}></span>
+        </div>
         <p id="go-quest-notify" className="quest-notify" style={{display:'none'}}>🎯 Quest complete! Tap to claim</p>
         <button className="btn btn-restart" id="btn-restart">↺ PLAY AGAIN</button>
         <button className="btn btn-back" id="btn-go-menu">← MENU</button>
+      </div>
+
+      {/* XP Rewards Sheet */}
+      <div id="xp-rewards-modal" className="xp-rewards-modal hidden">
+        <div className="xp-rewards-sheet">
+          <div className="xp-rewards-header">
+            <span className="xp-rewards-title">Level Rewards</span>
+            <button className="xp-rewards-close" id="btn-xp-rewards-close">✕</button>
+          </div>
+          <div className="xp-rewards-list" id="xp-rewards-list" />
+        </div>
+      </div>
+
+      {/* Level-up Modal */}
+      <div id="levelup-modal" className="levelup-modal hidden">
+        <div className="levelup-card">
+          <div className="levelup-icon" id="levelup-icon">⭐</div>
+          <div className="levelup-title">LEVEL UP!</div>
+          <div className="levelup-level" id="levelup-level">Lv.2</div>
+          <div className="levelup-reward" id="levelup-reward">+100 Coins</div>
+          <button className="btn levelup-btn" id="btn-levelup-ok">Awesome!</button>
+        </div>
       </div>
 
       {/* Continue Screen */}
@@ -188,6 +300,33 @@ export default function Game() {
             ✕ GIVE UP (<span id="continue-timer">5</span>s)
           </button>
         </div>
+      </div>
+
+      {/* Daily Spin Screen */}
+      <div id="screen-spin" className="screen hidden" style={{justifyContent:'flex-start',paddingTop:'5vh',alignItems:'center'}}>
+        <h2 style={{color:'#fff',fontSize:'clamp(1.2rem,6vw,1.8rem)',marginBottom:'4px',letterSpacing:'3px'}}>🎰 DAILY SPIN</h2>
+        <p style={{color:'rgba(255,255,255,0.45)',fontSize:'clamp(0.75rem,3vw,0.9rem)',marginBottom:'16px',letterSpacing:'1px'}}>Free once a day · resets at 00:00 UTC</p>
+
+        {/* Wheel canvas */}
+        <div className="spin-wheel-wrap">
+          <canvas id="spin-wheel-canvas" />
+          {/* Fixed pointer at top */}
+          <div className="spin-pointer" />
+        </div>
+
+        {/* Prize reveal */}
+        <div id="spin-result" className="spin-result hidden">
+          <span id="spin-result-icon" style={{fontSize:'2.2rem',display:'block',marginBottom:'4px'}}>🎁</span>
+          <span id="spin-result-label" style={{color:'#fff',fontWeight:'bold',fontSize:'clamp(1rem,4.5vw,1.3rem)',letterSpacing:'1px'}}>—</span>
+        </div>
+
+        {/* Countdown when already spun */}
+        <div id="spin-timer" className="spin-timer hidden" />
+
+        <button className="btn" id="btn-do-spin" style={{color:'#fff',marginBottom:'10px',width:'min(280px,85vw)',fontSize:'clamp(1rem,4.5vw,1.2rem)',letterSpacing:'2px'}}>
+          🎰 SPIN
+        </button>
+        <button className="btn btn-back" id="btn-spin-back" style={{width:'min(280px,85vw)'}}>← BACK</button>
       </div>
 
       {/* Leaderboard Screen */}
@@ -224,6 +363,55 @@ export default function Game() {
         <h2 style={{color:'#fff',fontSize:'clamp(1.2rem,6vw,2rem)',marginBottom:'16px',letterSpacing:'3px'}}>🎯 QUESTS</h2>
         <div id="quest-list" style={{width:'min(340px,90vw)',marginBottom:'16px'}}></div>
         <button className="btn btn-back" id="btn-quests-back">← BACK</button>
+      </div>
+
+      {/* Settings Screen */}
+      <div id="screen-settings" className="screen hidden" style={{justifyContent:'flex-start',paddingTop:'8vh'}}>
+        <h2 style={{color:'#fff',fontSize:'clamp(1.2rem,6vw,2rem)',marginBottom:'32px',letterSpacing:'3px'}}>⚙️ SETTINGS</h2>
+
+        <div className="settings-list">
+          {/* Music Volume */}
+          <div className="settings-row">
+            <div className="settings-row-info">
+              <span className="settings-row-icon">🎵</span>
+              <span className="settings-row-label">Music</span>
+            </div>
+            <div className="settings-slider-wrap">
+              <input type="range" id="settings-music-vol" className="settings-slider"
+                min="0" max="100" step="5" defaultValue="50" />
+              <span className="settings-slider-val" id="settings-music-label">50%</span>
+            </div>
+          </div>
+
+          {/* SFX Volume */}
+          <div className="settings-row">
+            <div className="settings-row-info">
+              <span className="settings-row-icon">🔊</span>
+              <span className="settings-row-label">Sound Effects</span>
+            </div>
+            <div className="settings-slider-wrap">
+              <input type="range" id="settings-sfx-vol" className="settings-slider"
+                min="0" max="100" step="5" defaultValue="80" />
+              <span className="settings-slider-val" id="settings-sfx-label">80%</span>
+            </div>
+          </div>
+
+          {/* Vibration */}
+          <div className="settings-row">
+            <div className="settings-row-info">
+              <span className="settings-row-icon">📳</span>
+              <span className="settings-row-label">Vibration</span>
+            </div>
+            <label className="settings-toggle">
+              <input type="checkbox" id="settings-vibrate-toggle" defaultChecked />
+              <span className="settings-toggle-track">
+                <span className="settings-toggle-thumb" />
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <button className="btn btn-back" id="btn-settings-back">← BACK</button>
       </div>
 
       {/* Check-in Screen */}

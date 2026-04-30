@@ -330,88 +330,99 @@ export default function Game() {
       </div>
 
       {/* Leaderboard Screen */}
-      <div id="screen-lb" className="screen hidden" style={{justifyContent:'flex-start',paddingTop:'8vh'}}>
-        <h2 style={{color:'#fff',fontSize:'clamp(1.2rem,6vw,2rem)',marginBottom:'16px',letterSpacing:'3px'}}>🏆 LEADERBOARD</h2>
-        <div className="lb-tabs">
-          <button className="lb-tab lb-tab-active" id="btn-lb-personal">Personal</button>
-          <button className="lb-tab" id="btn-lb-global">Global</button>
-          <button className="lb-tab" id="btn-lb-coins">Coins</button>
+      <div id="screen-lb" className="screen hidden scroll-screen">
+        <div className="scroll-screen-body">
+          <h2 style={{color:'#fff',fontSize:'clamp(1.2rem,6vw,2rem)',marginBottom:'16px',letterSpacing:'3px'}}>🏆 LEADERBOARD</h2>
+          <div className="lb-tabs">
+            <button className="lb-tab lb-tab-active" id="btn-lb-personal">Personal</button>
+            <button className="lb-tab" id="btn-lb-global">Global</button>
+            <button className="lb-tab" id="btn-lb-coins">Coins</button>
+          </div>
+          <div id="lb-list" style={{width:'min(320px,90vw)'}}></div>
         </div>
-        <div id="lb-list" style={{width:'min(320px,90vw)',marginBottom:'24px'}}></div>
-        <button className="btn btn-back" id="btn-lb-back">← BACK</button>
+        <div className="scroll-back-bar">
+          <button className="btn btn-back" id="btn-lb-back">← BACK</button>
+        </div>
       </div>
 
       {/* Shop Screen */}
-      <div id="screen-shop" className="screen hidden" style={{justifyContent:'flex-start',paddingTop:'8vh'}}>
-        <h2 style={{color:'#fff',fontSize:'clamp(1.2rem,6vw,2rem)',marginBottom:'8px',letterSpacing:'3px'}}>🛒 SHOP</h2>
-        <div id="shop-balance" style={{color:'#FFD700',fontSize:'clamp(1rem,4.5vw,1.3rem)',marginBottom:'20px',fontWeight:'bold',display:'flex',alignItems:'center',gap:'6px',justifyContent:'center'}}>
-          <img src="/game/coin.png" alt="coin" style={{width:'22px',height:'22px',objectFit:'contain'}} />
-          <span id="shop-coin-count">0</span>
+      <div id="screen-shop" className="screen hidden scroll-screen">
+        <div className="scroll-screen-body">
+          <h2 style={{color:'#fff',fontSize:'clamp(1.2rem,6vw,2rem)',marginBottom:'8px',letterSpacing:'3px'}}>🛒 SHOP</h2>
+          <div id="shop-balance" style={{color:'#FFD700',fontSize:'clamp(1rem,4.5vw,1.3rem)',marginBottom:'20px',fontWeight:'bold',display:'flex',alignItems:'center',gap:'6px',justifyContent:'center'}}>
+            <img src="/game/coin.png" alt="coin" style={{width:'22px',height:'22px',objectFit:'contain'}} />
+            <span id="shop-coin-count">0</span>
+          </div>
+          <div id="shop-tabs" style={{display:'flex',gap:'0',marginBottom:'16px',width:'min(320px,90vw)'}}>
+            <button id="shop-tab-skins" className="shop-tab shop-tab-active">Skins</button>
+            <button id="shop-tab-boosters" className="shop-tab">Boosters</button>
+            <button id="shop-tab-trails" className="shop-tab">Trails</button>
+          </div>
+          <div id="shop-items" style={{width:'min(320px,90vw)'}}></div>
         </div>
-        <div id="shop-tabs" style={{display:'flex',gap:'0',marginBottom:'16px',width:'min(320px,90vw)'}}>
-          <button id="shop-tab-skins" className="shop-tab shop-tab-active">Skins</button>
-          <button id="shop-tab-boosters" className="shop-tab">Boosters</button>
-          <button id="shop-tab-trails" className="shop-tab">Trails</button>
-          {/* <button id="shop-tab-effects" className="shop-tab">Effects</button> */}
+        <div className="scroll-back-bar">
+          <button className="btn btn-back" id="btn-shop-back">← BACK</button>
         </div>
-        <div id="shop-items" style={{width:'min(320px,90vw)',marginBottom:'24px'}}></div>
-        <button className="btn btn-back" id="btn-shop-back">← BACK</button>
       </div>
 
       {/* Quests Screen */}
-      <div id="screen-quests" className="screen hidden" style={{justifyContent:'flex-start',paddingTop:'8vh'}}>
-        <h2 style={{color:'#fff',fontSize:'clamp(1.2rem,6vw,2rem)',marginBottom:'16px',letterSpacing:'3px'}}>🎯 QUESTS</h2>
-        <div id="quest-list" style={{width:'min(340px,90vw)',marginBottom:'16px'}}></div>
-        <button className="btn btn-back" id="btn-quests-back">← BACK</button>
+      <div id="screen-quests" className="screen hidden scroll-screen">
+        <div className="scroll-screen-body">
+          <h2 style={{color:'#fff',fontSize:'clamp(1.2rem,6vw,2rem)',marginBottom:'16px',letterSpacing:'3px'}}>🎯 QUESTS</h2>
+          <div id="quest-list" style={{width:'min(340px,90vw)'}}></div>
+        </div>
+        <div className="scroll-back-bar">
+          <button className="btn btn-back" id="btn-quests-back">← BACK</button>
+        </div>
       </div>
 
       {/* Settings Screen */}
-      <div id="screen-settings" className="screen hidden" style={{justifyContent:'flex-start',paddingTop:'8vh'}}>
-        <h2 style={{color:'#fff',fontSize:'clamp(1.2rem,6vw,2rem)',marginBottom:'32px',letterSpacing:'3px'}}>⚙️ SETTINGS</h2>
-
-        <div className="settings-list">
-          {/* Music Volume */}
-          <div className="settings-row">
-            <div className="settings-row-info">
-              <span className="settings-row-icon">🎵</span>
-              <span className="settings-row-label">Music</span>
+      <div id="screen-settings" className="screen hidden scroll-screen">
+        <div className="scroll-screen-body">
+          <h2 style={{color:'#fff',fontSize:'clamp(1.2rem,6vw,2rem)',marginBottom:'32px',letterSpacing:'3px'}}>⚙️ SETTINGS</h2>
+          <div className="settings-list">
+            {/* Music Volume */}
+            <div className="settings-row">
+              <div className="settings-row-info">
+                <span className="settings-row-icon">🎵</span>
+                <span className="settings-row-label">Music</span>
+              </div>
+              <div className="settings-slider-wrap">
+                <input type="range" id="settings-music-vol" className="settings-slider"
+                  min="0" max="100" step="5" defaultValue="50" />
+                <span className="settings-slider-val" id="settings-music-label">50%</span>
+              </div>
             </div>
-            <div className="settings-slider-wrap">
-              <input type="range" id="settings-music-vol" className="settings-slider"
-                min="0" max="100" step="5" defaultValue="50" />
-              <span className="settings-slider-val" id="settings-music-label">50%</span>
+            {/* SFX Volume */}
+            <div className="settings-row">
+              <div className="settings-row-info">
+                <span className="settings-row-icon">🔊</span>
+                <span className="settings-row-label">Sound Effects</span>
+              </div>
+              <div className="settings-slider-wrap">
+                <input type="range" id="settings-sfx-vol" className="settings-slider"
+                  min="0" max="100" step="5" defaultValue="80" />
+                <span className="settings-slider-val" id="settings-sfx-label">80%</span>
+              </div>
             </div>
-          </div>
-
-          {/* SFX Volume */}
-          <div className="settings-row">
-            <div className="settings-row-info">
-              <span className="settings-row-icon">🔊</span>
-              <span className="settings-row-label">Sound Effects</span>
+            {/* Vibration */}
+            <div className="settings-row">
+              <div className="settings-row-info">
+                <span className="settings-row-icon">📳</span>
+                <span className="settings-row-label">Vibration</span>
+              </div>
+              <label className="settings-toggle">
+                <input type="checkbox" id="settings-vibrate-toggle" defaultChecked />
+                <span className="settings-toggle-track">
+                  <span className="settings-toggle-thumb" />
+                </span>
+              </label>
             </div>
-            <div className="settings-slider-wrap">
-              <input type="range" id="settings-sfx-vol" className="settings-slider"
-                min="0" max="100" step="5" defaultValue="80" />
-              <span className="settings-slider-val" id="settings-sfx-label">80%</span>
-            </div>
-          </div>
-
-          {/* Vibration */}
-          <div className="settings-row">
-            <div className="settings-row-info">
-              <span className="settings-row-icon">📳</span>
-              <span className="settings-row-label">Vibration</span>
-            </div>
-            <label className="settings-toggle">
-              <input type="checkbox" id="settings-vibrate-toggle" defaultChecked />
-              <span className="settings-toggle-track">
-                <span className="settings-toggle-thumb" />
-              </span>
-            </label>
           </div>
         </div>
-
-        <button className="btn btn-back" id="btn-settings-back">← BACK</button>
+        <div className="scroll-back-bar">
+          <button className="btn btn-back" id="btn-settings-back">← BACK</button>
+        </div>
       </div>
 
       {/* Check-in Screen */}

@@ -4383,6 +4383,8 @@ const UI = (() => {
 
   function show(name) {
     if (name !== 'ci') _stopCiTimer();
+    // Stop menu banner interval when leaving menu
+    if (name !== 'menu' && _menuCiInterval) { clearInterval(_menuCiInterval); _menuCiInterval = null; }
     Object.values(SCREENS).forEach(s => { if (s) s.classList.add('hidden'); });
     if (hud) hud.classList.add('hidden');
 
@@ -4422,6 +4424,9 @@ const UI = (() => {
       // Update daily spin banner visibility
       if (typeof DailySpin !== 'undefined') DailySpin.updateBanner();
       _updateCiBanner();
+      // Tick the banner every second while on menu
+      if (_menuCiInterval) clearInterval(_menuCiInterval);
+      _menuCiInterval = setInterval(_updateCiBanner, 1000);
     }
   }
 
@@ -6407,6 +6412,17 @@ function _bind(id, event, handler) {
 }
 
 // ===== ПРОФИЛЬ =====
+let _menuCiInterval = null;
+
+function _msUntilNextMidnightUTC() {
+  const now = new Date();
+  const midnight = new Date(Date.UTC(
+    now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1,
+    0, 0, 0, 0
+  ));
+  return midnight.getTime() - now.getTime();
+}
+
 function _updateCiBanner() {
   const banner = document.getElementById('btn-ci-banner');
   const sub    = document.getElementById('ci-banner-sub');
@@ -6425,17 +6441,12 @@ function _updateCiBanner() {
       : `Day ${state.streak + 1} · +${coins} coins`;
   } else {
     banner.classList.remove('ci-banner-available');
-    // Show live countdown until next check-in
-    if (typeof CheckIn !== 'undefined' && CheckIn._msUntilMidnight) {
-      const ms = CheckIn._msUntilMidnight();
-      const s  = Math.floor(ms / 1000);
-      const h  = Math.floor(s / 3600);
-      const m  = Math.floor((s % 3600) / 60);
-      const sc = s % 60;
-      sub.textContent = `Next in ${h}h ${String(m).padStart(2,'0')}m ${String(sc).padStart(2,'0')}s`;
-    } else {
-      sub.textContent = 'Come back tomorrow';
-    }
+    const ms = _msUntilNextMidnightUTC();
+    const s  = Math.floor(ms / 1000);
+    const h  = Math.floor(s / 3600);
+    const m  = Math.floor((s % 3600) / 60);
+    const sc = s % 60;
+    sub.textContent = `Next in ${h}h ${String(m).padStart(2, '0')}m ${String(sc).padStart(2, '0')}s`;
   }
 }
 

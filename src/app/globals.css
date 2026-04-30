@@ -390,13 +390,17 @@
 
     /* ===== CHECK-IN ===== */
     #screen-ci {
-      justify-content: center;
-      padding: 16px 16px 15vh;
-      gap: 4px;
+      justify-content: flex-start;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 8vh 16px 32px;
+      gap: 8px;
     }
     #screen-ci .btn {
       padding: 12px 0;
       margin: 4px auto;
+      flex-shrink: 0;
+      width: min(300px, 88vw);
     }
 
     .ci-header {
@@ -527,11 +531,12 @@
     .ci-status-box {
       text-align: center;
       width: min(300px, 88vw);
-      margin: 0 auto 14px;
-      min-height: 0;
+      margin: 0 auto 0;
+      flex-shrink: 0;
       display: flex;
       align-items: center;
       justify-content: center;
+      padding: 12px 0;
     }
     .ci-status {
       font-size: 0.88rem;

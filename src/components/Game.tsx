@@ -415,7 +415,7 @@ export default function Game() {
       </div>
 
       {/* Check-in Screen */}
-      <div id="screen-ci" className="screen hidden" style={{justifyContent:'flex-start',paddingTop:'8vh'}}>
+      <div id="screen-ci" className="screen hidden">
         <div className="ci-header">
           <h2 className="screen-title">📅 DAILY CHECK-IN</h2>
         </div>

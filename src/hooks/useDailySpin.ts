@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useAccount, useWriteContract, useWaitForTransactionReceipt, useSwitchChain, useWalletClient } from 'wagmi';
+import { useAccount, useSwitchChain, useWalletClient } from 'wagmi';
 import { base } from 'wagmi/chains';
 import { numberToHex, encodeFunctionData } from 'viem';
 import { SPIN_ABI, SPIN_ADDRESS, spinCost } from '@/config/spin-contract';
@@ -28,16 +28,7 @@ export function useDailySpin() {
   const [nextCost,   setNextCost]   = useState(0); // 0 = free
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // No useReadContract — all state comes from Redis via GET /api/spin
-  const { writeContract, data: txHash, isPending: isWritePending } = useWriteContract();
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
-    hash:            txHash,
-    chainId:         base.id,
-    pollingInterval: 2000,
-    confirmations:   1,
-  });
-
-  const isPending = isWritePending || isConfirming || paymasterPending;
+  const isPending = paymasterPending;
 
   // ── Fetch spin state from Redis on mount / address change ─────────────────
   const fetchState = useCallback(async () => {
@@ -52,13 +43,6 @@ export function useDailySpin() {
   }, [address]);
 
   useEffect(() => { fetchState(); }, [fetchState]);
-
-  // ── After on-chain tx confirms → claim prize from Redis ──────────────────
-  useEffect(() => {
-    if (!isSuccess || !address) return;
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    _fetchPrize(address);
-  }, [isSuccess, address]);
 
   // ── POST /api/spin → deduct coins + get prize ─────────────────────────────
   async function _fetchPrize(addr: string) {
@@ -94,41 +78,36 @@ export function useDailySpin() {
       await switchChainAsync({ chainId: base.id });
     }
 
-    if (CONTRACT_DEPLOYED) {
-      // Path A: Paymaster (gasless on-chain tx → then Redis prize)
-      if (PAYMASTER_URL && walletClient) {
-        try {
-          setPaymasterPending(true);
-          await walletClient.request({
-            method: 'wallet_sendCalls' as any,
-            params: [{
-              version:  '1.0',
-              chainId:  numberToHex(base.id),
-              from:     address,
-              calls:    [{ to: SPIN_ADDRESS, data: encodeFunctionData({ abi: SPIN_ABI, functionName: 'spin' }) }],
-              capabilities: { paymasterService: { url: PAYMASTER_URL } },
-            }],
-          } as any);
+    // Path A: Paymaster gasless on-chain tx (best-effort — contract is cosmetic)
+    if (CONTRACT_DEPLOYED && PAYMASTER_URL && walletClient) {
+      try {
+        setPaymasterPending(true);
+        await walletClient.request({
+          method: 'wallet_sendCalls' as any,
+          params: [{
+            version:  '1.0',
+            chainId:  numberToHex(base.id),
+            from:     address,
+            calls:    [{ to: SPIN_ADDRESS, data: encodeFunctionData({ abi: SPIN_ABI, functionName: 'spin' }) }],
+            capabilities: { paymasterService: { url: PAYMASTER_URL } },
+          }],
+        } as any);
 
-          // Poll for prize after Paymaster confirms (~15s)
-          timeoutRef.current = setTimeout(() => {
-            setPaymasterPending(false);
-            _fetchPrize(address);
-          }, 15000);
-          return;
-        } catch {
+        // Paymaster succeeded — poll for prize
+        timeoutRef.current = setTimeout(() => {
           setPaymasterPending(false);
-        }
+          _fetchPrize(address);
+        }, 15000);
+        return;
+      } catch {
+        // Paymaster rejected or wallet_sendCalls unsupported — fall through to Redis-only
+        setPaymasterPending(false);
       }
-
-      // Path B: regular on-chain tx (useWaitForTransactionReceipt handles completion)
-      writeContract({ address: SPIN_ADDRESS, abi: SPIN_ABI, functionName: 'spin' });
-
-    } else {
-      // Path C: no contract yet — Redis only (local dev)
-      await _fetchPrize(address);
     }
-  }, [address, isPending, chainId, walletClient, switchChainAsync, writeContract]);
+
+    // Path B: Redis-only (no gas required — prize logic is server-side anyway)
+    await _fetchPrize(address);
+  }, [address, isPending, chainId, walletClient, switchChainAsync]);
 
   // ── Expose to game.js ─────────────────────────────────────────────────────
   useEffect(() => {

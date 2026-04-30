@@ -519,6 +519,8 @@ const Sound = (() => {
 const Music = (() => {
   const TRACKS  = ['/game/music.mp3', '/game/music2.mp3'];
   let _audio    = null;
+  let _ctx      = null;   // AudioContext — for iOS volume control
+  let _gain     = null;   // GainNode    — audio.volume ignored on iOS
   let _vol      = 0.5;
   let _enabled  = true;
   let _trackIdx = -1;
@@ -529,20 +531,34 @@ const Music = (() => {
   }
 
   function _next() {
-    // Pick a different track than current
     let idx;
     do { idx = Math.floor(Math.random() * TRACKS.length); } while (idx === _trackIdx && TRACKS.length > 1);
     _trackIdx = idx;
     return TRACKS[_trackIdx];
   }
 
+  // Connect audio element → GainNode → speakers (call once, after user gesture)
+  function _initWebAudio() {
+    if (_ctx || !_audio) return;
+    try {
+      _ctx  = new (window.AudioContext || window.webkitAudioContext)();
+      _gain = _ctx.createGain();
+      _gain.gain.value = _vol;
+      _gain.connect(_ctx.destination);
+      const src = _ctx.createMediaElementSource(_audio);
+      src.connect(_gain);
+    } catch (e) {
+      _ctx = _gain = null; // fallback to audio.volume
+    }
+  }
+
   function init() {
     _load();
     _audio = new Audio();
-    _audio.volume = _vol;
+    _audio.crossOrigin = 'anonymous'; // required for createMediaElementSource
+    _audio.volume = _vol;             // fallback on non-iOS
     _audio.loop   = false;
     _audio.addEventListener('ended', () => {
-      // Auto-advance to next track
       _audio.src = _next();
       if (_enabled) _audio.play().catch(() => {});
     });
@@ -552,9 +568,10 @@ const Music = (() => {
     if (!_audio) init();
     if (!_enabled) return;
     if (_audio.paused) {
-      if (!_audio.src || _audio.ended || _audio.src === window.location.href) {
-        _audio.src = _next();
-      }
+      if (!_audio.src || _audio.src === window.location.href) _audio.src = _next();
+      // Init Web Audio on first real play (needs user gesture — always true here)
+      _initWebAudio();
+      if (_ctx && _ctx.state === 'suspended') _ctx.resume();
       _audio.play().catch(() => {});
     }
   }
@@ -563,11 +580,14 @@ const Music = (() => {
     if (_audio && !_audio.paused) _audio.pause();
   }
 
-  function getVolume()  { return _vol; }
+  function getVolume() { return _vol; }
+
   function setVolume(v) {
     _vol = Math.max(0, Math.min(1, v));
     localStorage.setItem('baserunner_musicvol', _vol);
-    if (_audio) _audio.volume = _vol;
+    // GainNode works on iOS; audio.volume is ignored by iOS but kept as fallback
+    if (_gain) _gain.gain.value = _vol;
+    else if (_audio) _audio.volume = _vol;
     _enabled = _vol > 0;
     if (_enabled) play(); else pause();
   }

@@ -4801,7 +4801,7 @@ const UI = (() => {
       // Transaction in progress
       if (statusEl) {
         statusEl.className = 'ci-status';
-        statusEl.innerHTML = '⏳ Confirming on-chain...';
+        statusEl.innerHTML = '';
       }
       if (claimBtn) {
         claimBtn.disabled      = true;

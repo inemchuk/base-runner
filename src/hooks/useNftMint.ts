@@ -1,18 +1,24 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { useAccount, useWriteContract, useWaitForTransactionReceipt, useSwitchChain } from 'wagmi';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, useSwitchChain, useWalletClient } from 'wagmi';
 import { base } from 'wagmi/chains';
+import { numberToHex, encodeFunctionData } from 'viem';
 import { NFT_ABI, NFT_CONTRACT, NFT_DEPLOYED } from '@/config/nft-contract';
 
+const PAYMASTER_URL = process.env.NEXT_PUBLIC_PAYMASTER_URL;
+
 export function useNftMint() {
-  const { address, chainId } = useAccount();
-  const { switchChainAsync } = useSwitchChain();
-  const [mintingItem, setMintingItem] = useState<string | null>(null);
+  const { address, chainId }   = useAccount();
+  const { switchChainAsync }   = useSwitchChain();
+  const { data: walletClient } = useWalletClient();
+  const [mintingItem, setMintingItem]   = useState<string | null>(null);
+  const [paymasterPath, setPaymasterPath] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const { writeContract, data: txHash, isPending: isWritePending } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
-    hash:            txHash,
+    hash:            paymasterPath ? undefined : txHash,
     chainId:         base.id,
     pollingInterval: 2000,
     confirmations:   1,
@@ -20,13 +26,16 @@ export function useNftMint() {
 
   const isPending = isWritePending || isConfirming || !!mintingItem;
 
-  // Fire nft-minted only after on-chain confirmation
+  // Regular tx path: fire after on-chain confirmation
   useEffect(() => {
-    if (isSuccess && mintingItem) {
+    if (isSuccess && mintingItem && !paymasterPath) {
       window.dispatchEvent(new CustomEvent('nft-minted', { detail: { itemId: mintingItem } }));
       setMintingItem(null);
     }
-  }, [isSuccess, mintingItem]);
+  }, [isSuccess, mintingItem, paymasterPath]);
+
+  // Cleanup poll on unmount
+  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
 
   const mint = useCallback(async (itemId: string) => {
     if (!address || !NFT_DEPLOYED) {
@@ -62,15 +71,72 @@ export function useNftMint() {
 
     setMintingItem(itemId);
 
-    // 2. Send tx — Coinbase Smart Wallet picks up paymaster automatically
-    //    for allowlisted contracts (no wallet_sendCalls needed)
+    const callData = encodeFunctionData({
+      abi:          NFT_ABI,
+      functionName: 'claim',
+      args:         [BigInt(tokenId), sig],
+    });
+
+    // 2. Try paymaster via wallet_sendCalls + poll wallet_getCallsStatus
+    if (PAYMASTER_URL && walletClient) {
+      try {
+        const callsId = await walletClient.request({
+          method: 'wallet_sendCalls' as any,
+          params: [{
+            version:  '1.0',
+            chainId:  numberToHex(base.id),
+            from:     address,
+            calls:    [{ to: NFT_CONTRACT, data: callData }],
+            capabilities: { paymasterService: { url: PAYMASTER_URL } },
+          }],
+        } as any) as string;
+
+        setPaymasterPath(true);
+
+        // Poll wallet_getCallsStatus until confirmed or failed (max 90s)
+        let elapsed = 0;
+        pollRef.current = setInterval(async () => {
+          elapsed += 2000;
+          try {
+            const status = await walletClient.request({
+              method: 'wallet_getCallsStatus' as any,
+              params: [callsId],
+            } as any) as { status: number };
+
+            if (status?.status === 200) {
+              // Confirmed on-chain
+              clearInterval(pollRef.current!);
+              pollRef.current = null;
+              window.dispatchEvent(new CustomEvent('nft-minted', { detail: { itemId } }));
+              setMintingItem(null);
+              setPaymasterPath(false);
+            } else if (status?.status === 400 || elapsed >= 90000) {
+              // Failed or timed out
+              clearInterval(pollRef.current!);
+              pollRef.current = null;
+              window.dispatchEvent(new CustomEvent('nft-mint-error', { detail: { error: 'transaction failed' } }));
+              setMintingItem(null);
+              setPaymasterPath(false);
+            }
+          } catch { /* keep polling */ }
+        }, 2000);
+
+        return;
+      } catch {
+        // wallet_sendCalls not supported — fall through to regular tx
+        setPaymasterPath(false);
+      }
+    }
+
+    // 3. Regular tx (user pays gas)
+    setPaymasterPath(false);
     writeContract({
       address:      NFT_CONTRACT,
       abi:          NFT_ABI,
       functionName: 'claim',
       args:         [BigInt(tokenId), sig],
     });
-  }, [address, chainId, isPending, switchChainAsync, writeContract]);
+  }, [address, chainId, isPending, walletClient, switchChainAsync, writeContract]);
 
   // Expose to game.js
   useEffect(() => {

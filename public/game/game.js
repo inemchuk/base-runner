@@ -7144,7 +7144,17 @@ function _initUI() {
       Shop.addBoosterCharges(randomBooster, 1);
     }
 
-    UI.showCheckIn();
+    // Immediately update button — React state may not be updated yet
+    const claimBtn = document.getElementById('btn-do-ci');
+    if (claimBtn) {
+      claimBtn.disabled      = true;
+      claimBtn.style.opacity = '0.35';
+      claimBtn.textContent   = '✓ Claimed today';
+    }
+
+    // Wait for React to re-render window.__BASE_CHECKIN, then full re-render
+    setTimeout(() => UI.showCheckIn(), 600);
+
     _updateCiBanner();
     const syncFn = window.__BASE_SYNC_COINS;
     if (syncFn) syncFn(Save.getCoins());

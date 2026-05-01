@@ -68,7 +68,7 @@ export function useCheckIn() {
         });
 
         setPaymasterPending(true);
-        await walletClient.request({
+        const callsId = await walletClient.request({
           method: 'wallet_sendCalls' as any,
           params: [{
             version: '1.0',
@@ -82,15 +82,38 @@ export function useCheckIn() {
               paymasterService: { url: PAYMASTER_URL },
             },
           }],
-        } as any);
+        } as any) as string;
 
-        // Paymaster succeeded — poll for confirmation
-        timeoutRef.current = setTimeout(() => {
+        // Poll wallet_getCallsStatus until confirmed (max 90s)
+        let elapsed = 0;
+        let pollFails = 0;
+        const finish = async () => {
           setPaymasterPending(false);
-          refetch().then(() => {
-            window.dispatchEvent(new CustomEvent('base-checkin-confirmed'));
-          });
-        }, 30000);
+          await refetch();
+          // Give React one extra tick to re-render window.__BASE_CHECKIN
+          setTimeout(() => window.dispatchEvent(new CustomEvent('base-checkin-confirmed')), 100);
+        };
+        const iv = setInterval(async () => {
+          elapsed += 2000;
+          try {
+            const res = await walletClient.request({
+              method: 'wallet_getCallsStatus' as any,
+              params: [callsId],
+            } as any) as { status: number | string };
+            const s = res?.status;
+            const confirmed = s === 200 || s === 'CONFIRMED' || s === 'confirmed';
+            const failed    = s === 400 || s === 'FAILED'    || s === 'failed';
+            if (confirmed || failed || elapsed >= 90000) {
+              clearInterval(iv);
+              if (confirmed || elapsed >= 90000) await finish();
+              else setPaymasterPending(false);
+            }
+          } catch {
+            pollFails++;
+            if (pollFails >= 5 || elapsed >= 15000) { clearInterval(iv); await finish(); }
+          }
+        }, 2000);
+        timeoutRef.current = iv;
         return;
 
       } catch {

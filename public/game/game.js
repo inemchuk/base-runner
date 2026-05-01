@@ -7279,9 +7279,10 @@ function _initUI() {
 
     // ── Starter Pack bonus ──────────────────────────────────────────────
     if (itemId === 'skin_cryptokid') {
-      // Award 100 coins
+      // Award 100 coins (local + Redis sync)
       const newCoins = Save.addCoins(100);
       UI.updateCoins(newCoins);
+      if (typeof window.__BASE_SYNC_COINS === 'function') window.__BASE_SYNC_COINS(newCoins);
       // Award 1× Second Chance booster
       if (typeof Shop !== 'undefined' && Shop.addBoosterCharges) {
         Shop.addBoosterCharges('boost_shield', 1);

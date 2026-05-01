@@ -12,16 +12,17 @@ const PRIZES = [
   { type: 'booster', value: 'boost_magnet',   weight: 8,  label: 'Coin Magnet',   icon: '🧲' },
   { type: 'booster', value: 'boost_double',   weight: 7,  label: 'Double Coins',  icon: '💰' },
   { type: 'booster', value: 'boost_shield',   weight: 6,  label: 'Second Chance', icon: '🛡️' },
-  // Trails (rarer)
-  { type: 'trail',   value: 'trail_sparkle',  weight: 4,  label: 'Sparkle Trail', icon: '✨' },
-  { type: 'trail',   value: 'trail_hearts',   weight: 3,  label: 'Hearts Trail',  icon: '💖' },
-  { type: 'trail',   value: 'trail_fire',     weight: 3,  label: 'Fire Trail',    icon: '🔥' },
-  { type: 'trail',   value: 'trail_coins',    weight: 2,  label: 'Coins Trail',   icon: '🪙' },
-  { type: 'trail',   value: 'trail_rainbow',  weight: 1,  label: 'Rainbow Trail', icon: '🌈' },
-  // Skins (rare)
-  { type: 'skin', value: 'skin_street_runner', weight: 3, label: 'Street Runner', icon: '🏃' },
-  { type: 'skin', value: 'skin_default',        weight: 2, label: 'Builder',      icon: '👷' },
-  { type: 'skin', value: 'skin_founder',         weight: 1, label: 'Founder',     icon: '🏗️' },
+  // Trails — weight inversely proportional to shop price
+  { type: 'trail',   value: 'trail_sparkle',  weight: 6,  label: 'Sparkle Trail', icon: '✨' }, // 150 coins
+  { type: 'trail',   value: 'trail_hearts',   weight: 5,  label: 'Hearts Trail',  icon: '💖' }, // 200 coins
+  { type: 'trail',   value: 'trail_fire',     weight: 3,  label: 'Fire Trail',    icon: '🔥' }, // 300 coins
+  { type: 'trail',   value: 'trail_coins',    weight: 2,  label: 'Coins Trail',   icon: '🪙' }, // 400 coins
+  { type: 'trail',   value: 'trail_rainbow',  weight: 1,  label: 'Rainbow Trail', icon: '🌈' }, // 600 coins
+  // Skins — weight inversely proportional to shop price
+  { type: 'skin', value: 'skin_street_runner', weight: 5, label: 'Street Runner', icon: '🏃' }, // 150 coins
+  { type: 'skin', value: 'skin_default',        weight: 3, label: 'Builder',      icon: '👷' }, // 300 coins
+  { type: 'skin', value: 'skin_founder',         weight: 2, label: 'Founder',     icon: '🏗️' }, // 500 coins
+  { type: 'skin', value: 'skin_base_king',       weight: 1, label: 'Base King',   icon: '👑' }, // 1000 coins
 ] as const;
 
 type Prize = typeof PRIZES[number];

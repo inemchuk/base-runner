@@ -1,0 +1,11 @@
+{
+  "name": "Base Runner — Fire Trail",
+  "description": "Blazing flame puffs mark your path. A trail earned in Base Runner on Base.",
+  "image": "https://baserunnerapp.vercel.app/nft/images/trail_fire.png",
+  "external_url": "https://baserunnerapp.vercel.app",
+  "attributes": [
+    { "trait_type": "Type",   "value": "Trail" },
+    { "trait_type": "Rarity", "value": "Epic" },
+    { "trait_type": "Game",   "value": "Base Runner" }
+  ]
+}

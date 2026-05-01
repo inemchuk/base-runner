@@ -2274,6 +2274,130 @@ const Renderer = (() => {
   let playerImg = null;
   let coinImg   = null;
 
+  // ── Procedural grass tile (offscreen canvas, built once at init) ──
+  const _GRASS_PATTERNS = {};
+
+  // Seeded pseudo-random (mulberry32)
+  function _seedRng(seed) {
+    let s = seed >>> 0;
+    return () => { s += 0x6D2B79F5; let t = Math.imul(s ^ s >>> 15, 1 | s); t ^= t + Math.imul(t ^ t >>> 7, 61 | t); return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+  }
+
+  // Colours for speck variations per biome
+  const _GRASS_TILE_CFG = {
+    default: { base: '#4CAF50', dark: '#357A38', light: '#69C46D', darkAlpha: 0.28, lightAlpha: 0.18 },
+    desert:  { base: '#C2B280', dark: '#8C7A50', light: '#D8CC9C', darkAlpha: 0.25, lightAlpha: 0.18 },
+    snow:    { base: '#E0E0EC', dark: '#A8A8C0', light: '#F5F5FF', darkAlpha: 0.20, lightAlpha: 0.16 },
+  };
+
+  function _buildGrassTile(biome) {
+    const cfg  = _GRASS_TILE_CFG[biome] || _GRASS_TILE_CFG.default;
+    const SIZE = 128;
+    const oc   = typeof OffscreenCanvas !== 'undefined'
+      ? new OffscreenCanvas(SIZE, SIZE)
+      : (() => { const c = document.createElement('canvas'); c.width = c.height = SIZE; return c; })();
+    const ox   = oc.getContext('2d');
+    const rng  = _seedRng(biome === 'desert' ? 0xDEAD : biome === 'snow' ? 0xC0DE : 0xBEEF);
+
+    ox.fillStyle = cfg.base;
+    ox.fillRect(0, 0, SIZE, SIZE);
+
+    // Dark specks — irregular blobs
+    for (let i = 0; i < 55; i++) {
+      const x = rng() * SIZE, y = rng() * SIZE;
+      const w = 1 + rng() * 4, h = 1 + rng() * 2.5;
+      ox.globalAlpha = cfg.darkAlpha * (0.5 + rng() * 0.8);
+      ox.fillStyle = cfg.dark;
+      ox.fillRect(Math.floor(x), Math.floor(y), Math.ceil(w), Math.ceil(h));
+    }
+    // Light specks — highlights
+    for (let i = 0; i < 30; i++) {
+      const x = rng() * SIZE, y = rng() * SIZE;
+      const w = 1 + rng() * 3, h = 1 + rng() * 2;
+      ox.globalAlpha = cfg.lightAlpha * (0.5 + rng() * 0.8);
+      ox.fillStyle = cfg.light;
+      ox.fillRect(Math.floor(x), Math.floor(y), Math.ceil(w), Math.ceil(h));
+    }
+
+    return oc;
+  }
+
+  function loadGrassTextures() {
+    for (const biome of ['default', 'desert', 'snow']) {
+      const tile = _buildGrassTile(biome);
+      const pat  = ctx.createPattern(tile, 'repeat');
+      if (pat) _GRASS_PATTERNS[biome] = pat;
+    }
+  }
+
+  function _applyGrassTexture(y, bi) {
+    const patA = _GRASS_PATTERNS[bi.biome];
+    const patB = bi.nextBiome ? _GRASS_PATTERNS[bi.nextBiome] : null;
+    if (!patA && !patB) return;
+    ctx.save();
+    ctx.globalCompositeOperation = 'multiply';
+    const t = bi.blendT || 0;
+    if (patA) {
+      ctx.globalAlpha = 0.60 * (1 - t);
+      ctx.fillStyle = patA;
+      ctx.fillRect(0, y, COLS * CELL, CELL);
+    }
+    if (patB && t > 0) {
+      ctx.globalAlpha = 0.60 * t;
+      ctx.fillStyle = patB;
+      ctx.fillRect(0, y, COLS * CELL, CELL);
+    }
+    ctx.restore();
+  }
+
+  // Environment sprite images
+  const _ENV_SPRITES = {};
+  const _ENV_SPRITE_SRCS = {
+    bush:       '/game/env/bush.png',
+    tree:       '/game/env/tree.png',
+    rock:       '/game/env/rock.png',
+    cactus:     '/game/env/cactus.png',
+    tumbleweed: '/game/env/tumbleweed.png',
+    pine:       '/game/env/pine.png',
+    snowman:    '/game/env/snowman.png',
+  };
+
+  function loadEnvSprites() {
+    for (const [key, src] of Object.entries(_ENV_SPRITE_SRCS)) {
+      const img = new Image();
+      img.onload = () => { _ENV_SPRITES[key] = img; };
+      img.src = src;
+    }
+  }
+
+  // Per-type config: size multiplier, shadow (sw=half-width, sh=half-height, dy=vertical offset)
+  const _ENV_SPRITE_CFG = {
+    bush:       { size: 0.82, sw: 0.26, sh: 0.07, dy: 0.30 },
+    tree:       { size: 1.05, sw: 0.30, sh: 0.08, dy: 0.38 },
+    rock:       { size: 0.72, sw: 0.26, sh: 0.06, dy: 0.22 },
+    cactus:     { size: 0.88, sw: 0.22, sh: 0.05, dy: 0.28 },
+    tumbleweed: { size: 0.65, sw: 0.18, sh: 0.05, dy: 0.18 },
+    pine:       { size: 1.05, sw: 0.26, sh: 0.05, dy: 0.38 },
+    snowman:    { size: 0.80, sw: 0.22, sh: 0.06, dy: 0.28 },
+  };
+
+  function drawEnvSprite(type, cx, cy) {
+    const img = _ENV_SPRITES[type];
+    if (!img || !img.complete || !img.naturalWidth) return false;
+    const cfg  = _ENV_SPRITE_CFG[type] || { size: 0.85, sw: 0.24, sh: 0.06, dy: 0.26 };
+    const size = CELL * cfg.size;
+    // Shadow ellipse under the sprite
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + CELL * cfg.dy, CELL * cfg.sw, CELL * cfg.sh, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    // Sprite image centered on (cx, cy)
+    ctx.drawImage(img, cx - size / 2, cy - size / 2, size, size);
+    return true;
+  }
+
   function init() {
     canvas = document.getElementById('gameCanvas');
     if (!canvas) return;
@@ -2281,6 +2405,8 @@ const Renderer = (() => {
     loadCarSprites();
     loadPlayerSprite();
     loadCoinSprite();
+    loadEnvSprites();
+    loadGrassTextures();
     resize();
   }
 
@@ -2606,6 +2732,14 @@ const Renderer = (() => {
     }
     ctx.fillStyle = grassColor;
     ctx.fillRect(0, y, COLS * CELL, CELL);
+    _applyGrassTexture(y, bi);
+
+    // Row-top depth shadow (Crossy Road style)
+    const edgeGrad = ctx.createLinearGradient(0, y, 0, y + CELL * 0.22);
+    edgeGrad.addColorStop(0,   'rgba(0,0,0,0.22)');
+    edgeGrad.addColorStop(1,   'rgba(0,0,0,0)');
+    ctx.fillStyle = edgeGrad;
+    ctx.fillRect(0, y, COLS * CELL, CELL * 0.22);
 
     // Coins
     if (row.coins) {
@@ -2648,13 +2782,21 @@ const Renderer = (() => {
         const cx = d.col * CELL + CELL / 2;
         const cy = y + CELL / 2;
         const swayX = d.type === 'rock' || d.type === 'snowman' ? 0 : windSway;
-        if      (d.type === 'bush')       drawBush(cx + swayX, cy, bi);
-        else if (d.type === 'tree')       drawTree(cx + swayX * 1.5, cy, bi);
-        else if (d.type === 'rock')       drawRock(cx, cy, bi);
-        else if (d.type === 'cactus')     drawCactus(cx + swayX * 0.5, cy, bi);
-        else if (d.type === 'tumbleweed') drawTumbleweed(cx + swayX * 2, cy, bi);
-        else if (d.type === 'pine')       drawPine(cx + swayX * 1.2, cy, bi);
-        else if (d.type === 'snowman')    drawSnowman(cx, cy, bi);
+        const spriteCx = d.type === 'bush'       ? cx + swayX
+                       : d.type === 'tree'       ? cx + swayX * 1.5
+                       : d.type === 'cactus'     ? cx + swayX * 0.5
+                       : d.type === 'tumbleweed' ? cx + swayX * 2
+                       : d.type === 'pine'       ? cx + swayX * 1.2
+                       : cx;
+        if (!drawEnvSprite(d.type, spriteCx, cy)) {
+          if      (d.type === 'bush')       drawBush(spriteCx, cy, bi);
+          else if (d.type === 'tree')       drawTree(spriteCx, cy, bi);
+          else if (d.type === 'rock')       drawRock(cx, cy, bi);
+          else if (d.type === 'cactus')     drawCactus(spriteCx, cy, bi);
+          else if (d.type === 'tumbleweed') drawTumbleweed(spriteCx, cy, bi);
+          else if (d.type === 'pine')       drawPine(spriteCx, cy, bi);
+          else if (d.type === 'snowman')    drawSnowman(cx, cy, bi);
+        }
       }
     }
   }
@@ -4721,6 +4863,37 @@ const UI = (() => {
 })();
 
 
+/* ===== nft-utils.js ===== */
+// Module-level NFT helpers — used by Shop, DailySpin, and Xp
+function _isNftClaimed(itemId) {
+  try { return JSON.parse(localStorage.getItem('nft_claimed') || '[]').includes(itemId); } catch { return false; }
+}
+function _markNftClaimed(itemId) {
+  try {
+    const c = JSON.parse(localStorage.getItem('nft_claimed') || '[]');
+    if (!c.includes(itemId)) { c.push(itemId); localStorage.setItem('nft_claimed', JSON.stringify(c)); }
+  } catch {}
+}
+// Render an NFT button or claimed badge for an owned item
+function _nftBtnHtml(itemId) {
+  if (!window.__NFT_DEPLOYED) return '';
+  if (_isNftClaimed(itemId)) return '<span class="shop-nft-claimed">✓ On-chain</span>';
+  return `<button class="shop-nft-btn" data-id="${itemId}">⬡ Claim</button>`;
+}
+// Bind click handlers on all .shop-nft-btn inside a container
+function _bindNftBtns(container) {
+  container.querySelectorAll('.shop-nft-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const itemId = btn.dataset.id;
+      const mintFn = window.__NFT_MINT;
+      if (!mintFn || window.__NFT_PENDING) return;
+      btn.textContent = '⏳ Claiming…';
+      btn.disabled = true;
+      mintFn(itemId);
+    });
+  });
+}
+
 /* ===== shop.js ===== */
 const Shop = (() => {
   // ── Скины ──
@@ -4734,9 +4907,9 @@ const Shop = (() => {
 
   // ── Бустеры (расходуемые, покупаются паками) ──
   const BOOSTERS = [
-    { id: 'boost_magnet', name: 'Coin Magnet',   packPrice: 60,  packSize: 3, icon: '🧲', desc: 'Coins pull from 2 tiles away' },
-    { id: 'boost_double', name: 'Double Coins',  packPrice: 90,  packSize: 3, icon: '💰', desc: 'Every coin counts as 2'       },
-    { id: 'boost_shield', name: 'Second Chance', packPrice: 100, packSize: 3, icon: '🛡️', desc: 'Extra life — triggers on death'  },
+    { id: 'boost_magnet', name: 'Coin Magnet',   packPrice: 60,  packSize: 3, icon: '🧲', sprite: '/game/boosters/coin_magnet.png',   desc: 'Coins pull from 2 tiles away' },
+    { id: 'boost_double', name: 'Double Coins',  packPrice: 90,  packSize: 3, icon: '💰', sprite: '/game/boosters/double_coins.png',  desc: 'Every coin counts as 2'       },
+    { id: 'boost_shield', name: 'Second Chance', packPrice: 100, packSize: 3, icon: '🛡️', sprite: '/game/boosters/second_chance.png', desc: 'Extra life — triggers on death'  },
   ];
 
   // ── Паки анимаций смерти ──
@@ -4748,11 +4921,11 @@ const Shop = (() => {
 
   // ── Следы персонажа (trail skins) ──
   const TRAIL_PACKS = [
-    { id: 'trail_sparkle', name: 'Sparkle', price: 150, icon: '✨', desc: 'Golden twinkling stars'   },
-    { id: 'trail_hearts',  name: 'Hearts',  price: 200, icon: '💖', desc: 'Floating heart burst'     },
-    { id: 'trail_fire',    name: 'Fire',    price: 300, icon: '🔥', desc: 'Blazing flame puffs'      },
-    { id: 'trail_coins',   name: 'Coins',   price: 400, icon: '🪙', desc: 'Shiny spinning coins'     },
-    { id: 'trail_rainbow', name: 'Rainbow', price: 600, icon: '🌈', desc: 'Six-color rainbow burst'  },
+    { id: 'trail_sparkle', name: 'Sparkle', price: 150, icon: '✨', sprite: '/nft/images/trail_sparkle.png', desc: 'Golden twinkling stars'   },
+    { id: 'trail_hearts',  name: 'Hearts',  price: 200, icon: '💖', sprite: '/nft/images/trail_hearts.png',  desc: 'Floating heart burst'     },
+    { id: 'trail_fire',    name: 'Fire',    price: 300, icon: '🔥', sprite: '/nft/images/trail_fire.png',    desc: 'Blazing flame puffs'      },
+    { id: 'trail_coins',   name: 'Coins',   price: 400, icon: '🪙', sprite: '/nft/images/trail_coins.png',   desc: 'Shiny spinning coins'     },
+    { id: 'trail_rainbow', name: 'Rainbow', price: 600, icon: '🌈', sprite: '/nft/images/trail_rainbow.png', desc: 'Six-color rainbow burst'  },
   ];
 
   const SAVE_KEY = 'shop_v1';
@@ -4768,21 +4941,37 @@ const Shop = (() => {
 
   function _syncToServer(d) {
     const syncFn = window.__BASE_SHOP_SYNC;
-    if (syncFn) syncFn(d.owned || ['skin_cryptokid'], d.equipped || 'skin_cryptokid', d.boosterCharges || {});
+    if (syncFn) syncFn(
+      d.owned      || ['skin_cryptokid'],
+      d.equipped   || 'skin_cryptokid',
+      d.boosterCharges || {},
+      d.trailPacks || [],
+    );
   }
 
-  function applyServerData(owned, equipped, boosterCharges) {
-    const local = _migrateCharges(loadShopData());
+  function applyServerData(owned, equipped, boosterCharges, trailPacks) {
+    const local      = _migrateCharges(loadShopData());
     const localOwned = local.owned || ['skin_cryptokid'];
     const mergedOwned = [...new Set([...localOwned, ...(owned || [])])];
     // Merge charges: take max of local and server for each id
-    const localCharges = local.boosterCharges || {};
+    const localCharges  = local.boosterCharges || {};
     const serverCharges = (typeof boosterCharges === 'object' && !Array.isArray(boosterCharges)) ? boosterCharges : {};
     const mergedCharges = { ...localCharges };
     for (const id of Object.keys(serverCharges)) {
       mergedCharges[id] = Math.max(mergedCharges[id] || 0, serverCharges[id] || 0);
     }
-    const d = { owned: mergedOwned, equipped: equipped || local.equipped || 'skin_cryptokid', boosterCharges: mergedCharges };
+    // Merge trails
+    const localTrails  = local.trailPacks || [];
+    const serverTrails = Array.isArray(trailPacks) ? trailPacks : [];
+    const mergedTrails = [...new Set([...localTrails, ...serverTrails])];
+
+    const d = {
+      owned:          mergedOwned,
+      equipped:       equipped || local.equipped || 'skin_cryptokid',
+      boosterCharges: mergedCharges,
+      trailPacks:     mergedTrails,
+      equippedTrail:  local.equippedTrail || 'default',
+    };
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(d)); } catch {}
     if (typeof Renderer !== 'undefined') Renderer.reloadPlayerSprite();
   }
@@ -4892,6 +5081,15 @@ const Shop = (() => {
   }
 
   // ── Рендер скинов ──
+  // Skins (except the free starter) require an on-chain NFT claim before equipping.
+  const _FREE_SKINS = ['skin_cryptokid']; // always equippable without claim
+
+  function _skinUnlocked(id) {
+    if (_FREE_SKINS.includes(id)) return true;   // starter skin — no claim needed
+    if (!window.__NFT_DEPLOYED)   return true;   // NFT not deployed — open access
+    return _isNftClaimed(id);
+  }
+
   function renderSkins() {
     const container = document.getElementById('shop-items');
     if (!container) return;
@@ -4904,10 +5102,29 @@ const Shop = (() => {
       const isOwned    = owned.includes(item.id);
       const isEquipped = equipped === item.id;
       const canAfford  = balance >= item.price;
+      const isUnlocked = _skinUnlocked(item.id); // claimed or free
+      const needsClaim = isOwned && !isUnlocked;
 
       const iconHtml = item.sprite
         ? `<span class="shop-icon shop-icon-img"><img src="${item.sprite}" alt="${item.name}" style="width:48px;height:48px;object-fit:contain;display:block;image-rendering:pixelated;"></span>`
         : `<span class="shop-icon">${item.icon}</span>`;
+
+      // Info row: show claimed badge for claimed skins; nothing for unclaimed/free
+      const nftInfoHtml = (isOwned && window.__NFT_DEPLOYED && !_FREE_SKINS.includes(item.id))
+        ? `<div class="shop-nft-row">${isUnlocked ? '<span class="shop-nft-claimed">✓ On-chain</span>' : ''}</div>`
+        : '';
+
+      // Action: equipped → ON | owned+unlocked → Equip | owned+locked → Claim to Equip | not owned → Buy
+      let actionHtml;
+      if (isEquipped) {
+        actionHtml = '<span class="shop-badge-on">✓ ON</span>';
+      } else if (isOwned && isUnlocked) {
+        actionHtml = `<button class="shop-btn shop-btn-equip" data-id="${item.id}">Equip</button>`;
+      } else if (needsClaim) {
+        actionHtml = `<button class="shop-btn shop-btn-claim-equip" data-id="${item.id}">⬡ Claim</button>`;
+      } else {
+        actionHtml = `<button class="shop-btn shop-btn-buy${canAfford ? '' : ' disabled'}" data-id="${item.id}" data-price="${item.price}" style="display:inline-flex;flex-direction:row;align-items:center;justify-content:center;gap:4px;"><img src="/game/coin.png" style="width:14px;height:14px;object-fit:contain;display:block;flex-shrink:0;"> ${item.price}</button>`;
+      }
 
       const el = document.createElement('div');
       el.className = 'shop-item' + (isEquipped ? ' shop-item-equipped' : '');
@@ -4915,26 +5132,36 @@ const Shop = (() => {
         ${iconHtml}
         <div class="shop-info">
           <span class="shop-name">${item.name}</span>
-          <span class="shop-desc">${item.desc}</span>
+          <span class="shop-desc">${item.desc}${needsClaim ? '<br><span style="color:rgba(180,140,255,0.7);font-size:0.7rem;">Claim NFT to unlock</span>' : ''}</span>
+          ${nftInfoHtml}
         </div>
-        <div class="shop-action">
-          ${isEquipped
-            ? '<span class="shop-badge-on">✓ ON</span>'
-            : isOwned
-              ? `<button class="shop-btn shop-btn-equip" data-id="${item.id}">Equip</button>`
-              : `<button class="shop-btn shop-btn-buy${canAfford ? '' : ' disabled'}" data-id="${item.id}" data-price="${item.price}" style="display:inline-flex;flex-direction:row;align-items:center;justify-content:center;gap:4px;"><img src="/game/coin.png" style="width:14px;height:14px;object-fit:contain;display:block;flex-shrink:0;"> ${item.price}</button>`
-          }
-        </div>`;
+        <div class="shop-action">${actionHtml}</div>`;
       container.appendChild(el);
     }
 
+    // Equip (only possible for unlocked skins — double-check guard)
     container.querySelectorAll('.shop-btn-equip').forEach(btn => {
       btn.addEventListener('click', () => {
-        equip(btn.dataset.id);
+        const id = btn.dataset.id;
+        if (!_skinUnlocked(id)) return;
+        equip(id);
         if (typeof Renderer !== 'undefined') Renderer.reloadPlayerSprite();
         render();
       });
     });
+
+    // Claim to Equip
+    container.querySelectorAll('.shop-btn-claim-equip').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const mintFn = window.__NFT_MINT;
+        if (!mintFn || window.__NFT_PENDING) return;
+        btn.textContent = '⏳ Claiming…';
+        btn.disabled    = true;
+        mintFn(btn.dataset.id);
+      });
+    });
+
+    // Buy with coins (skin still needs claiming after purchase)
     container.querySelectorAll('.shop-btn-buy').forEach(btn => {
       if (btn.classList.contains('disabled')) return;
       btn.addEventListener('click', () => {
@@ -4945,8 +5172,7 @@ const Shop = (() => {
         d.coins -= price;
         Save.save(d);
         own(btn.dataset.id);
-        equip(btn.dataset.id);
-        if (typeof Renderer !== 'undefined') Renderer.reloadPlayerSprite();
+        // Don't auto-equip — user must claim first
         if (typeof UI !== 'undefined') UI.updateCoins(Save.getCoins());
         if (typeof window.__BASE_SYNC_COINS === 'function') window.__BASE_SYNC_COINS(Save.getCoins());
         render();
@@ -4968,8 +5194,11 @@ const Shop = (() => {
 
       const el = document.createElement('div');
       el.className = 'shop-item' + (hasActive ? ' shop-item-equipped' : '');
+      const boosterIconHtml = item.sprite
+        ? `<span class="shop-icon shop-icon-img"><img src="${item.sprite}" alt="${item.name}" style="width:48px;height:48px;object-fit:contain;display:block;image-rendering:pixelated;"></span>`
+        : `<span class="shop-icon">${item.icon}</span>`;
       el.innerHTML = `
-        <span class="shop-icon">${item.icon}</span>
+        ${boosterIconHtml}
         <div class="shop-info">
           <span class="shop-name">${item.name}</span>
           <span class="shop-desc">${item.desc}</span>
@@ -5087,7 +5316,7 @@ const Shop = (() => {
     const defEl = document.createElement('div');
     defEl.className = 'shop-item' + (equipped === 'default' ? ' shop-item-equipped' : '');
     defEl.innerHTML = `
-      <span class="shop-icon">👣</span>
+      <span class="shop-icon shop-icon-img"><img src="/nft/images/trail_default.png" alt="Default" style="width:48px;height:48px;object-fit:contain;display:block;image-rendering:pixelated;"></span>
       <div class="shop-info">
         <span class="shop-name">Default</span>
         <span class="shop-desc">Footprints, dust and ripples</span>
@@ -5104,13 +5333,18 @@ const Shop = (() => {
       const isEquipped = equipped === item.id;
       const canAfford  = balance >= item.price;
 
+      const trailIconHtml = item.sprite
+        ? `<span class="shop-icon shop-icon-img"><img src="${item.sprite}" alt="${item.name}" style="width:48px;height:48px;object-fit:contain;display:block;image-rendering:pixelated;"></span>`
+        : `<span class="shop-icon">${item.icon}</span>`;
+
       const el = document.createElement('div');
       el.className = 'shop-item' + (isEquipped ? ' shop-item-equipped' : '');
       el.innerHTML = `
-        <span class="shop-icon">${item.icon}</span>
+        ${trailIconHtml}
         <div class="shop-info">
           <span class="shop-name">${item.name}</span>
           <span class="shop-desc">${item.desc}</span>
+          ${isOwned ? `<div class="shop-nft-row">${_nftBtnHtml(item.id)}</div>` : ''}
         </div>
         <div class="shop-action">
           ${isEquipped
@@ -5122,6 +5356,8 @@ const Shop = (() => {
         </div>`;
       container.appendChild(el);
     }
+
+    _bindNftBtns(container);
 
     container.querySelectorAll('.shop-btn-equip-trail').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -5164,7 +5400,7 @@ const Shop = (() => {
     if (typeof UI !== 'undefined') UI.show('shop');
   }
 
-  return { show, setTab, getEquipped, getOwned, getSprite, applyServerData, hasBoosted, useBooster, getBoosterCount, getEquippedDeath, getEquippedTrail, getTrailPacks, own, ownTrailPack, addBoosterCharges };
+  return { show, setTab, getEquipped, getOwned, getSprite, applyServerData, hasBoosted, useBooster, getBoosterCount, getEquippedDeath, getEquippedTrail, getTrailPacks, own, ownTrailPack, addBoosterCharges, _markNftClaimedPublic: _markNftClaimed, _refreshNft: () => render(), _equipPublic: equip };
 })();
 
 
@@ -5707,7 +5943,7 @@ const DailySpin = (() => {
           : ALL_BOOSTERS[Math.floor(Math.random() * ALL_BOOSTERS.length)];
         Shop.addBoosterCharges(boosterId, 1);
         const BOOSTER_NAMES = { boost_magnet: 'Coin Magnet', boost_double: 'Double Coins', boost_shield: 'Second Chance' };
-        if (_prize) _prize._resolvedBoosterName = BOOSTER_NAMES[boosterId] || boosterId;
+        if (_prize) { _prize._resolvedBoosterName = BOOSTER_NAMES[boosterId] || boosterId; _prize._resolvedItemId = boosterId; }
       }
     } else if (prize.type === 'trail') {
       if (typeof Shop !== 'undefined') {
@@ -5719,7 +5955,7 @@ const DailySpin = (() => {
           : ALL_TRAILS[Math.floor(Math.random() * ALL_TRAILS.length)];
         Shop.ownTrailPack(trailId);
         const TRAIL_NAMES = { trail_sparkle: 'Sparkle', trail_hearts: 'Hearts', trail_fire: 'Fire', trail_coins: 'Coins', trail_rainbow: 'Rainbow' };
-        if (_prize) _prize._resolvedTrailName = TRAIL_NAMES[trailId] || trailId;
+        if (_prize) { _prize._resolvedTrailName = TRAIL_NAMES[trailId] || trailId; _prize._resolvedItemId = trailId; }
       }
     } else if (prize.type === 'skin') {
       // Server picks a specific skin; if it's already owned, pick a random unowned one
@@ -5736,7 +5972,7 @@ const DailySpin = (() => {
         Shop.own(skinId);
         // Update prize label shown in result box
         const SKIN_NAMES = { skin_street_runner: 'Street Runner', skin_default: 'Builder', skin_founder: 'Founder', skin_base_king: 'Base King' };
-        if (_prize) _prize._resolvedSkinName = SKIN_NAMES[skinId] || skinId;
+        if (_prize) { _prize._resolvedSkinName = SKIN_NAMES[skinId] || skinId; _prize._resolvedItemId = skinId; }
       }
     }
   }
@@ -5754,11 +5990,15 @@ const DailySpin = (() => {
       if (_prize.type === 'skin' && _shirtImg && _shirtImg.complete && _shirtImg.naturalWidth) {
         iconEl.innerHTML = `<img src="/game/shirt.png" style="width:2.2rem;height:2.2rem;object-fit:contain;display:block;margin:0 auto 4px;">`;
         labelEl.textContent = _prize._resolvedSkinName ? `${_prize._resolvedSkinName} skin!` : 'New skin!';
-      } else if (_prize.type === 'trail' && _boosterImg && _boosterImg.complete && _boosterImg.naturalWidth) {
-        iconEl.innerHTML = `<img src="/game/trails.png" style="width:2.2rem;height:2.2rem;object-fit:contain;display:block;margin:0 auto 4px;">`;
+      } else if (_prize.type === 'trail') {
+        const _trailSprites = { trail_sparkle: '/nft/images/trail_sparkle.png', trail_hearts: '/nft/images/trail_hearts.png', trail_fire: '/nft/images/trail_fire.png', trail_coins: '/nft/images/trail_coins.png', trail_rainbow: '/nft/images/trail_rainbow.png' };
+        const _trailSrc = _prize._resolvedItemId && _trailSprites[_prize._resolvedItemId] ? _trailSprites[_prize._resolvedItemId] : '/game/trails.png';
+        iconEl.innerHTML = `<img src="${_trailSrc}" style="width:2.2rem;height:2.2rem;object-fit:contain;display:block;margin:0 auto 4px;">`;
         labelEl.textContent = _prize._resolvedTrailName ? `${_prize._resolvedTrailName} trail!` : 'New trail!';
-      } else if (_prize.type === 'booster' && _boosterBagImg && _boosterBagImg.complete && _boosterBagImg.naturalWidth) {
-        iconEl.innerHTML = `<img src="/game/boosters.png" style="width:2.2rem;height:2.2rem;object-fit:contain;display:block;margin:0 auto 4px;">`;
+      } else if (_prize.type === 'booster') {
+        const _boosterSprites = { boost_magnet: '/game/boosters/coin_magnet.png', boost_double: '/game/boosters/double_coins.png', boost_shield: '/game/boosters/second_chance.png' };
+        const _boosterSrc = _prize._resolvedItemId && _boosterSprites[_prize._resolvedItemId] ? _boosterSprites[_prize._resolvedItemId] : '/game/boosters.png';
+        iconEl.innerHTML = `<img src="${_boosterSrc}" style="width:2.2rem;height:2.2rem;object-fit:contain;display:block;margin:0 auto 4px;">`;
         labelEl.textContent = _prize._resolvedBoosterName ? `${_prize._resolvedBoosterName}!` : 'New booster!';
       } else {
         iconEl.textContent = _prize.icon || '🎁';
@@ -5766,6 +6006,48 @@ const DailySpin = (() => {
       }
       resultEl.classList.remove('hidden');
     }
+
+    // ── NFT mint card for skin/trail prizes ──
+    const nftCard = document.getElementById('spin-nft-card');
+    if (nftCard) {
+      nftCard.classList.add('hidden');
+      if (window.__NFT_DEPLOYED && _prize && (_prize.type === 'skin' || _prize.type === 'trail')) {
+        const itemId = _prize._resolvedItemId;
+        if (itemId && !_isNftClaimed(itemId)) {
+          const SKIN_SPRITES = {
+            skin_street_runner: '/game/chars/street_runner.png',
+            skin_default:        '/game/chars/default.png',
+            skin_founder:        '/game/chars/founder.png',
+            skin_base_king:      '/game/chars/base_king.png',
+          };
+          const TRAIL_SPRITES = { trail_sparkle: '/nft/images/trail_sparkle.png', trail_hearts: '/nft/images/trail_hearts.png', trail_fire: '/nft/images/trail_fire.png', trail_coins: '/nft/images/trail_coins.png', trail_rainbow: '/nft/images/trail_rainbow.png' };
+          const previewHtml = (_prize.type === 'skin' && SKIN_SPRITES[itemId])
+            ? `<img src="${SKIN_SPRITES[itemId]}" class="spin-nft-sprite" alt="${itemId}">`
+            : (_prize.type === 'trail' && TRAIL_SPRITES[itemId])
+              ? `<img src="${TRAIL_SPRITES[itemId]}" class="spin-nft-sprite" alt="${itemId}">`
+              : `<span class="spin-nft-emoji">🎁</span>`;
+          nftCard.innerHTML = `
+            ${previewHtml}
+            <div class="spin-nft-label">Claim as NFT on Base</div>
+            <button class="spin-nft-btn" id="btn-spin-nft" data-id="${itemId}">⬡ Claim</button>
+            <button class="spin-nft-later" id="btn-spin-nft-later">Later →</button>`;
+          nftCard.classList.remove('hidden');
+
+          const mintBtn = document.getElementById('btn-spin-nft');
+          const laterBtn = document.getElementById('btn-spin-nft-later');
+          if (mintBtn) mintBtn.addEventListener('click', () => {
+            const mintFn = window.__NFT_MINT;
+            if (!mintFn || window.__NFT_PENDING) return;
+            mintBtn.textContent = '⏳ Claiming…';
+            mintBtn.disabled = true;
+            if (laterBtn) laterBtn.style.display = 'none';
+            mintFn(itemId);
+          });
+          if (laterBtn) laterBtn.addEventListener('click', () => nftCard.classList.add('hidden'));
+        }
+      }
+    }
+
     _updateDoBtn();
     _startCountdown();
   }
@@ -5788,6 +6070,8 @@ const DailySpin = (() => {
     if (doBtn) { doBtn.disabled = true; doBtn.textContent = '⏳ Spinning…'; }
     const resultEl = document.getElementById('spin-result');
     if (resultEl) resultEl.classList.add('hidden');
+    const nftCard = document.getElementById('spin-nft-card');
+    if (nftCard) nftCard.classList.add('hidden');
 
     spinFn();
 
@@ -5940,15 +6224,15 @@ const Xp = (() => {
     2:  { type: 'coins', value: 100,  icon: '🪙', label: '+100 Coins' },
     3:  { type: 'skin',  value: 'skin_street_runner', sprite: '/game/chars/street_runner.png', label: 'Street Runner unlocked!' },
     5:  { type: 'coins', value: 200,  icon: '🪙', label: '+200 Coins' },
-    7:  { type: 'trail', value: 'trail_sparkle', icon: '✨', label: 'Sparkle Trail unlocked!' },
+    7:  { type: 'trail', value: 'trail_sparkle', sprite: '/nft/images/trail_sparkle.png', icon: '✨', label: 'Sparkle Trail unlocked!' },
     10: { type: 'coins', value: 500,  icon: '🪙', label: '+500 Coins' },
-    12: { type: 'trail', value: 'trail_hearts',  icon: '💖', label: 'Hearts Trail unlocked!' },
+    12: { type: 'trail', value: 'trail_hearts',  sprite: '/nft/images/trail_hearts.png',  icon: '💖', label: 'Hearts Trail unlocked!' },
     15: { type: 'coins', value: 750,  icon: '🪙', label: '+750 Coins' },
-    18: { type: 'trail', value: 'trail_fire',    icon: '🔥', label: 'Fire Trail unlocked!' },
+    18: { type: 'trail', value: 'trail_fire',    sprite: '/nft/images/trail_fire.png',    icon: '🔥', label: 'Fire Trail unlocked!' },
     20: { type: 'skin',  value: 'skin_founder',  sprite: '/game/chars/founder.png',       label: 'Founder unlocked!' },
-    25: { type: 'trail', value: 'trail_coins',   icon: '🪙', label: 'Coins Trail unlocked!' },
+    25: { type: 'trail', value: 'trail_coins',   sprite: '/nft/images/trail_coins.png',   icon: '🪙', label: 'Coins Trail unlocked!' },
     30: { type: 'skin',  value: 'skin_base_king', sprite: '/game/chars/base_king.png',    label: 'Base King unlocked!' },
-    35: { type: 'trail', value: 'trail_rainbow', icon: '🌈', label: 'Rainbow Trail unlocked!' },
+    35: { type: 'trail', value: 'trail_rainbow', sprite: '/nft/images/trail_rainbow.png', icon: '🌈', label: 'Rainbow Trail unlocked!' },
   };
 
   function _load() {
@@ -6047,7 +6331,7 @@ const Xp = (() => {
         : current
           ? '<span class="xpr-lock next-lock">▶</span>'
           : '<span class="xpr-lock">🔒</span>';
-      const iconHtml = r.type === 'skin'
+      const iconHtml = (r.type === 'skin' || r.type === 'trail') && r.sprite
         ? `<img src="${r.sprite}" class="xpr-skin-img" alt="${r.label}">`
         : r.type === 'coins'
           ? `<img src="/game/coin.png" class="xpr-coin-img" alt="coins">`
@@ -6274,16 +6558,52 @@ function _showNextLevelUp() {
   const lvlEl  = document.getElementById('levelup-level');
   const rwdEl  = document.getElementById('levelup-reward');
   if (!modal) return;
-  if (iconEl) iconEl.textContent  = item.reward ? item.reward.icon : '⭐';
+
+  const r = item.reward;
+
+  // Icon: for skins and trails show sprite image, otherwise emoji
+  if (iconEl) {
+    if (r && r.sprite) {
+      iconEl.innerHTML = `<img src="${r.sprite}" style="width:56px;height:56px;object-fit:contain;image-rendering:pixelated;">`;
+    } else {
+      iconEl.innerHTML = '';
+      iconEl.textContent = r ? (r.icon || '⭐') : '⭐';
+    }
+  }
   if (lvlEl)  lvlEl.textContent   = `Lv.${item.level}`;
-  if (rwdEl)  rwdEl.textContent   = item.reward ? item.reward.label : '';
-  rwdEl.style.display = item.reward ? '' : 'none';
+  if (rwdEl)  rwdEl.textContent   = r ? r.label : '';
+  if (rwdEl)  rwdEl.style.display = r ? '' : 'none';
+
+  // NFT mint button for skin/trail rewards
+  const nftRow = document.getElementById('levelup-nft-row');
+  if (nftRow) {
+    nftRow.innerHTML = '';
+    nftRow.classList.add('hidden');
+    if (window.__NFT_DEPLOYED && r && (r.type === 'skin' || r.type === 'trail') && r.value && !_isNftClaimed(r.value)) {
+      const btn = document.createElement('button');
+      btn.className = 'levelup-nft-btn';
+      btn.textContent = '⬡ Claim';
+      btn.dataset.id = r.value;
+      btn.addEventListener('click', () => {
+        const mintFn = window.__NFT_MINT;
+        if (!mintFn || window.__NFT_PENDING) return;
+        btn.textContent = '⏳ Claiming…';
+        btn.disabled = true;
+        mintFn(r.value);
+      });
+      nftRow.appendChild(btn);
+      nftRow.classList.remove('hidden');
+    }
+  }
+
   modal.classList.remove('hidden');
 }
 
 function _closeLevelUp() {
-  const modal = document.getElementById('levelup-modal');
-  if (modal) modal.classList.add('hidden');
+  const modal  = document.getElementById('levelup-modal');
+  const nftRow = document.getElementById('levelup-nft-row');
+  if (modal)  modal.classList.add('hidden');
+  if (nftRow) { nftRow.innerHTML = ''; nftRow.classList.add('hidden'); }
   if (_levelUpQueue.length > 0) setTimeout(_showNextLevelUp, 300);
 }
 
@@ -6542,11 +6862,11 @@ function _renderProfile() {
       { id: 'skin_base_king',     name: 'Base King',     sprite: '/game/chars/base_king.png'     },
     ];
     const TRAIL_META = [
-      { id: 'trail_sparkle', name: 'Sparkle', icon: '✨', color: 'rgba(255,215,0,0.22)',    glow: 'rgba(255,215,0,0.5)'   },
-      { id: 'trail_hearts',  name: 'Hearts',  icon: '💖', color: 'rgba(255,100,170,0.22)',  glow: 'rgba(255,100,170,0.5)' },
-      { id: 'trail_fire',    name: 'Fire',    icon: '🔥', color: 'rgba(255,110,0,0.22)',    glow: 'rgba(255,110,0,0.5)'   },
-      { id: 'trail_coins',   name: 'Coins',   icon: '🪙', color: 'rgba(255,200,0,0.22)',    glow: 'rgba(255,200,0,0.5)'   },
-      { id: 'trail_rainbow', name: 'Rainbow', icon: '🌈', color: 'rgba(140,100,255,0.22)',  glow: 'rgba(140,100,255,0.5)' },
+      { id: 'trail_sparkle', name: 'Sparkle', icon: '✨', sprite: '/nft/images/trail_sparkle.png', color: 'rgba(255,215,0,0.22)',    glow: 'rgba(255,215,0,0.5)'   },
+      { id: 'trail_hearts',  name: 'Hearts',  icon: '💖', sprite: '/nft/images/trail_hearts.png',  color: 'rgba(255,100,170,0.22)',  glow: 'rgba(255,100,170,0.5)' },
+      { id: 'trail_fire',    name: 'Fire',    icon: '🔥', sprite: '/nft/images/trail_fire.png',    color: 'rgba(255,110,0,0.22)',    glow: 'rgba(255,110,0,0.5)'   },
+      { id: 'trail_coins',   name: 'Coins',   icon: '🪙', sprite: '/nft/images/trail_coins.png',   color: 'rgba(255,200,0,0.22)',    glow: 'rgba(255,200,0,0.5)'   },
+      { id: 'trail_rainbow', name: 'Rainbow', icon: '🌈', sprite: '/nft/images/trail_rainbow.png', color: 'rgba(140,100,255,0.22)',  glow: 'rgba(140,100,255,0.5)' },
     ];
 
     const skinId  = Shop.getEquipped();
@@ -6562,7 +6882,14 @@ function _renderProfile() {
     // Trail bubble
     const bubbleEl = el('equipped-trail-bubble');
     const iconEl   = el('equipped-trail-icon');
-    if (iconEl) iconEl.textContent = trail ? trail.icon : '👣';
+    if (iconEl) {
+      const trailSprite = trail ? trail.sprite : '/nft/images/trail_default.png';
+      if (trailSprite) {
+        iconEl.innerHTML = `<img src="${trailSprite}" style="width:52px;height:52px;object-fit:contain;image-rendering:pixelated;display:block;">`;
+      } else {
+        iconEl.textContent = trail ? trail.icon : '👣';
+      }
+    }
     if (el('equipped-trail-name')) el('equipped-trail-name').textContent = trail ? trail.name : 'None';
     if (bubbleEl) {
       if (trail) {
@@ -6669,9 +6996,33 @@ function _initUI() {
   }
 
   // Кнопка звука
-  _bind('btn-mute',      'click', () => Sound.toggleMute());
-  _bind('btn-settings',      'click', () => { _initSettingsScreen(); UI.show('settings'); });
-  _bind('btn-settings-back', 'click', () => UI.show('menu'));
+  // btn-mute removed — replaced by btn-settings-game in HUD
+  let _settingsReturnScreen = 'menu';
+
+  _bind('btn-settings', 'click', () => {
+    _settingsReturnScreen = 'menu';
+    _initSettingsScreen();
+    UI.show('settings');
+  });
+  _bind('btn-settings-game', 'click', () => {
+    _settingsReturnScreen = 'game';
+    _initSettingsScreen();
+    UI.show('settings');
+  });
+  _bind('btn-settings-back', 'click', () => {
+    if (_settingsReturnScreen === 'game') {
+      // Return to game: show game screen + HUD without resetting swipe hint
+      const settingsScreen = document.getElementById('screen-settings');
+      const gameScreen     = document.getElementById('screen-game');
+      const hud            = document.getElementById('hud');
+      if (settingsScreen) settingsScreen.classList.add('hidden');
+      if (gameScreen)     gameScreen.classList.remove('hidden');
+      if (hud)            hud.classList.remove('hidden');
+      if (typeof Music !== 'undefined') Music.pause(); // game screens have no music
+    } else {
+      UI.show('menu');
+    }
+  });
 
   // Music volume slider — bind once
   const musicSlider = document.getElementById('settings-music-vol');
@@ -6820,6 +7171,33 @@ function _initUI() {
   window.addEventListener('spin-insufficient', () => {
     // Abort animation if running, show "not enough coins"
     DailySpin.onInsufficient();
+  });
+
+  // NFT mint events
+  window.addEventListener('nft-minted', (e) => {
+    const itemId = e.detail && e.detail.itemId;
+    if (!itemId) return;
+    // Persist claimed state to localStorage
+    _markNftClaimed(itemId);
+    // If it's a skin, auto-equip now that it's unlocked
+    if (itemId.startsWith('skin_') && typeof Shop !== 'undefined') {
+      const owned = Shop.getOwned ? Shop.getOwned() : [];
+      if (owned.includes(itemId)) {
+        Shop.own && Shop.own(itemId); // ensure owned
+        // Equip via internal method exposed on Shop
+        if (Shop._equipPublic) Shop._equipPublic(itemId);
+        if (typeof Renderer !== 'undefined') Renderer.reloadPlayerSprite();
+      }
+    }
+    // Re-render current shop tab
+    if (typeof Shop !== 'undefined' && Shop._refreshNft) Shop._refreshNft();
+  });
+  window.addEventListener('nft-mint-error', () => {
+    // Reset any stuck "Claiming…" buttons
+    document.querySelectorAll('.shop-nft-btn').forEach(btn => {
+      btn.textContent = '⬡ Claim';
+      btn.disabled    = false;
+    });
   });
 
   // Старт

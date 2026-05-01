@@ -156,6 +156,9 @@
       width: 100%;
       box-sizing: border-box;
     }
+    .settings-screen-body {
+      padding-top: 18vh;
+    }
     .scroll-back-bar {
       flex-shrink: 0;
       padding: 24px 16px 20px;
@@ -301,7 +304,7 @@
       pointer-events: none;
     }
     #hud.hidden { display: none; }
-    #btn-mute {
+    .hud-settings-btn {
       background: rgba(0,8,30,0.75);
       border: 1px solid rgba(0,82,255,0.35);
       border-radius: 10px;
@@ -315,7 +318,7 @@
       justify-content: center;
       transition: transform 0.1s;
     }
-    #btn-mute:active { transform: scale(0.9); }
+    .hud-settings-btn:active { transform: scale(0.9); }
     #score-combined {
       display: flex;
       align-items: stretch;
@@ -710,6 +713,46 @@
     .shop-btn-equip, .shop-btn-equip-death { background: #0052FF; color: #fff; }
     .shop-btn-buy   { background: #FFD700; color: #1a0a00; display:inline-flex; align-items:center; justify-content:center; gap:4px; }
     .shop-btn-buy.disabled { opacity: 0.4; cursor: not-allowed; }
+    .shop-btn-claim-equip {
+      background: rgba(107,71,255,0.2);
+      border-color: #6B47FF;
+      color: #c4b0ff;
+      font-size: 0.78rem;
+      padding: 6px 10px;
+    }
+    .shop-btn-claim-equip:active { background: rgba(107,71,255,0.45); }
+    .shop-btn-claim-equip:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* NFT claim row inside shop items */
+    .shop-nft-row {
+      margin-top: 6px;
+    }
+    .shop-nft-btn {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      padding: 3px 10px;
+      border-radius: 8px;
+      border: 1.5px solid #6B47FF;
+      background: rgba(107,71,255,0.18);
+      color: #a48fff;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+      white-space: nowrap;
+    }
+    .shop-nft-btn:active { background: rgba(107,71,255,0.35); }
+    .shop-nft-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+    .shop-nft-claimed {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      color: #5af0a0;
+      background: rgba(90,240,160,0.12);
+      border: 1.5px solid rgba(90,240,160,0.35);
+      border-radius: 8px;
+      padding: 3px 10px;
+      display: inline-block;
+    }
 
     .coin-icon {
       width: 22px;
@@ -1030,7 +1073,7 @@
       background: rgba(77,143,255,0.07);
     }
     .booster-pill.empty { opacity: 0.38; }
-    .booster-pill-icon { font-size: 1.9rem; line-height: 1; }
+    .booster-pill-icon { font-size: 1.9rem; line-height: 1; display: flex; align-items: center; justify-content: center; }
     .booster-pill-count {
       color: #fff; font-size: 0.82rem; font-weight: 700; letter-spacing: 0.5px;
     }
@@ -1221,6 +1264,57 @@
       text-align: center;
     }
     .spin-timer.hidden { display: none; }
+
+    /* ── Spin NFT card ── */
+    .spin-nft-card {
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
+      margin: 8px 0 4px;
+      padding: 16px 20px;
+      background: rgba(107,71,255,0.12);
+      border: 1.5px solid rgba(107,71,255,0.4);
+      border-radius: 18px;
+      width: min(280px, 85vw);
+      animation: spinResultPop 0.3s ease;
+    }
+    .spin-nft-card.hidden { display: none; }
+    .spin-nft-sprite {
+      width: 72px; height: 72px; object-fit: contain; image-rendering: pixelated;
+    }
+    .spin-nft-emoji { font-size: 3rem; line-height: 1; }
+    .spin-nft-label {
+      color: rgba(255,255,255,0.6); font-size: 0.78rem; letter-spacing: 0.5px;
+    }
+    .spin-nft-btn {
+      font-size: 0.9rem; font-weight: 700; letter-spacing: 1px;
+      padding: 8px 24px; border-radius: 12px;
+      border: 1.5px solid #6B47FF;
+      background: linear-gradient(135deg, rgba(107,71,255,0.35), rgba(107,71,255,0.15));
+      color: #c4b0ff; cursor: pointer; width: 100%;
+      transition: background 0.15s;
+    }
+    .spin-nft-btn:active  { background: rgba(107,71,255,0.5); }
+    .spin-nft-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+    .spin-nft-later {
+      background: none; border: none; color: rgba(255,255,255,0.35);
+      font-size: 0.75rem; cursor: pointer; padding: 2px 0;
+    }
+    .spin-nft-later:hover { color: rgba(255,255,255,0.6); }
+
+    /* ── Level-up NFT row ── */
+    .levelup-nft-row {
+      width: 100%; margin: 4px 0 2px;
+    }
+    .levelup-nft-row.hidden { display: none; }
+    .levelup-nft-btn {
+      width: 100%; padding: 8px; border-radius: 10px;
+      border: 1.5px solid #6B47FF;
+      background: rgba(107,71,255,0.2);
+      color: #c4b0ff; font-size: 0.85rem; font-weight: 700;
+      letter-spacing: 1px; cursor: pointer;
+      transition: background 0.15s;
+    }
+    .levelup-nft-btn:active  { background: rgba(107,71,255,0.45); }
+    .levelup-nft-btn:disabled { opacity: 0.55; cursor: not-allowed; }
 
     /* ── Spin button ── */
     #btn-do-spin {

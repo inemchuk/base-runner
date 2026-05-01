@@ -1,0 +1,11 @@
+{
+  "name": "Base Runner — Founder",
+  "description": "Building the future. A skin earned in Base Runner on Base.",
+  "image": "https://baserunnerapp.vercel.app/game/chars/founder.png",
+  "external_url": "https://baserunnerapp.vercel.app",
+  "attributes": [
+    { "trait_type": "Type",   "value": "Skin" },
+    { "trait_type": "Rarity", "value": "Epic" },
+    { "trait_type": "Game",   "value": "Base Runner" }
+  ]
+}

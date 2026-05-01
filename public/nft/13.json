@@ -1,0 +1,11 @@
+{
+  "name": "Base Runner — Coins Trail",
+  "description": "Shiny spinning coins shower your trail. A trail earned in Base Runner on Base.",
+  "image": "https://baserunnerapp.vercel.app/nft/images/trail_coins.png",
+  "external_url": "https://baserunnerapp.vercel.app",
+  "attributes": [
+    { "trait_type": "Type",   "value": "Trail" },
+    { "trait_type": "Rarity", "value": "Uncommon" },
+    { "trait_type": "Game",   "value": "Base Runner" }
+  ]
+}

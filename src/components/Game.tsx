@@ -9,6 +9,7 @@ import { useCoinClaim } from '@/hooks/useCoinClaim';
 import { useShopSync } from '@/hooks/useShopSync';
 import { useQuestSync } from '@/hooks/useQuestSync';
 import { useDailySpin } from '@/hooks/useDailySpin';
+import { useNftMint } from '@/hooks/useNftMint';
 
 export default function Game() {
   useCheckIn();
@@ -18,6 +19,7 @@ export default function Game() {
   useShopSync();
   useQuestSync();
   useDailySpin();
+  useNftMint();
 
   useEffect(() => {
     // Resize canvas on mount
@@ -80,7 +82,7 @@ export default function Game() {
             <span className="score-val-num" id="coin-count">0</span>
           </div>
         </div>
-        <button id="btn-mute">🔊</button>
+        <button id="btn-settings-game" className="hud-settings-btn" aria-label="Settings"><span style={{display:'block',lineHeight:1,marginTop:'3px'}}>⚙️</span></button>
       </div>
 
       {/* Swipe hint */}
@@ -194,15 +196,15 @@ export default function Game() {
             <p className="profile-section-title">Boosters</p>
             <div className="profile-booster-row">
               <div className="booster-pill" id="profile-boost-magnet">
-                <span className="booster-pill-icon">🧲</span>
+                <span className="booster-pill-icon"><img src="/game/boosters/coin_magnet.png" style={{width:'28px',height:'28px',objectFit:'contain',imageRendering:'pixelated'}} alt="Magnet" /></span>
                 <span className="booster-pill-count" id="profile-boost-magnet-count">×0</span>
               </div>
               <div className="booster-pill" id="profile-boost-double">
-                <span className="booster-pill-icon">💰</span>
+                <span className="booster-pill-icon"><img src="/game/boosters/double_coins.png" style={{width:'28px',height:'28px',objectFit:'contain',imageRendering:'pixelated'}} alt="Double" /></span>
                 <span className="booster-pill-count" id="profile-boost-double-count">×0</span>
               </div>
               <div className="booster-pill" id="profile-boost-shield">
-                <span className="booster-pill-icon">🛡️</span>
+                <span className="booster-pill-icon"><img src="/game/boosters/second_chance.png" style={{width:'28px',height:'28px',objectFit:'contain',imageRendering:'pixelated'}} alt="Shield" /></span>
                 <span className="booster-pill-count" id="profile-boost-shield-count">×0</span>
               </div>
             </div>
@@ -276,6 +278,7 @@ export default function Game() {
           <div className="levelup-title">LEVEL UP!</div>
           <div className="levelup-level" id="levelup-level">Lv.2</div>
           <div className="levelup-reward" id="levelup-reward">+100 Coins</div>
+          <div id="levelup-nft-row" className="levelup-nft-row hidden" />
           <button className="btn levelup-btn" id="btn-levelup-ok">Awesome!</button>
         </div>
       </div>
@@ -319,6 +322,9 @@ export default function Game() {
           <span id="spin-result-icon" style={{fontSize:'2.2rem',display:'block',marginBottom:'4px'}}>🎁</span>
           <span id="spin-result-label" style={{color:'#fff',fontWeight:'bold',fontSize:'clamp(1rem,4.5vw,1.3rem)',letterSpacing:'1px'}}>—</span>
         </div>
+
+        {/* NFT mint card — shown after skin/trail prize */}
+        <div id="spin-nft-card" className="spin-nft-card hidden" />
 
         {/* Countdown when already spun */}
         <div id="spin-timer" className="spin-timer hidden" />
@@ -378,7 +384,7 @@ export default function Game() {
 
       {/* Settings Screen */}
       <div id="screen-settings" className="screen hidden scroll-screen">
-        <div className="scroll-screen-body">
+        <div className="scroll-screen-body settings-screen-body">
           <h2 style={{color:'#fff',fontSize:'clamp(1.2rem,6vw,2rem)',marginBottom:'32px',letterSpacing:'3px'}}>⚙️ SETTINGS</h2>
           <div className="settings-list">
             {/* Music Volume */}

@@ -1,0 +1,11 @@
+{
+  "name": "Base Runner — Rainbow Trail",
+  "description": "Six-color rainbow burst. A trail earned in Base Runner on Base.",
+  "image": "https://baserunnerapp.vercel.app/nft/images/trail_rainbow.png",
+  "external_url": "https://baserunnerapp.vercel.app",
+  "attributes": [
+    { "trait_type": "Type",   "value": "Trail" },
+    { "trait_type": "Rarity", "value": "Legendary" },
+    { "trait_type": "Game",   "value": "Base Runner" }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "name": "Base Runner — Base King",
+  "description": "Rule the chain. A skin earned in Base Runner on Base.",
+  "image": "https://baserunnerapp.vercel.app/game/chars/base_king.png",
+  "external_url": "https://baserunnerapp.vercel.app",
+  "attributes": [
+    { "trait_type": "Type",   "value": "Skin" },
+    { "trait_type": "Rarity", "value": "Legendary" },
+    { "trait_type": "Game",   "value": "Base Runner" }
+  ]
+}

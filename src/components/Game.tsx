@@ -124,6 +124,14 @@ export default function Game() {
             </div>
             <span className="spin-banner-arrow">›</span>
           </button>
+          <button id="btn-starter-pack-banner" className="spin-banner hidden">
+            <span className="spin-banner-icon">🎁</span>
+            <div className="spin-banner-text">
+              <span className="spin-banner-title">Starter Pack</span>
+              <span className="spin-banner-sub">Claim for free - skins, coins & booster!</span>
+            </div>
+            <span className="spin-banner-arrow">›</span>
+          </button>
         </div>
         <div style={{flex:1}} />
         <nav className="tab-bar" id="menu-tab-bar">
@@ -162,7 +170,7 @@ export default function Game() {
 
           <div className="profile-stats" id="profile-stats">
             <div className="profile-stat profile-stat-rank">
-              <span className="profile-stat-value" id="stat-rank">#—</span>
+              <span className="profile-stat-value" id="stat-rank">#-</span>
               <span className="profile-stat-label">Global Rank</span>
             </div>
             <div className="profile-stat">
@@ -320,7 +328,7 @@ export default function Game() {
         {/* Prize reveal */}
         <div id="spin-result" className="spin-result hidden">
           <span id="spin-result-icon" style={{fontSize:'2.2rem',display:'block',marginBottom:'4px'}}>🎁</span>
-          <span id="spin-result-label" style={{color:'#fff',fontWeight:'bold',fontSize:'clamp(1rem,4.5vw,1.3rem)',letterSpacing:'1px'}}>—</span>
+          <span id="spin-result-label" style={{color:'#fff',fontWeight:'bold',fontSize:'clamp(1rem,4.5vw,1.3rem)',letterSpacing:'1px'}}>-</span>
         </div>
 
         {/* NFT mint card — shown after skin/trail prize */}
@@ -428,6 +436,39 @@ export default function Game() {
         </div>
         <div className="scroll-back-bar">
           <button className="btn btn-back" id="btn-settings-back">← BACK</button>
+        </div>
+      </div>
+
+      {/* Starter Pack Overlay */}
+      <div id="starter-pack-overlay" className="starter-pack-overlay hidden">
+        <div className="starter-pack-card">
+          <div className="starter-pack-badge">FREE</div>
+          <h2 className="starter-pack-title">STARTER PACK</h2>
+          <p className="starter-pack-desc">Claim your starter pack and gear up for your first run! Get 100 bonus coins, an on-chain character with starter skin and trails, and a booster for extra lives - all free on Base!</p>
+          <div className="starter-pack-items">
+            <div className="starter-item">
+              <img src="/game/chars/cryptokid.png" className="starter-item-img" alt="skin" />
+              <span className="starter-item-name">Crypto Kid</span>
+              <span className="starter-item-type">Skin</span>
+            </div>
+            <div className="starter-item">
+              <img src="/nft/images/trail_default.png" className="starter-item-img" alt="trail" />
+              <span className="starter-item-name">Default Trail</span>
+              <span className="starter-item-type">Trail</span>
+            </div>
+            <div className="starter-item">
+              <img src="/game/coin.png" className="starter-item-img" alt="coins" />
+              <span className="starter-item-name">100 Coins</span>
+              <span className="starter-item-type">Bonus</span>
+            </div>
+            <div className="starter-item">
+              <img src="/game/boosters/second_chance.png" className="starter-item-img" alt="booster" />
+              <span className="starter-item-name">Second Chance</span>
+              <span className="starter-item-type">Booster</span>
+            </div>
+          </div>
+          <button id="btn-starter-claim" className="starter-claim-btn">Claim for Free</button>
+          <button id="btn-starter-skip" className="starter-skip-btn">Skip for now →</button>
         </div>
       </div>
 

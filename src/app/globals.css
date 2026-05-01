@@ -693,7 +693,7 @@
     .shop-icon { font-size: 1.8rem; flex-shrink: 0; }
     .shop-info { flex: 1; display: flex; flex-direction: column; gap: 2px; }
     .shop-name { color: #fff; font-size: 0.95rem; font-weight: bold; letter-spacing: 1px; }
-    .shop-desc { color: rgba(255,255,255,0.5); font-size: 0.75rem; }
+    .shop-desc { color: rgba(255,255,255,0.5); font-size: 0.7rem; }
     .shop-action { flex-shrink: 0; }
     .shop-badge-on {
       color: #FFD700; font-size: 0.85rem; font-weight: bold; letter-spacing: 1px;
@@ -1353,3 +1353,153 @@
           0 0 60px rgba(120,0,255,0.45);
       }
     }
+
+    /* ── Starter Pack overlay ─────────────────────────────────────────── */
+    .starter-pack-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.72);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      padding: 20px;
+      box-sizing: border-box;
+    }
+    .starter-pack-overlay.hidden { display: none; }
+
+    .starter-pack-card {
+      position: relative;
+      width: 100%;
+      max-width: 360px;
+      background: linear-gradient(160deg, #0a0e2a 0%, #0d1540 55%, #0a1230 100%);
+      border: 1.5px solid rgba(100, 160, 255, 0.35);
+      border-radius: 20px;
+      padding: 28px 22px 22px;
+      box-shadow:
+        0 0 40px rgba(0, 82, 255, 0.25),
+        0 20px 60px rgba(0, 0, 0, 0.7);
+      box-sizing: border-box;
+      animation: starterCardIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+    }
+    @keyframes starterCardIn {
+      from { opacity: 0; transform: translateY(28px) scale(0.92); }
+      to   { opacity: 1; transform: translateY(0)   scale(1);    }
+    }
+
+    .starter-pack-badge {
+      position: absolute;
+      top: -12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: linear-gradient(90deg, #0052FF, #7B2FFF);
+      color: #fff;
+      font-size: 0.7rem;
+      font-weight: 800;
+      letter-spacing: 2.5px;
+      padding: 4px 14px;
+      border-radius: 20px;
+      box-shadow: 0 0 14px rgba(0, 82, 255, 0.6);
+    }
+
+    .starter-pack-title {
+      text-align: center;
+      font-size: 1.4rem;
+      font-weight: 900;
+      letter-spacing: 3px;
+      color: #fff;
+      margin: 4px 0 8px;
+      text-shadow: 0 0 18px rgba(80, 140, 255, 0.7);
+    }
+
+    .starter-pack-desc {
+      text-align: center;
+      font-size: 0.78rem;
+      color: rgba(180, 200, 255, 0.75);
+      line-height: 1.5;
+      margin: 0 0 20px;
+    }
+
+    .starter-pack-items {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-bottom: 22px;
+    }
+
+    .starter-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(100, 140, 255, 0.2);
+      border-radius: 12px;
+      padding: 10px 6px 8px;
+    }
+
+    .starter-item-img {
+      width: 40px;
+      height: 40px;
+      object-fit: contain;
+    }
+
+    .starter-item-name {
+      font-size: 0.62rem;
+      font-weight: 700;
+      color: #fff;
+      text-align: center;
+      line-height: 1.2;
+    }
+
+    .starter-item-type {
+      font-size: 0.55rem;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      color: rgba(120, 170, 255, 0.8);
+      text-transform: uppercase;
+    }
+
+    .starter-claim-btn {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 14px;
+      background: linear-gradient(135deg, #0052FF 0%, #7B2FFF 60%, #B800FF 100%);
+      color: #fff;
+      font-size: 1rem;
+      font-weight: 800;
+      letter-spacing: 1.5px;
+      cursor: pointer;
+      margin-bottom: 10px;
+      box-shadow:
+        0 5px 0 rgba(0, 20, 120, 0.7),
+        0 0 22px rgba(100, 60, 255, 0.55);
+      transition: transform 0.1s, box-shadow 0.1s;
+    }
+    .starter-claim-btn:active {
+      transform: scale(0.97) translateY(2px);
+      box-shadow: 0 2px 0 rgba(0, 20, 120, 0.7);
+    }
+    .starter-claim-btn:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
+    .starter-skip-btn {
+      width: 100%;
+      padding: 10px;
+      border: none;
+      border-radius: 10px;
+      background: transparent;
+      color: rgba(150, 170, 220, 0.6);
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      letter-spacing: 0.5px;
+    }
+    .starter-skip-btn:active { opacity: 0.6; }
+

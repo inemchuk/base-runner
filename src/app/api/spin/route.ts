@@ -55,6 +55,43 @@ function pickPrize(): Prize {
   return PRIZES[0];
 }
 
+// Weighted pick from a subset of prizes
+function pickFrom(pool: readonly Prize[]): Prize {
+  const total = pool.reduce((s, p) => s + p.weight, 0);
+  let r = Math.random() * total;
+  for (const p of pool) { r -= p.weight; if (r <= 0) return p; }
+  return pool[pool.length - 1];
+}
+
+// Avoid awarding a skin/trail the player already owns.
+// Falls back to coins (50) if the entire type is collected.
+function deduplicatePrize(
+  prize:      Prize,
+  owned:      string[],
+  trailPacks: string[],
+): Prize {
+  if (prize.type !== 'skin' && prize.type !== 'trail') return prize;
+
+  const alreadyOwned = prize.type === 'skin'
+    ? owned.includes(prize.value as string)
+    : trailPacks.includes(prize.value as string);
+
+  if (!alreadyOwned) return prize; // no dupe — use as-is
+
+  // Find unowned prizes of the same type
+  const unowned = (PRIZES as readonly Prize[]).filter(p => {
+    if (p.type !== prize.type) return false;
+    return prize.type === 'skin'
+      ? !owned.includes(p.value as string)
+      : !trailPacks.includes(p.value as string);
+  });
+
+  if (unowned.length > 0) return pickFrom(unowned);
+
+  // Entire collection complete — reward coins instead
+  return { type: 'coins', value: 50, weight: 0, label: '50 Coins', icon: '💰' } as unknown as Prize;
+}
+
 // In-memory fallback for local dev (no Redis)
 const memSpinCount = new Map<string, number>(); // addr → spinsToday
 const memSpinDate  = new Map<string, string>();  // addr → date string
@@ -122,8 +159,15 @@ export async function POST(req: NextRequest) {
       await redis.zadd('coin_lb', { score: Math.max(newBalance, Number(lbScore)), member: addr });
     }
 
-    // ── Pick prize ───────────────────────────────────────────────────────
-    const prize         = pickPrize();
+    // ── Pick prize (no duplicates for skins/trails) ──────────────────────
+    const rawPrize = pickPrize();
+    let prize = rawPrize;
+    if (redis && (rawPrize.type === 'skin' || rawPrize.type === 'trail')) {
+      const shopData = await redis.get<{ owned?: string[]; trailPacks?: string[] }>(`shop:${addr}`);
+      const owned      = shopData?.owned      ?? ['skin_cryptokid'];
+      const trailPacks = shopData?.trailPacks ?? [];
+      prize = deduplicatePrize(rawPrize, owned, trailPacks);
+    }
     const newSpinsToday = spinsToday + 1;
 
     if (redis) {

@@ -1,17 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 interface ShopData {
-  owned:      string[];   // skin IDs
-  equipped:   string;
-  boosters:   string[];
-  trailPacks: string[];   // trail IDs
+  owned:          string[];                 // skin IDs
+  equipped:       string;                   // active skin
+  boosterCharges: Record<string, number>;   // { boost_shield: 2, … }
+  trailPacks:     string[];                 // owned trail IDs
+  equippedTrail:  string;                   // active trail
+  equippedDeath:  string;                   // active death effect
+  deathPacks:     string[];                 // owned death effect IDs
 }
 
 const DEFAULTS: ShopData = {
-  owned:      ['skin_cryptokid'],
-  equipped:   'skin_cryptokid',
-  boosters:   [],
-  trailPacks: [],
+  owned:          ['skin_cryptokid'],
+  equipped:       'skin_cryptokid',
+  boosterCharges: {},
+  trailPacks:     [],
+  equippedTrail:  'default',
+  equippedDeath:  'default',
+  deathPacks:     [],
 };
 
 const memStore = new Map<string, ShopData>();
@@ -43,17 +49,19 @@ export async function GET(req: NextRequest) {
 // POST /api/shop
 export async function POST(req: NextRequest) {
   try {
-    const { address, owned, equipped, boosters, trailPacks } = await req.json();
-    if (!address || !owned || !equipped) {
-      return NextResponse.json({ ok: false, error: 'invalid params' }, { status: 400 });
-    }
+    const body = await req.json();
+    const { address } = body;
+    if (!address) return NextResponse.json({ ok: false, error: 'invalid params' }, { status: 400 });
 
-    const addr: string = (address as string).toLowerCase();
+    const addr = (address as string).toLowerCase();
     const shopData: ShopData = {
-      owned,
-      equipped,
-      boosters:   boosters   ?? [],
-      trailPacks: trailPacks ?? [],
+      owned:          body.owned          ?? DEFAULTS.owned,
+      equipped:       body.equipped       ?? DEFAULTS.equipped,
+      boosterCharges: body.boosterCharges ?? DEFAULTS.boosterCharges,
+      trailPacks:     body.trailPacks     ?? DEFAULTS.trailPacks,
+      equippedTrail:  body.equippedTrail  ?? DEFAULTS.equippedTrail,
+      equippedDeath:  body.equippedDeath  ?? DEFAULTS.equippedDeath,
+      deathPacks:     body.deathPacks     ?? DEFAULTS.deathPacks,
     };
 
     const redis = await getRedis();

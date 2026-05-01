@@ -4952,36 +4952,43 @@ const Shop = (() => {
 
   function _syncToServer(d) {
     const syncFn = window.__BASE_SHOP_SYNC;
-    if (syncFn) syncFn(
-      d.owned      || ['skin_cryptokid'],
-      d.equipped   || 'skin_cryptokid',
-      d.boosterCharges || {},
-      d.trailPacks || [],
-    );
+    if (typeof syncFn === 'function') syncFn({
+      owned:          d.owned          || ['skin_cryptokid'],
+      equipped:       d.equipped       || 'skin_cryptokid',
+      boosterCharges: d.boosterCharges || {},
+      trailPacks:     d.trailPacks     || [],
+      equippedTrail:  d.equippedTrail  || 'default',
+      equippedDeath:  d.equippedDeath  || 'default',
+      deathPacks:     d.deathPacks     || [],
+    });
   }
 
-  function applyServerData(owned, equipped, boosterCharges, trailPacks) {
-    const local      = _migrateCharges(loadShopData());
-    const localOwned = local.owned || ['skin_cryptokid'];
-    const mergedOwned = [...new Set([...localOwned, ...(owned || [])])];
-    // Merge charges: take max of local and server for each id
+  function applyServerData(owned, equipped, boosterCharges, trailPacks, equippedTrail, equippedDeath, deathPacks) {
+    const local = _migrateCharges(loadShopData());
+
+    // Merge owned skins (union)
+    const mergedOwned = [...new Set([...(local.owned || ['skin_cryptokid']), ...(owned || [])])];
+
+    // Merge booster charges (take max of local vs server)
     const localCharges  = local.boosterCharges || {};
     const serverCharges = (typeof boosterCharges === 'object' && !Array.isArray(boosterCharges)) ? boosterCharges : {};
     const mergedCharges = { ...localCharges };
     for (const id of Object.keys(serverCharges)) {
       mergedCharges[id] = Math.max(mergedCharges[id] || 0, serverCharges[id] || 0);
     }
-    // Merge trails
-    const localTrails  = local.trailPacks || [];
-    const serverTrails = Array.isArray(trailPacks) ? trailPacks : [];
-    const mergedTrails = [...new Set([...localTrails, ...serverTrails])];
+
+    // Merge trail/death packs (union)
+    const mergedTrails = [...new Set([...(local.trailPacks || []), ...(Array.isArray(trailPacks) ? trailPacks : [])])];
+    const mergedDeaths = [...new Set([...(local.deathPacks || []), ...(Array.isArray(deathPacks)  ? deathPacks  : [])])];
 
     const d = {
       owned:          mergedOwned,
-      equipped:       equipped || local.equipped || 'skin_cryptokid',
+      equipped:       equipped      || local.equipped      || 'skin_cryptokid',
       boosterCharges: mergedCharges,
       trailPacks:     mergedTrails,
-      equippedTrail:  local.equippedTrail || 'default',
+      equippedTrail:  equippedTrail || local.equippedTrail || 'default',
+      equippedDeath:  equippedDeath || local.equippedDeath || 'default',
+      deathPacks:     mergedDeaths,
     };
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(d)); } catch {}
     if (typeof Renderer !== 'undefined') Renderer.reloadPlayerSprite();

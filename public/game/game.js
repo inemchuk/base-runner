@@ -5863,16 +5863,24 @@ const DailySpin = (() => {
 
   function _buildSegments(prize) {
     // Keep DISPLAY_POOL visually unchanged during animation — no mid-spin glitch.
-    // Only set _winIndex to whichever fixed slot matches the prize type.
+    // For coins: land on the slot whose label matches the actual prize value.
+    // For other types: pick the matching type slot.
     _segments = [...DISPLAY_POOL];
-    const slotsByType = {
-      coins:   [0, 3, 5, 6],
-      skin:    [1],
-      trail:   [2, 7],
-      booster: [4],
-    };
-    const slots = (prize && slotsByType[prize.type]) || [0];
-    _winIndex = slots[Math.floor(Math.random() * slots.length)];
+    if (prize && prize.type === 'coins') {
+      // Map value → DISPLAY_POOL index by label
+      const valueStr = String(Number(prize.value));
+      const matchIdx = _segments.findIndex(s => s.coin && s.label === valueStr);
+      const coinSlots = [0, 3, 5, 6];
+      _winIndex = matchIdx >= 0 ? matchIdx : coinSlots[Math.floor(Math.random() * coinSlots.length)];
+    } else {
+      const slotsByType = {
+        skin:    [1],
+        trail:   [2, 7],
+        booster: [4],
+      };
+      const slots = (prize && slotsByType[prize.type]) || [0];
+      _winIndex = slots[Math.floor(Math.random() * slots.length)];
+    }
   }
 
   // ── Animation ─────────────────────────────────────────────────────────────
@@ -6000,6 +6008,9 @@ const DailySpin = (() => {
         const _boosterSrc = _prize._resolvedItemId && _boosterSprites[_prize._resolvedItemId] ? _boosterSprites[_prize._resolvedItemId] : '/game/boosters.png';
         iconEl.innerHTML = `<img src="${_boosterSrc}" style="width:2.2rem;height:2.2rem;object-fit:contain;display:block;margin:0 auto 4px;">`;
         labelEl.textContent = _prize._resolvedBoosterName ? `${_prize._resolvedBoosterName}!` : 'New booster!';
+      } else if (_prize.type === 'coins') {
+        iconEl.innerHTML = `<img src="/game/coin.png" style="width:2.4rem;height:2.4rem;object-fit:contain;display:block;margin:0 auto 4px;">`;
+        labelEl.textContent = _prize.label || `${_prize.value} Coins`;
       } else {
         iconEl.textContent = _prize.icon || '🎁';
         labelEl.textContent = _prize.label || 'Prize!';

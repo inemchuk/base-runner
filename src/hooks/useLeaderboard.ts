@@ -7,9 +7,9 @@ export function useLeaderboard() {
   const { address } = useAccount();
   const sessionTokenRef = useRef<string | null>(null);
 
-  const fetchLeaderboard = useCallback(async () => {
+  const fetchLeaderboard = useCallback(async (period: string = 'alltime') => {
     try {
-      const res = await fetch('/api/score/leaderboard');
+      const res = await fetch(`/api/score/leaderboard?period=${period}`);
       const data = await res.json();
       (window as any).__BASE_LEADERBOARD_ENTRIES = data.entries || [];
       window.dispatchEvent(new CustomEvent('base-leaderboard-loaded'));
@@ -56,15 +56,17 @@ export function useLeaderboard() {
   }, [address, fetchLeaderboard]);
 
   useEffect(() => {
-    (window as any).__BASE_SUBMIT_SCORE  = submit;
-    (window as any).__BASE_SESSION_START = fetchSessionToken;
-    (window as any).__BASE_LEADERBOARD  = { myBest: 0, isPending: false };
+    (window as any).__BASE_SUBMIT_SCORE    = submit;
+    (window as any).__BASE_SESSION_START   = fetchSessionToken;
+    (window as any).__BASE_FETCH_SCORE_LB  = fetchLeaderboard;
+    (window as any).__BASE_LEADERBOARD     = { myBest: 0, isPending: false };
 
-    fetchLeaderboard();
+    fetchLeaderboard('alltime');
 
     return () => {
       delete (window as any).__BASE_SUBMIT_SCORE;
       delete (window as any).__BASE_SESSION_START;
+      delete (window as any).__BASE_FETCH_SCORE_LB;
       delete (window as any).__BASE_LEADERBOARD;
       delete (window as any).__BASE_LEADERBOARD_ENTRIES;
     };

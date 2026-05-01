@@ -8,6 +8,13 @@ const HARD_SCORE_CAP      = 9999;
 
 const memStore = new Map<string, number>();
 
+function isoWeek(d: Date): number {
+  const tmp = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  tmp.setUTCDate(tmp.getUTCDate() + 4 - (tmp.getUTCDay() || 7));
+  const yearStart = new Date(Date.UTC(tmp.getUTCFullYear(), 0, 1));
+  return Math.ceil((((tmp.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+}
+
 function verifyToken(token: string, address: string): { ok: true; issuedAt: number } | { ok: false; reason: string } {
   try {
     const decoded = Buffer.from(token, 'base64url').toString('utf8');
@@ -82,12 +89,29 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // ── Persist (best score only) ────────────────────────────────────────
+    // ── Persist (best score per period) ─────────────────────────────────
     const redis = await getRedis();
     if (redis) {
+      const now   = new Date();
+      const week  = `scores:week:${now.getUTCFullYear()}-W${isoWeek(now).toString().padStart(2,'0')}`;
+      const month = `scores:month:${now.getUTCFullYear()}-${String(now.getUTCMonth()+1).padStart(2,'0')}`;
+
+      // All-time: only update if new personal best
       const current = await redis.zscore('scores', addr);
       if (!current || score > Number(current)) {
         await redis.zadd('scores', { score, member: addr });
+      }
+      // Weekly: only update if best this week
+      const curWeek = await redis.zscore(week, addr);
+      if (!curWeek || score > Number(curWeek)) {
+        await redis.zadd(week,  { score, member: addr });
+        await redis.expire(week,  21 * 86400); // keep 3 weeks
+      }
+      // Monthly: only update if best this month
+      const curMonth = await redis.zscore(month, addr);
+      if (!curMonth || score > Number(curMonth)) {
+        await redis.zadd(month, { score, member: addr });
+        await redis.expire(month, 93 * 86400); // keep 3 months
       }
     } else {
       const current = memStore.get(addr) ?? 0;

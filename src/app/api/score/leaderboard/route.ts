@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createPublicClient, http, keccak256, namehash, encodePacked } from 'viem';
 import { base } from 'viem/chains';
 
@@ -55,7 +55,22 @@ async function batchResolveAvatars(addresses: string[]): Promise<Map<string, str
 
 const memStore = new Map<string, number>();
 
-export async function GET() {
+function isoWeek(d: Date): number {
+  const tmp = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  tmp.setUTCDate(tmp.getUTCDate() + 4 - (tmp.getUTCDay() || 7));
+  const yearStart = new Date(Date.UTC(tmp.getUTCFullYear(), 0, 1));
+  return Math.ceil((((tmp.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+}
+
+function redisKey(period: string): string {
+  const now = new Date();
+  if (period === 'week')  return `scores:week:${now.getUTCFullYear()}-W${isoWeek(now).toString().padStart(2,'0')}`;
+  if (period === 'month') return `scores:month:${now.getUTCFullYear()}-${String(now.getUTCMonth()+1).padStart(2,'0')}`;
+  return 'scores'; // alltime
+}
+
+export async function GET(req: NextRequest) {
+  const period = req.nextUrl.searchParams.get('period') ?? 'alltime';
   try {
     let raw: Array<{ address: string; score: number }> = [];
 
@@ -65,7 +80,8 @@ export async function GET() {
         url: process.env.UPSTASH_REDIS_REST_URL,
         token: process.env.UPSTASH_REDIS_REST_TOKEN,
       });
-      const result = await redis.zrange('scores', 0, 99, { rev: true, withScores: true }) as (string | number)[];
+      const key    = redisKey(period);
+      const result = await redis.zrange(key, 0, 99, { rev: true, withScores: true }) as (string | number)[];
       for (let i = 0; i < result.length; i += 2) {
         raw.push({ address: result[i] as string, score: result[i + 1] as number });
       }

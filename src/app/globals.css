@@ -266,9 +266,13 @@
     .btn-claim-coins  { background: linear-gradient(135deg,#B8860B,#FFD700); color:#fff; text-shadow: 0 1px 2px rgba(0,0,0,0.6); box-shadow: 0 5px 0 #7A5800; }
 
     /* ===== LEADERBOARD TABS ===== */
-    .lb-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+    .lb-tabs { display: flex; gap: 8px; margin-bottom: 10px; }
     .lb-tab { flex: 1; padding: 8px 12px; border-radius: 20px; border: 1.5px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.07); color: #aaa; cursor: pointer; font-size: 0.85rem; font-family: inherit; letter-spacing: 1px; transition: background 0.2s, color 0.2s; }
     .lb-tab-active { background: #0052FF; color: #fff; border-color: #0052FF; }
+    .lb-period-tabs { display: flex; gap: 6px; margin-bottom: 14px; }
+    .lb-period-tabs.hidden { display: none; }
+    .lb-period-tab { flex: 1; padding: 5px 8px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.05); color: #888; cursor: pointer; font-size: 0.72rem; font-family: inherit; letter-spacing: 0.5px; transition: background 0.15s, color 0.15s; }
+    .lb-period-active { background: rgba(0,82,255,0.25); color: #6aa3ff; border-color: rgba(0,82,255,0.4); }
 
     /* ===== SWIPE HINT ===== */
     #swipe-hint {

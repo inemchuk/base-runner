@@ -27,13 +27,25 @@ export const NFT_ABI = [
 
 // Game item ID → ERC-1155 tokenId
 export const ITEM_TOKEN_IDS: Record<string, number> = {
-  // Skins
+  // Skins (original)
   skin_cryptokid:     0,
   skin_street_runner: 1,
   skin_default:       2,
   skin_founder:       3,
   skin_base_king:     4,
-  // Trails
+  // Skins (new, 5-9 then 15-20)
+  skin_1:  5,
+  skin_2:  6,
+  skin_3:  7,
+  skin_4:  8,
+  skin_5:  9,
+  skin_6:  15,
+  skin_7:  16,
+  skin_8:  17,
+  skin_9:  18,
+  skin_10: 19,
+  skin_11: 20,
+  // Trails (10-14, unchanged)
   trail_sparkle: 10,
   trail_hearts:  11,
   trail_fire:    12,

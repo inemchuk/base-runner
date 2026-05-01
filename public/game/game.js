@@ -4900,19 +4900,19 @@ const Shop = (() => {
   const ITEMS = [
     { id: 'skin_cryptokid',    name: 'Crypto Kid',    price: 0,    icon: '🧒', desc: 'Born on-chain',         sprite: '/game/chars/cryptokid.png'     },
     { id: 'skin_street_runner',name: 'Street Runner', price: 150,  icon: '🏃', desc: 'Fast on the streets',   sprite: '/game/chars/street_runner.png' },
-    { id: 'skin1',             name: 'Neon Runner',   price: 200,  icon: '🌟', desc: 'Glowing in the dark',   sprite: '/game/chars/skin1.png'         },
-    { id: 'skin2',             name: 'Pixel Dude',    price: 200,  icon: '👾', desc: '8-bit and proud',       sprite: '/game/chars/skin2.png'         },
+    { id: 'skin_1',             name: 'Neon Runner',   price: 200,  icon: '🌟', desc: 'Glowing in the dark',   sprite: '/game/chars/skin1.png'         },
+    { id: 'skin_2',             name: 'Pixel Dude',    price: 200,  icon: '👾', desc: '8-bit and proud',       sprite: '/game/chars/skin2.png'         },
     { id: 'skin_default',      name: 'Builder',       price: 300,  icon: '👷', desc: 'Default character',     sprite: '/game/player.png'              },
-    { id: 'skin3',             name: 'Shadow',        price: 300,  icon: '🌑', desc: 'Moves like a ghost',    sprite: '/game/chars/skin3.png'         },
-    { id: 'skin4',             name: 'Gold Rush',     price: 350,  icon: '💛', desc: 'All that glitters',     sprite: '/game/chars/skin4.png'         },
-    { id: 'skin5',             name: 'Cyber Punk',    price: 400,  icon: '⚡', desc: 'Born from the grid',    sprite: '/game/chars/skin5.png'         },
-    { id: 'skin6',             name: 'Ocean Rider',   price: 450,  icon: '🌊', desc: 'Rides the blue wave',   sprite: '/game/chars/skin6.png'         },
-    { id: 'skin7',             name: 'Flame Chaser',  price: 500,  icon: '🔥', desc: 'Always on fire',        sprite: '/game/chars/skin7.png'         },
+    { id: 'skin_3',             name: 'Shadow',        price: 300,  icon: '🌑', desc: 'Moves like a ghost',    sprite: '/game/chars/skin3.png'         },
+    { id: 'skin_4',             name: 'Gold Rush',     price: 350,  icon: '💛', desc: 'All that glitters',     sprite: '/game/chars/skin4.png'         },
+    { id: 'skin_5',             name: 'Cyber Punk',    price: 400,  icon: '⚡', desc: 'Born from the grid',    sprite: '/game/chars/skin5.png'         },
+    { id: 'skin_6',             name: 'Ocean Rider',   price: 450,  icon: '🌊', desc: 'Rides the blue wave',   sprite: '/game/chars/skin6.png'         },
+    { id: 'skin_7',             name: 'Flame Chaser',  price: 500,  icon: '🔥', desc: 'Always on fire',        sprite: '/game/chars/skin7.png'         },
     { id: 'skin_founder',      name: 'Founder',       price: 500,  icon: '🏗️', desc: 'Building the future',   sprite: '/game/chars/founder.png'       },
-    { id: 'skin8',             name: 'Arctic',        price: 600,  icon: '❄️', desc: 'Cool under pressure',   sprite: '/game/chars/skin8.png'         },
-    { id: 'skin9',             name: 'Desert Storm',  price: 700,  icon: '🌵', desc: 'Forged in the heat',    sprite: '/game/chars/skin9.png'         },
-    { id: 'skin10',            name: 'Thunder',       price: 800,  icon: '🌩️', desc: 'Speed of lightning',    sprite: '/game/chars/skin10.png'        },
-    { id: 'skin11',            name: 'Diamond Hands', price: 900,  icon: '💎', desc: 'Never gonna sell',      sprite: '/game/chars/skin11.png'        },
+    { id: 'skin_8',             name: 'Arctic',        price: 600,  icon: '❄️', desc: 'Cool under pressure',   sprite: '/game/chars/skin8.png'         },
+    { id: 'skin_9',             name: 'Desert Storm',  price: 700,  icon: '🌵', desc: 'Forged in the heat',    sprite: '/game/chars/skin9.png'         },
+    { id: 'skin_10',            name: 'Thunder',       price: 800,  icon: '🌩️', desc: 'Speed of lightning',    sprite: '/game/chars/skin10.png'        },
+    { id: 'skin_11',            name: 'Diamond Hands', price: 900,  icon: '💎', desc: 'Never gonna sell',      sprite: '/game/chars/skin11.png'        },
     { id: 'skin_base_king',    name: 'Base King',     price: 1000, icon: '👑', desc: 'Rule the chain',        sprite: '/game/chars/base_king.png'     },
   ];
 
@@ -5979,7 +5979,7 @@ const DailySpin = (() => {
     } else if (prize.type === 'skin') {
       // Server picks a specific skin; if it's already owned, pick a random unowned one
       if (typeof Shop !== 'undefined') {
-        const ALL_SKINS = ['skin_street_runner', 'skin1', 'skin2', 'skin_default', 'skin3', 'skin4', 'skin5', 'skin6', 'skin7', 'skin_founder', 'skin8', 'skin9', 'skin10', 'skin11', 'skin_base_king'];
+        const ALL_SKINS = ['skin_street_runner', 'skin_1', 'skin_2', 'skin_default', 'skin_3', 'skin_4', 'skin_5', 'skin_6', 'skin_7', 'skin_founder', 'skin_8', 'skin_9', 'skin_10', 'skin_11', 'skin_base_king'];
         const owned     = Shop.getOwned ? Shop.getOwned() : [];
         let   skinId    = prize.value;
         if (owned.includes(skinId)) {
@@ -6879,19 +6879,19 @@ function _renderProfile() {
     const SKIN_META = [
       { id: 'skin_cryptokid',     name: 'Crypto Kid',    sprite: '/game/chars/cryptokid.png'     },
       { id: 'skin_street_runner', name: 'Street Runner', sprite: '/game/chars/street_runner.png' },
-      { id: 'skin1',              name: 'Neon Runner',   sprite: '/game/chars/skin1.png'         },
-      { id: 'skin2',              name: 'Pixel Dude',    sprite: '/game/chars/skin2.png'         },
+      { id: 'skin_1',              name: 'Neon Runner',   sprite: '/game/chars/skin1.png'         },
+      { id: 'skin_2',              name: 'Pixel Dude',    sprite: '/game/chars/skin2.png'         },
       { id: 'skin_default',       name: 'Builder',       sprite: '/game/player.png'              },
-      { id: 'skin3',              name: 'Shadow',        sprite: '/game/chars/skin3.png'         },
-      { id: 'skin4',              name: 'Gold Rush',     sprite: '/game/chars/skin4.png'         },
-      { id: 'skin5',              name: 'Cyber Punk',    sprite: '/game/chars/skin5.png'         },
-      { id: 'skin6',              name: 'Ocean Rider',   sprite: '/game/chars/skin6.png'         },
-      { id: 'skin7',              name: 'Flame Chaser',  sprite: '/game/chars/skin7.png'         },
+      { id: 'skin_3',              name: 'Shadow',        sprite: '/game/chars/skin3.png'         },
+      { id: 'skin_4',              name: 'Gold Rush',     sprite: '/game/chars/skin4.png'         },
+      { id: 'skin_5',              name: 'Cyber Punk',    sprite: '/game/chars/skin5.png'         },
+      { id: 'skin_6',              name: 'Ocean Rider',   sprite: '/game/chars/skin6.png'         },
+      { id: 'skin_7',              name: 'Flame Chaser',  sprite: '/game/chars/skin7.png'         },
       { id: 'skin_founder',       name: 'Founder',       sprite: '/game/chars/founder.png'       },
-      { id: 'skin8',              name: 'Arctic',        sprite: '/game/chars/skin8.png'         },
-      { id: 'skin9',              name: 'Desert Storm',  sprite: '/game/chars/skin9.png'         },
-      { id: 'skin10',             name: 'Thunder',       sprite: '/game/chars/skin10.png'        },
-      { id: 'skin11',             name: 'Diamond Hands', sprite: '/game/chars/skin11.png'        },
+      { id: 'skin_8',              name: 'Arctic',        sprite: '/game/chars/skin8.png'         },
+      { id: 'skin_9',              name: 'Desert Storm',  sprite: '/game/chars/skin9.png'         },
+      { id: 'skin_10',             name: 'Thunder',       sprite: '/game/chars/skin10.png'        },
+      { id: 'skin_11',             name: 'Diamond Hands', sprite: '/game/chars/skin11.png'        },
       { id: 'skin_base_king',     name: 'Base King',     sprite: '/game/chars/base_king.png'     },
     ];
     const TRAIL_META = [

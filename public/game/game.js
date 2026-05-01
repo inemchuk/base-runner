@@ -266,7 +266,7 @@ const Leaderboard = (() => {
     }
     container.innerHTML = scores.map((score, i) => {
       const rankClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
-      const medal = MEDALS[i] || `${i + 1}.`;
+      const medal = MEDALS[i] || `${i + 1}`;
       return `<div class="lb-row ${rankClass}">
         <span class="lb-rank">${medal}</span>
         <span class="lb-name">You</span>
@@ -285,7 +285,7 @@ const Leaderboard = (() => {
     }
     container.innerHTML = onChain.map((entry, i) => {
       const rankClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
-      const medal = MEDALS[i] || `${i + 1}.`;
+      const medal = MEDALS[i] || `${i + 1}`;
       const avatarHtml = entry.avatar
         ? `<img class="lb-avatar" src="${entry.avatar}" onerror="this.style.background='rgba(0,82,255,0.3)';this.removeAttribute('src');" />`
         : `<span class="lb-avatar"></span>`;
@@ -308,7 +308,7 @@ const Leaderboard = (() => {
     }
     container.innerHTML = entries.map((entry, i) => {
       const rankClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
-      const medal = MEDALS[i] || `${i + 1}.`;
+      const medal = MEDALS[i] || `${i + 1}`;
       const avatarHtml = entry.avatar
         ? `<img class="lb-avatar" src="${entry.avatar}" onerror="this.style.background='rgba(0,82,255,0.3)';this.removeAttribute('src');" />`
         : `<span class="lb-avatar"></span>`;

@@ -151,132 +151,17 @@ export function useNftMint() {
     });
   }, [address, chainId, isPending, walletClient, switchChainAsync, writeContract]);
 
-  // Mint two items in one wallet_sendCalls batch (starter pack)
-  const mintStarterPack = useCallback(async () => {
-    const items = ['skin_cryptokid', 'trail_default'];
-    if (!address || !NFT_DEPLOYED) {
-      window.dispatchEvent(new CustomEvent('nft-mint-error', { detail: { error: 'contract not deployed' } }));
-      return;
-    }
-    if (isPending) return;
-
-    if (chainId !== base.id) {
-      try { await switchChainAsync({ chainId: base.id }); }
-      catch { return; }
-    }
-
-    // Fetch signatures for both items in parallel
-    let calls: { sig: `0x${string}`; tokenId: number; itemId: string }[];
-    try {
-      const results = await Promise.all(items.map(async itemId => {
-        const r = await fetch('/api/nft/sign', {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ address, itemId }),
-        });
-        if (!r.ok) throw new Error(itemId);
-        const { sig, tokenId } = await r.json();
-        return { sig, tokenId, itemId };
-      }));
-      calls = results;
-    } catch {
-      window.dispatchEvent(new CustomEvent('nft-mint-error', { detail: { error: 'sign error' } }));
-      return;
-    }
-
-    setMintingItem('skin_cryptokid');
-
-    const callDatas = calls.map(({ tokenId, sig }) =>
-      encodeFunctionData({ abi: NFT_ABI, functionName: 'claim', args: [BigInt(tokenId), sig] })
-    );
-
-    // Try batch via wallet_sendCalls (one popup, one tx)
-    if (PAYMASTER_URL && walletClient) {
-      try {
-        const callsId = await walletClient.request({
-          method: 'wallet_sendCalls' as any,
-          params: [{
-            version:  '1.0',
-            chainId:  numberToHex(base.id),
-            from:     address,
-            calls:    callDatas.map(data => ({ to: NFT_CONTRACT, data })),
-            capabilities: { paymasterService: { url: PAYMASTER_URL } },
-          }],
-        } as any) as string;
-
-        setPaymasterPath(true);
-
-        let elapsed = 0, pollFails = 0;
-        pollRef.current = setInterval(async () => {
-          elapsed += 2000;
-          try {
-            const res = await walletClient.request({
-              method: 'wallet_getCallsStatus' as any,
-              params: [callsId],
-            } as any) as { status: number | string };
-            const s = res?.status;
-            const confirmed = s === 200 || s === 'CONFIRMED' || s === 'confirmed';
-            const failed    = s === 400 || s === 'FAILED'    || s === 'failed';
-            if (confirmed || elapsed >= 60000) {
-              clearInterval(pollRef.current!); pollRef.current = null;
-              // Fire nft-minted for each item
-              items.forEach(itemId =>
-                window.dispatchEvent(new CustomEvent('nft-minted', { detail: { itemId } }))
-              );
-              setMintingItem(null); setPaymasterPath(false);
-            } else if (failed) {
-              clearInterval(pollRef.current!); pollRef.current = null;
-              window.dispatchEvent(new CustomEvent('nft-mint-error', { detail: { error: 'transaction failed' } }));
-              setMintingItem(null); setPaymasterPath(false);
-            }
-          } catch {
-            pollFails++;
-            if (pollFails >= 5 || elapsed >= 15000) {
-              clearInterval(pollRef.current!); pollRef.current = null;
-              items.forEach(itemId =>
-                window.dispatchEvent(new CustomEvent('nft-minted', { detail: { itemId } }))
-              );
-              setMintingItem(null); setPaymasterPath(false);
-            }
-          }
-        }, 2000);
-        return;
-      } catch {
-        setPaymasterPath(false);
-      }
-    }
-
-    // Fallback: mint sequentially (two separate txs)
-    setPaymasterPath(false);
-    for (const { tokenId, sig, itemId } of calls) {
-      await new Promise<void>(resolve => {
-        writeContract(
-          { address: NFT_CONTRACT, abi: NFT_ABI, functionName: 'claim', args: [BigInt(tokenId), sig] },
-          { onSuccess: () => {
-              window.dispatchEvent(new CustomEvent('nft-minted', { detail: { itemId } }));
-              resolve();
-            },
-            onError: () => resolve(),
-          }
-        );
-      });
-    }
-    setMintingItem(null);
-  }, [address, chainId, isPending, walletClient, switchChainAsync, writeContract]);
-
   // Expose to game.js
   useEffect(() => {
-    (window as any).__NFT_MINT              = mint;
-    (window as any).__NFT_MINT_STARTER_PACK = mintStarterPack;
-    (window as any).__NFT_PENDING           = isPending;
-    (window as any).__NFT_DEPLOYED          = NFT_DEPLOYED;
+    (window as any).__NFT_MINT     = mint;
+    (window as any).__NFT_PENDING  = isPending;
+    (window as any).__NFT_DEPLOYED = NFT_DEPLOYED;
     return () => {
       delete (window as any).__NFT_MINT;
-      delete (window as any).__NFT_MINT_STARTER_PACK;
       delete (window as any).__NFT_PENDING;
       delete (window as any).__NFT_DEPLOYED;
     };
-  }, [mint, mintStarterPack, isPending]);
+  }, [mint, isPending]);
 
-  return { mint, mintStarterPack, isPending };
+  return { mint, isPending };
 }

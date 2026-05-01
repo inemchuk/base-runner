@@ -5,10 +5,9 @@ import { spinCost } from '@/config/spin-contract';
 const PRIZES = [
   // Coins
   { type: 'coins',   value: 10,               weight: 25, label: '10 Coins',      icon: '🪙' },
-  { type: 'coins',   value: 25,               weight: 18, label: '25 Coins',      icon: '🪙' },
-  { type: 'coins',   value: 50,               weight: 12, label: '50 Coins',      icon: '💰' },
-  { type: 'coins',   value: 100,              weight: 6,  label: '100 Coins',     icon: '💰' },
-  { type: 'coins',   value: 200,              weight: 3,  label: '200 Coins',     icon: '🤑' },
+  { type: 'coins',   value: 25,               weight: 20, label: '25 Coins',      icon: '🪙' },
+  { type: 'coins',   value: 50,               weight: 13, label: '50 Coins',      icon: '💰' },
+  { type: 'coins',   value: 100,              weight: 7,  label: '100 Coins',     icon: '💰' },
   // Boosters
   { type: 'booster', value: 'boost_magnet',   weight: 8,  label: 'Coin Magnet',   icon: '🧲' },
   { type: 'booster', value: 'boost_double',   weight: 7,  label: 'Double Coins',  icon: '💰' },

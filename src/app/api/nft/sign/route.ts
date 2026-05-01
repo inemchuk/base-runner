@@ -25,8 +25,8 @@ export async function POST(req: NextRequest) {
 
     const addr = (address as string).toLowerCase();
 
-    // skin_cryptokid is free for everyone — no Redis check needed
-    const isFreeItem = itemId === 'skin_cryptokid';
+    // Free starter items — no ownership check needed
+    const isFreeItem = itemId === 'skin_cryptokid' || itemId === 'trail_default';
 
     if (!isFreeItem) {
       const redis = await getRedis();

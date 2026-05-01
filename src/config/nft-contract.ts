@@ -45,7 +45,8 @@ export const ITEM_TOKEN_IDS: Record<string, number> = {
   skin_9:  18,
   skin_10: 19,
   skin_11: 20,
-  // Trails (10-14, unchanged)
+  // Trails (10-14 original, 21 default)
+  trail_default: 21,
   trail_sparkle: 10,
   trail_hearts:  11,
   trail_fire:    12,

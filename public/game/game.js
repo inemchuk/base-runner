@@ -7277,7 +7277,14 @@ function _initUI() {
     // Re-render current shop tab
     if (typeof Shop !== 'undefined' && Shop._refreshNft) Shop._refreshNft();
 
-    // ── Starter Pack bonus ──────────────────────────────────────────────
+    // ── trail_default: add to owned trails + sync ───────────────────────
+    if (itemId === 'trail_default') {
+      if (typeof Shop !== 'undefined' && Shop.ownTrailPack) {
+        Shop.ownTrailPack('trail_default');
+      }
+    }
+
+    // ── Starter Pack bonus (coins + booster + hide overlay) ─────────────
     if (itemId === 'skin_cryptokid') {
       // Award 100 coins (local + Redis sync)
       const newCoins = Save.addCoins(100);
@@ -7312,10 +7319,14 @@ function _initUI() {
 
   // ── Starter Pack wiring ─────────────────────────────────────────────
   _bind('btn-starter-claim', 'click', () => {
-    if (typeof window.__NFT_MINT !== 'function') return;
+    const mintFn = window.__NFT_MINT_STARTER_PACK || window.__NFT_MINT;
+    if (typeof mintFn !== 'function') return;
     const claimBtn = document.getElementById('btn-starter-claim');
     if (claimBtn) { claimBtn.textContent = 'Claiming…'; claimBtn.disabled = true; }
-    window.__NFT_MINT('skin_cryptokid');
+    // mintStarterPack batches skin_cryptokid + trail_default in one tx
+    window.__NFT_MINT_STARTER_PACK
+      ? window.__NFT_MINT_STARTER_PACK()
+      : window.__NFT_MINT('skin_cryptokid');
   });
   _bind('btn-starter-skip', 'click', () => {
     const overlay = document.getElementById('starter-pack-overlay');

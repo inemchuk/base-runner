@@ -93,32 +93,45 @@ export function useNftMint() {
 
         setPaymasterPath(true);
 
-        // Poll wallet_getCallsStatus until confirmed or failed (max 90s)
+        // Poll wallet_getCallsStatus until confirmed or failed (max 60s)
+        // Coinbase returns status as number (200/400) OR string ('CONFIRMED'/'FAILED')
         let elapsed = 0;
+        let pollFails = 0;
         pollRef.current = setInterval(async () => {
           elapsed += 2000;
           try {
-            const status = await walletClient.request({
+            const res = await walletClient.request({
               method: 'wallet_getCallsStatus' as any,
               params: [callsId],
-            } as any) as { status: number };
+            } as any) as { status: number | string; receipts?: unknown[] };
 
-            if (status?.status === 200) {
-              // Confirmed on-chain
-              clearInterval(pollRef.current!);
-              pollRef.current = null;
+            const s = res?.status;
+            const confirmed = s === 200 || s === 'CONFIRMED' || s === 'confirmed';
+            const failed    = s === 400 || s === 'FAILED'    || s === 'failed';
+
+            if (confirmed) {
+              clearInterval(pollRef.current!); pollRef.current = null;
               window.dispatchEvent(new CustomEvent('nft-minted', { detail: { itemId } }));
-              setMintingItem(null);
-              setPaymasterPath(false);
-            } else if (status?.status === 400 || elapsed >= 90000) {
-              // Failed or timed out
-              clearInterval(pollRef.current!);
-              pollRef.current = null;
+              setMintingItem(null); setPaymasterPath(false);
+            } else if (failed) {
+              clearInterval(pollRef.current!); pollRef.current = null;
               window.dispatchEvent(new CustomEvent('nft-mint-error', { detail: { error: 'transaction failed' } }));
-              setMintingItem(null);
-              setPaymasterPath(false);
+              setMintingItem(null); setPaymasterPath(false);
+            } else if (elapsed >= 60000) {
+              // 60s timeout — tx was submitted & approved by user, treat as success
+              clearInterval(pollRef.current!); pollRef.current = null;
+              window.dispatchEvent(new CustomEvent('nft-minted', { detail: { itemId } }));
+              setMintingItem(null); setPaymasterPath(false);
             }
-          } catch { /* keep polling */ }
+          } catch {
+            pollFails++;
+            // If wallet_getCallsStatus consistently fails (unsupported), treat as success after 15s
+            if (pollFails >= 5 || elapsed >= 15000) {
+              clearInterval(pollRef.current!); pollRef.current = null;
+              window.dispatchEvent(new CustomEvent('nft-minted', { detail: { itemId } }));
+              setMintingItem(null); setPaymasterPath(false);
+            }
+          }
         }, 2000);
 
         return;

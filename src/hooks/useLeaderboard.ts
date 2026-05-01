@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { useAccount } from 'wagmi';
 
 export function useLeaderboard() {
   const { address } = useAccount();
+  const sessionTokenRef = useRef<string | null>(null);
 
   const fetchLeaderboard = useCallback(async () => {
     try {
@@ -17,15 +18,36 @@ export function useLeaderboard() {
     }
   }, []);
 
+  // Called by game.js via __BASE_SESSION_START when a new game begins
+  const fetchSessionToken = useCallback(async () => {
+    if (!address) return;
+    try {
+      const res = await fetch('/api/score/session', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ address }),
+      });
+      const data = await res.json();
+      sessionTokenRef.current = data.token ?? null;
+    } catch (err) {
+      console.error('session token fetch error:', err);
+      sessionTokenRef.current = null;
+    }
+  }, [address]);
+
   const submit = useCallback(async (score: number) => {
     if (!address) return;
     try {
       await fetch('/api/score/submit', {
-        method: 'POST',
+        method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address, score }),
+        body:    JSON.stringify({
+          address,
+          score,
+          token: sessionTokenRef.current,
+        }),
       });
-      // Refetch leaderboard after submit
+      sessionTokenRef.current = null; // consume — one token per game
       await fetchLeaderboard();
       window.dispatchEvent(new CustomEvent('base-score-submitted'));
     } catch (err) {
@@ -34,18 +56,19 @@ export function useLeaderboard() {
   }, [address, fetchLeaderboard]);
 
   useEffect(() => {
-    (window as any).__BASE_SUBMIT_SCORE = submit;
-    (window as any).__BASE_LEADERBOARD = { myBest: 0, isPending: false };
+    (window as any).__BASE_SUBMIT_SCORE  = submit;
+    (window as any).__BASE_SESSION_START = fetchSessionToken;
+    (window as any).__BASE_LEADERBOARD  = { myBest: 0, isPending: false };
 
-    // Fetch on mount
     fetchLeaderboard();
 
     return () => {
       delete (window as any).__BASE_SUBMIT_SCORE;
+      delete (window as any).__BASE_SESSION_START;
       delete (window as any).__BASE_LEADERBOARD;
       delete (window as any).__BASE_LEADERBOARD_ENTRIES;
     };
-  }, [submit, fetchLeaderboard]);
+  }, [submit, fetchSessionToken, fetchLeaderboard]);
 
-  return { submit, fetchLeaderboard };
+  return { submit, fetchLeaderboard, fetchSessionToken };
 }

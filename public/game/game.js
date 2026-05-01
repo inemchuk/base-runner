@@ -7001,9 +7001,15 @@ function _initSettingsScreen() {
   if (vibToggle) vibToggle.checked = Vibrate.isEnabled();
 }
 
+function _requestSessionToken() {
+  if (typeof window.__BASE_SESSION_START === 'function') {
+    window.__BASE_SESSION_START(); // async, non-blocking
+  }
+}
+
 function _initUI() {
   // Кнопки меню
-  _bind('btn-start', 'click', () => initGame());
+  _bind('btn-start',   'click', () => { _requestSessionToken(); initGame(); });
   _bind('btn-lb',    'click', () => UI.showLeaderboard());
   // btn-ci removed from profile — check-in is now on the main menu
   _bind('btn-shop',  'click', () => Shop.show());
@@ -7094,7 +7100,7 @@ function _initUI() {
   }
 
   // Кнопки game over
-  _bind('btn-restart', 'click', () => initGame());
+  _bind('btn-restart', 'click', () => { _requestSessionToken(); initGame(); });
   _bind('btn-go-menu', 'click', () => {
     currentState = GameState.MENU;
     UI.show('menu');

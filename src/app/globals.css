@@ -2,7 +2,11 @@
 
 
     /* ===== СБРОС И БАЗОВЫЕ СТИЛИ ===== */
-    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    * {
+      margin: 0; padding: 0; box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-touch-callout: none; /* no long-press callout on iOS */
+    }
 
     :root {
       --green:  #4CAF50;
@@ -30,7 +34,11 @@
       font-family: var(--font);
       touch-action: none;
       user-select: none;
+      overscroll-behavior: none; /* prevent pull-to-refresh on Android/iOS */
     }
+
+    /* Fast tap on all buttons — no 300ms delay */
+    button { touch-action: manipulation; }
 
     /* ===== CANVAS ===== */
     #gameCanvas {
@@ -57,16 +65,16 @@
       background: rgba(5, 8, 20, 0.75);
       backdrop-filter: blur(2px);
       justify-content: space-between;
-      padding-top: 8vh;
-      padding-bottom: 60px;
+      padding-top: max(8vh, env(safe-area-inset-top, 0px));
+      padding-bottom: max(60px, calc(40px + env(safe-area-inset-bottom, 0px)));
     }
 
     /* Settings gear button — top-right of menu */
     .settings-gear-btn {
-      position: absolute; top: 16px; right: 16px;
+      position: absolute; top: 12px; right: 12px;
       background: rgba(255,255,255,0.07);
       border: 1px solid rgba(255,255,255,0.12);
-      border-radius: 50%; width: 40px; height: 40px;
+      border-radius: 50%; width: 44px; height: 44px; /* Apple 44pt min touch target */
       font-size: 1.1rem; cursor: pointer;
       display: flex; align-items: center; justify-content: center;
       line-height: 1; padding: 0;
@@ -149,7 +157,9 @@
       flex: 1;
       overflow-y: auto;
       -webkit-overflow-scrolling: touch;
-      padding: 8vh 16px 16px;
+      overscroll-behavior: contain;   /* prevent scroll chaining to body */
+      touch-action: pan-y;            /* allow vertical scroll, block zoom */
+      padding: 8vh 16px calc(16px + env(safe-area-inset-bottom, 0px));
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -1297,7 +1307,9 @@
     .spin-nft-btn:disabled { opacity: 0.55; cursor: not-allowed; }
     .spin-nft-later {
       background: none; border: none; color: rgba(255,255,255,0.35);
-      font-size: 0.75rem; cursor: pointer; padding: 2px 0;
+      font-size: 0.75rem; cursor: pointer;
+      padding: 10px 16px; /* larger touch target */
+      min-height: 36px;
     }
     .spin-nft-later:hover { color: rgba(255,255,255,0.6); }
 

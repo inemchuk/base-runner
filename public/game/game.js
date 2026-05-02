@@ -2070,6 +2070,16 @@ const Renderer = (() => {
   let shakePeak  = 0;    // peak magnitude in screen pixels
   const SHAKE_DUR = 0.38;
 
+  // ── Squash & stretch ──────────────────────────────────────
+  let squashTimer  = 0;      // post-landing spring countdown
+  let _wasJumping  = false;  // edge-detect jump→land transition
+  const SQUASH_DUR  = 0.18;  // spring duration after landing
+  const SQUASH_PEAK = 0.14;  // 14% max deformation
+
+  // ── Jump ring ─────────────────────────────────────────────
+  let _ringState  = null;    // { x, y, timer } — null when inactive
+  const RING_DUR  = 0.30;    // ring persists this long after jump starts
+
   function triggerDeath(x, y, type) {
     deathActive    = true;
     deathTimer     = 0;
@@ -2607,6 +2617,23 @@ const Renderer = (() => {
       shakeTimer -= dt_approx;
       if (shakeTimer < 0) shakeTimer = 0;
     }
+
+    // Squash & stretch — detect landing moment and advance spring timer
+    const _isJumping = _ps.jumping;
+    if (_wasJumping && !_isJumping) squashTimer = SQUASH_DUR;   // just landed
+    if (!_wasJumping && _isJumping) {                            // just launched → spawn ring
+      _ringState = { x: _ps.jumpFrom.x, y: _ps.jumpFrom.y, timer: RING_DUR };
+    }
+    _wasJumping = _isJumping;
+    if (squashTimer > 0) {
+      squashTimer -= dt_approx;
+      if (squashTimer < 0) squashTimer = 0;
+    }
+    // Advance jump ring timer
+    if (_ringState) {
+      _ringState.timer -= dt_approx;
+      if (_ringState.timer <= 0) _ringState = null;
+    }
     // Quadratic decay: maximum impulse at impact, fades quickly
     let shakeX = 0, shakeY = 0;
     if (shakeTimer > 0) {
@@ -2813,12 +2840,31 @@ const Renderer = (() => {
         ctx.fill();
         ctx.save();
         ctx.translate(cx, cy + bob);
+
+        // Glow — radial gradient beneath coin sprite.
+        // Alpha scales with scaleX (face-factor): no glow when coin is edge-on.
+        // Slow breathing pulse (~2.5s period) offset per column so coins don't sync.
+        const glowPulse = 0.17 + 0.11 * Math.sin(t * 1.5 + coin.col * 2.1);
+        const glowAlpha = glowPulse * scaleX;   // scaleX: 1=face-on, 0=edge-on
+        if (glowAlpha > 0.015) {
+          const gR = size * 0.70;
+          const grd = ctx.createRadialGradient(0, 0, size * 0.08, 0, 0, gR);
+          grd.addColorStop(0,   `rgba(80,150,255,${glowAlpha})`);      // bright blue-white core
+          grd.addColorStop(0.45,`rgba(0, 82,255,${glowAlpha * 0.5})`); // pure Base blue mid
+          grd.addColorStop(1,   'rgba(0,40,220,0)');                    // transparent edge
+          ctx.fillStyle = grd;
+          ctx.beginPath();
+          // Slightly squished ellipse — matches isometric perspective of the shadow below
+          ctx.ellipse(0, 0, gR, gR * 0.72, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
         if (coinImg) {
           // Спрайт пользователя — spinning эффект через scaleX
           ctx.drawImage(coinImg, -drawW / 2, -size / 2, drawW, size);
         } else {
           // Fallback: нарисованная монета
-          ctx.fillStyle = '#FFD700';
+          ctx.fillStyle = '#0052FF';
           ctx.beginPath();
           ctx.ellipse(0, 0, drawW / 2, size / 2, 0, 0, Math.PI * 2);
           ctx.fill();
@@ -4351,6 +4397,22 @@ const Renderer = (() => {
     if (typeof currentState !== 'undefined' && currentState === GameState.MENU) return;
     if (deathActive && deathTimer > 0.05) return;
 
+    // ── Jump ring — expanding shadow ripple at launch origin ──
+    if (_ringState) {
+      const progress = 1 - _ringState.timer / RING_DUR;   // 0→1 as ring expands
+      const alpha    = (1 - progress) * 0.30;             // fades out linearly
+      const rW       = CELL * (0.28 + progress * 0.55);   // expands from shadow width
+      const rH       = rW * 0.32;                         // isometric aspect ratio (= shadow ratio)
+      const lw       = Math.max(0.5, 2.5 * (1 - progress)); // stroke thins as it grows
+      ctx.save();
+      ctx.strokeStyle = `rgba(0,0,0,${alpha})`;
+      ctx.lineWidth   = lw;
+      ctx.beginPath();
+      ctx.ellipse(_ringState.x, _ringState.y + CELL * 0.2, rW, rH, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
     const ps   = Player.getState();
     const x    = ps.visualX;
     const y    = ps.visualY;
@@ -4376,13 +4438,33 @@ const Renderer = (() => {
       ctx.ellipse(x, y + CELL * 0.2, CELL * 0.28 * shadowScale, CELL * 0.09 * shadowScale, 0, 0, Math.PI * 2);
       ctx.fill();
 
+      // ── Squash & stretch ──────────────────────────────────
+      let sqX = 1, sqY = 1;
+      if (ps.jumping) {
+        const jt = Math.min(ps.jumpTimer / 0.16, 1);
+        if (jt < 0.25) {
+          // Launch: stretch tall, narrow — character springs off ground
+          const a = SQUASH_PEAK * (1 - jt / 0.25);
+          sqY = 1 + a;  sqX = 1 - a * 0.45;
+        } else if (jt > 0.72) {
+          // Pre-land: squash wide, short — anticipates impact
+          const a = SQUASH_PEAK * ((jt - 0.72) / 0.28);
+          sqY = 1 - a;  sqX = 1 + a * 0.5;
+        }
+      } else if (squashTimer > 0) {
+        // Post-landing damped spring: squash → overshoot stretch → settle
+        const phase = 1 - squashTimer / SQUASH_DUR;           // 0→1
+        const a = SQUASH_PEAK * Math.exp(-phase * 5) * Math.cos(phase * Math.PI * 2.5);
+        sqY = 1 - a;  sqX = 1 + a * 0.5;
+      }
+
       // Мигание при инвизе (щит активен)
       const invincible = Player.isInvincible();
       const blinkAlpha = invincible ? (Math.sin(Date.now() / 80) > 0 ? 1.0 : 0.15) : 1.0;
       ctx.save();
       ctx.globalAlpha = blinkAlpha;
       ctx.translate(x, baseY + bobY);
-      ctx.scale(flip, 1);
+      ctx.scale(flip * sqX, sqY);
       ctx.drawImage(playerImg, -size / 2, -size * 0.72, size, size);
       ctx.restore();
       ctx.globalAlpha = 1;
@@ -4390,6 +4472,19 @@ const Renderer = (() => {
     }
 
     // ── Fallback: procedural render ───────────────────────
+
+    // Squash & stretch (reuse sqX/sqY from sprite block above if already set,
+    // otherwise compute here for the rare case sprite isn't loaded yet)
+    let sqXp = 1, sqYp = 1;
+    if (ps.jumping) {
+      const jt = Math.min(ps.jumpTimer / 0.16, 1);
+      if (jt < 0.25)      { const a = SQUASH_PEAK*(1-jt/0.25);         sqYp=1+a; sqXp=1-a*0.45; }
+      else if (jt > 0.72) { const a = SQUASH_PEAK*((jt-0.72)/0.28);   sqYp=1-a; sqXp=1+a*0.5;  }
+    } else if (squashTimer > 0) {
+      const phase = 1 - squashTimer/SQUASH_DUR;
+      const a = SQUASH_PEAK * Math.exp(-phase*5) * Math.cos(phase*Math.PI*2.5);
+      sqYp=1-a; sqXp=1+a*0.5;
+    }
 
     // ── Walk cycle parameters ──────────────────────────────
     // walkPhase drives all limb swings (0→2π per step cycle)
@@ -4409,6 +4504,13 @@ const Renderer = (() => {
     ctx.beginPath();
     ctx.ellipse(x, y + CELL * 0.3, CELL * 0.28 * shadowScale, CELL * 0.09 * shadowScale, 0, 0, Math.PI * 2);
     ctx.fill();
+
+    // Apply squash & stretch — scale around foot anchor, all coords below unchanged
+    const _sqAnchorY = y + CELL * 0.2;
+    ctx.save();
+    ctx.translate(x, _sqAnchorY);
+    ctx.scale(sqXp, sqYp);
+    ctx.translate(-x, -_sqAnchorY);
 
     // ── Leg positions with swing ──────────────────────────
     const legW   = CELL * 0.12;
@@ -4538,7 +4640,8 @@ const Renderer = (() => {
     ctx.arc(-CELL * 0.01 * flip, eyeY2 + CELL * 0.1, CELL * 0.055, 0.1, Math.PI - 0.1);
     ctx.stroke();
 
-    ctx.restore();
+    ctx.restore();         // head tilt restore
+    ctx.restore();         // squash & stretch restore
   }
 
   function roundRect(ctx, x, y, w, h, r) {

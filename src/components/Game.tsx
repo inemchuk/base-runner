@@ -325,14 +325,17 @@ export default function Game() {
           <div className="spin-pointer" />
         </div>
 
-        {/* Prize reveal */}
-        <div id="spin-result" className="spin-result hidden">
-          <span id="spin-result-icon" style={{fontSize:'2.2rem',display:'block',marginBottom:'4px'}}>🎁</span>
-          <span id="spin-result-label" style={{color:'#fff',fontWeight:'bold',fontSize:'clamp(1rem,4.5vw,1.3rem)',letterSpacing:'1px'}}>-</span>
+        {/* Unified prize card — result + optional NFT claim */}
+        <div id="spin-prize-card" className="spin-prize-card hidden">
+          <div id="spin-prize-icon" className="spin-prize-icon"></div>
+          <div id="spin-prize-label" className="spin-prize-label"></div>
+          <div id="spin-nft-section" className="spin-nft-section hidden">
+            <div className="spin-nft-divider" />
+            <div className="spin-nft-sub">Claim as NFT on Base</div>
+            <button className="spin-nft-btn" id="btn-spin-nft">Claim</button>
+            <button className="spin-nft-later" id="btn-spin-nft-later">Later →</button>
+          </div>
         </div>
-
-        {/* NFT mint card — shown after skin/trail prize */}
-        <div id="spin-nft-card" className="spin-nft-card hidden" />
 
         {/* Countdown when already spun */}
         <div id="spin-timer" className="spin-timer hidden" />

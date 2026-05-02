@@ -5698,6 +5698,7 @@ const DailySpin = (() => {
 
   let _timerInterval  = null;
   let _safetyTimeout  = null;
+  let _mintItemId     = null;   // item being offered for NFT claim
 
   // ── Canvas init / resize ─────────────────────────────────────────────────
   function _initCanvas() {
@@ -6073,84 +6074,53 @@ const DailySpin = (() => {
     if (_safetyTimeout) { clearTimeout(_safetyTimeout); _safetyTimeout = null; }
     _applyPrize(_prize);
 
-    const resultEl = document.getElementById('spin-result');
-    const iconEl   = document.getElementById('spin-result-icon');
-    const labelEl  = document.getElementById('spin-result-label');
-    if (resultEl && iconEl && labelEl && _prize) {
-      // For skin prizes show the shirt image; for others use emoji
+    const cardEl  = document.getElementById('spin-prize-card');
+    const iconEl  = document.getElementById('spin-prize-icon');
+    const labelEl = document.getElementById('spin-prize-label');
+
+    if (cardEl && iconEl && labelEl && _prize) {
+      const IMG = (src, size) =>
+        `<img src="${src}" style="width:${size};height:${size};object-fit:contain;image-rendering:pixelated;">`;
+
       if (_prize.type === 'skin') {
-        const skinSrc = _prize._resolvedSkinSprite || '/game/shirt.png';
-        iconEl.innerHTML = `<img src="${skinSrc}" style="width:2.2rem;height:2.2rem;object-fit:contain;display:block;margin:0 auto 4px;">`;
+        const src = _prize._resolvedSkinSprite || '/game/shirt.png';
+        iconEl.innerHTML = IMG(src, '64px');
         labelEl.textContent = _prize._resolvedSkinName ? `${_prize._resolvedSkinName} skin!` : 'New skin!';
       } else if (_prize.type === 'trail') {
-        const _trailSprites = { trail_sparkle: '/nft/images/trail_sparkle.png', trail_hearts: '/nft/images/trail_hearts.png', trail_fire: '/nft/images/trail_fire.png', trail_coins: '/nft/images/trail_coins.png', trail_rainbow: '/nft/images/trail_rainbow.png' };
-        const _trailSrc = _prize._resolvedItemId && _trailSprites[_prize._resolvedItemId] ? _trailSprites[_prize._resolvedItemId] : '/game/trails.png';
-        iconEl.innerHTML = `<img src="${_trailSrc}" style="width:2.2rem;height:2.2rem;object-fit:contain;display:block;margin:0 auto 4px;">`;
+        const TRAIL_SP = { trail_sparkle: '/nft/images/trail_sparkle.png', trail_hearts: '/nft/images/trail_hearts.png', trail_fire: '/nft/images/trail_fire.png', trail_coins: '/nft/images/trail_coins.png', trail_rainbow: '/nft/images/trail_rainbow.png' };
+        const src = _prize._resolvedItemId && TRAIL_SP[_prize._resolvedItemId] ? TRAIL_SP[_prize._resolvedItemId] : '/game/trails.png';
+        iconEl.innerHTML = IMG(src, '64px');
         labelEl.textContent = _prize._resolvedTrailName ? `${_prize._resolvedTrailName} trail!` : 'New trail!';
       } else if (_prize.type === 'booster') {
-        const _boosterSprites = { boost_magnet: '/game/boosters/coin_magnet.png', boost_double: '/game/boosters/double_coins.png', boost_shield: '/game/boosters/second_chance.png' };
-        const _boosterSrc = _prize._resolvedItemId && _boosterSprites[_prize._resolvedItemId] ? _boosterSprites[_prize._resolvedItemId] : '/game/boosters.png';
-        iconEl.innerHTML = `<img src="${_boosterSrc}" style="width:2.2rem;height:2.2rem;object-fit:contain;display:block;margin:0 auto 4px;">`;
+        const BOOST_SP = { boost_magnet: '/game/boosters/coin_magnet.png', boost_double: '/game/boosters/double_coins.png', boost_shield: '/game/boosters/second_chance.png' };
+        const src = _prize._resolvedItemId && BOOST_SP[_prize._resolvedItemId] ? BOOST_SP[_prize._resolvedItemId] : '/game/boosters.png';
+        iconEl.innerHTML = IMG(src, '56px');
         labelEl.textContent = _prize._resolvedBoosterName ? `${_prize._resolvedBoosterName}!` : 'New booster!';
       } else if (_prize.type === 'coins') {
-        iconEl.innerHTML = `<img src="/game/coin.png" style="width:2.4rem;height:2.4rem;object-fit:contain;display:block;margin:0 auto 4px;">`;
+        iconEl.innerHTML = IMG('/game/coin.png', '56px');
         labelEl.textContent = _prize.label || `${_prize.value} Coins`;
       } else {
         iconEl.textContent = _prize.icon || '🎁';
         labelEl.textContent = _prize.label || 'Prize!';
       }
-      resultEl.classList.remove('hidden');
+      cardEl.classList.remove('hidden');
     }
 
-    // ── NFT mint card for skin/trail prizes ──
-    const nftCard = document.getElementById('spin-nft-card');
-    if (nftCard) {
-      nftCard.classList.add('hidden');
+    // ── NFT claim section (inside the card) ──────────────────────────────────
+    const nftSection = document.getElementById('spin-nft-section');
+    const mintBtn    = document.getElementById('btn-spin-nft');
+    _mintItemId = null;
+    if (nftSection) {
+      nftSection.classList.add('hidden');
+      if (mintBtn) { mintBtn.textContent = 'Claim'; mintBtn.disabled = false; }
+      const laterBtn = document.getElementById('btn-spin-nft-later');
+      if (laterBtn) laterBtn.style.display = '';
+
       if (window.__NFT_DEPLOYED && _prize && (_prize.type === 'skin' || _prize.type === 'trail')) {
         const itemId = _prize._resolvedItemId;
         if (itemId && !_isNftClaimed(itemId)) {
-          const SKIN_SPRITES = {
-            skin_cryptokid:     '/game/chars/cryptokid.png',
-            skin_street_runner: '/game/chars/street_runner.png',
-            skin_1:             '/game/chars/skin1.png',
-            skin_2:             '/game/chars/skin2.png',
-            skin_default:       '/game/player.png',
-            skin_3:             '/game/chars/skin3.png',
-            skin_4:             '/game/chars/skin4.png',
-            skin_5:             '/game/chars/skin5.png',
-            skin_6:             '/game/chars/skin6.png',
-            skin_7:             '/game/chars/skin7.png',
-            skin_founder:       '/game/chars/founder.png',
-            skin_8:             '/game/chars/skin8.png',
-            skin_9:             '/game/chars/skin9.png',
-            skin_10:            '/game/chars/skin10.png',
-            skin_11:            '/game/chars/skin11.png',
-            skin_base_king:     '/game/chars/base_king.png',
-          };
-          const TRAIL_SPRITES = { trail_sparkle: '/nft/images/trail_sparkle.png', trail_hearts: '/nft/images/trail_hearts.png', trail_fire: '/nft/images/trail_fire.png', trail_coins: '/nft/images/trail_coins.png', trail_rainbow: '/nft/images/trail_rainbow.png' };
-          const previewHtml = (_prize.type === 'skin' && SKIN_SPRITES[itemId])
-            ? `<img src="${SKIN_SPRITES[itemId]}" class="spin-nft-sprite" alt="${itemId}">`
-            : (_prize.type === 'trail' && TRAIL_SPRITES[itemId])
-              ? `<img src="${TRAIL_SPRITES[itemId]}" class="spin-nft-sprite" alt="${itemId}">`
-              : `<span class="spin-nft-emoji">🎁</span>`;
-          nftCard.innerHTML = `
-            ${previewHtml}
-            <div class="spin-nft-label">Claim as NFT on Base</div>
-            <button class="spin-nft-btn" id="btn-spin-nft" data-id="${itemId}">Claim</button>
-            <button class="spin-nft-later" id="btn-spin-nft-later">Later →</button>`;
-          nftCard.classList.remove('hidden');
-
-          const mintBtn = document.getElementById('btn-spin-nft');
-          const laterBtn = document.getElementById('btn-spin-nft-later');
-          if (mintBtn) mintBtn.addEventListener('click', () => {
-            const mintFn = window.__NFT_MINT;
-            if (!mintFn || window.__NFT_PENDING) return;
-            mintBtn.textContent = '⏳ Claiming…';
-            mintBtn.disabled = true;
-            if (laterBtn) laterBtn.style.display = 'none';
-            mintFn(itemId);
-          });
-          if (laterBtn) laterBtn.addEventListener('click', () => nftCard.classList.add('hidden'));
+          _mintItemId = itemId;
+          nftSection.classList.remove('hidden');
         }
       }
     }
@@ -6175,10 +6145,9 @@ const DailySpin = (() => {
 
     const doBtn = document.getElementById('btn-do-spin');
     if (doBtn) { doBtn.disabled = true; doBtn.textContent = '⏳ Spinning…'; }
-    const resultEl = document.getElementById('spin-result');
-    if (resultEl) resultEl.classList.add('hidden');
-    const nftCard = document.getElementById('spin-nft-card');
-    if (nftCard) nftCard.classList.add('hidden');
+    const cardEl = document.getElementById('spin-prize-card');
+    if (cardEl) cardEl.classList.add('hidden');
+    _mintItemId = null;
 
     spinFn();
 
@@ -6285,9 +6254,9 @@ const DailySpin = (() => {
     const info     = window.__SPIN || {};
     const avail    = info.isAvailable !== false;
     const timerEl  = document.getElementById('spin-timer');
-    const resultEl = document.getElementById('spin-result');
+    const cardEl   = document.getElementById('spin-prize-card');
 
-    if (resultEl) resultEl.classList.toggle('hidden', _animPhase !== 'done');
+    if (cardEl) cardEl.classList.toggle('hidden', _animPhase !== 'done');
 
     if (!avail) {
       _startCountdown();
@@ -6305,18 +6274,37 @@ const DailySpin = (() => {
     _drawWheel();
     _updateDoBtn();
     // Flash "not enough coins" on the result area briefly
-    const resultEl = document.getElementById('spin-result');
-    const iconEl   = document.getElementById('spin-result-icon');
-    const labelEl  = document.getElementById('spin-result-label');
-    if (resultEl && iconEl && labelEl) {
+    const cardEl  = document.getElementById('spin-prize-card');
+    const iconEl  = document.getElementById('spin-prize-icon');
+    const labelEl = document.getElementById('spin-prize-label');
+    if (cardEl && iconEl && labelEl) {
       iconEl.textContent  = '😔';
       labelEl.textContent = 'Not enough coins';
-      resultEl.classList.remove('hidden');
-      setTimeout(() => resultEl.classList.add('hidden'), 2500);
+      // Hide NFT section if visible
+      const nftSection = document.getElementById('spin-nft-section');
+      if (nftSection) nftSection.classList.add('hidden');
+      cardEl.classList.remove('hidden');
+      setTimeout(() => cardEl.classList.add('hidden'), 2500);
     }
   }
 
-  return { show, doSpin, onPrize, onInsufficient, updateBanner };
+  // ── NFT button handlers (called from static _initUI bindings) ────────────
+  function onNftClaim() {
+    const mintFn = window.__NFT_MINT;
+    if (!mintFn || window.__NFT_PENDING || !_mintItemId) return;
+    const mintBtn  = document.getElementById('btn-spin-nft');
+    const laterBtn = document.getElementById('btn-spin-nft-later');
+    if (mintBtn)  { mintBtn.textContent = '⏳ Claiming…'; mintBtn.disabled = true; }
+    if (laterBtn) laterBtn.style.display = 'none';
+    mintFn(_mintItemId);
+  }
+
+  function onNftLater() {
+    const nftSection = document.getElementById('spin-nft-section');
+    if (nftSection) nftSection.classList.add('hidden');
+  }
+
+  return { show, doSpin, onPrize, onInsufficient, updateBanner, onNftClaim, onNftLater };
 })();
 
 
@@ -7302,8 +7290,10 @@ function _initUI() {
   // Daily Spin
   _bind('btn-ci-banner', 'click', () => UI.showCheckIn());
   _bind('btn-spin',      'click', () => DailySpin.show());
-  _bind('btn-do-spin',   'click', () => DailySpin.doSpin());
-  _bind('btn-spin-back', 'click', () => UI.show('menu'));
+  _bind('btn-do-spin',       'click', () => DailySpin.doSpin());
+  _bind('btn-spin-back',     'click', () => UI.show('menu'));
+  _bind('btn-spin-nft',      'click', () => DailySpin.onNftClaim());
+  _bind('btn-spin-nft-later','click', () => DailySpin.onNftLater());
   window.addEventListener('spin-prize',        e => DailySpin.onPrize(e.detail));
   window.addEventListener('spin-insufficient', () => {
     // Abort animation if running, show "not enough coins"

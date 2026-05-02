@@ -6023,8 +6023,47 @@ const DailySpin = (() => {
         }
         Shop.own(skinId);
         // Update prize label shown in result box
-        const SKIN_NAMES = { skin_street_runner: 'Street Runner', skin_default: 'Builder', skin_founder: 'Founder', skin_base_king: 'Base King' };
-        if (_prize) { _prize._resolvedSkinName = SKIN_NAMES[skinId] || skinId; _prize._resolvedItemId = skinId; }
+        const SKIN_NAMES = {
+          skin_cryptokid:     'Crypto Kid',
+          skin_street_runner: 'Street Runner',
+          skin_1:             'Neon Runner',
+          skin_2:             'Pixel Dude',
+          skin_default:       'Builder',
+          skin_3:             'Shadow',
+          skin_4:             'Gold Rush',
+          skin_5:             'Cyber Punk',
+          skin_6:             'Ocean Rider',
+          skin_7:             'Flame Chaser',
+          skin_founder:       'Founder',
+          skin_8:             'Arctic',
+          skin_9:             'Desert Storm',
+          skin_10:            'Thunder',
+          skin_11:            'Diamond Hands',
+          skin_base_king:     'Base King',
+        };
+        const SKIN_SPRITES = {
+          skin_cryptokid:     '/game/chars/cryptokid.png',
+          skin_street_runner: '/game/chars/street_runner.png',
+          skin_1:             '/game/chars/skin1.png',
+          skin_2:             '/game/chars/skin2.png',
+          skin_default:       '/game/player.png',
+          skin_3:             '/game/chars/skin3.png',
+          skin_4:             '/game/chars/skin4.png',
+          skin_5:             '/game/chars/skin5.png',
+          skin_6:             '/game/chars/skin6.png',
+          skin_7:             '/game/chars/skin7.png',
+          skin_founder:       '/game/chars/founder.png',
+          skin_8:             '/game/chars/skin8.png',
+          skin_9:             '/game/chars/skin9.png',
+          skin_10:            '/game/chars/skin10.png',
+          skin_11:            '/game/chars/skin11.png',
+          skin_base_king:     '/game/chars/base_king.png',
+        };
+        if (_prize) {
+          _prize._resolvedSkinName   = SKIN_NAMES[skinId]   || skinId;
+          _prize._resolvedItemId     = skinId;
+          _prize._resolvedSkinSprite = SKIN_SPRITES[skinId] || null;
+        }
       }
     }
   }
@@ -6039,8 +6078,9 @@ const DailySpin = (() => {
     const labelEl  = document.getElementById('spin-result-label');
     if (resultEl && iconEl && labelEl && _prize) {
       // For skin prizes show the shirt image; for others use emoji
-      if (_prize.type === 'skin' && _shirtImg && _shirtImg.complete && _shirtImg.naturalWidth) {
-        iconEl.innerHTML = `<img src="/game/shirt.png" style="width:2.2rem;height:2.2rem;object-fit:contain;display:block;margin:0 auto 4px;">`;
+      if (_prize.type === 'skin') {
+        const skinSrc = _prize._resolvedSkinSprite || '/game/shirt.png';
+        iconEl.innerHTML = `<img src="${skinSrc}" style="width:2.2rem;height:2.2rem;object-fit:contain;display:block;margin:0 auto 4px;">`;
         labelEl.textContent = _prize._resolvedSkinName ? `${_prize._resolvedSkinName} skin!` : 'New skin!';
       } else if (_prize.type === 'trail') {
         const _trailSprites = { trail_sparkle: '/nft/images/trail_sparkle.png', trail_hearts: '/nft/images/trail_hearts.png', trail_fire: '/nft/images/trail_fire.png', trail_coins: '/nft/images/trail_coins.png', trail_rainbow: '/nft/images/trail_rainbow.png' };
@@ -6070,10 +6110,22 @@ const DailySpin = (() => {
         const itemId = _prize._resolvedItemId;
         if (itemId && !_isNftClaimed(itemId)) {
           const SKIN_SPRITES = {
+            skin_cryptokid:     '/game/chars/cryptokid.png',
             skin_street_runner: '/game/chars/street_runner.png',
-            skin_default:        '/game/chars/default.png',
-            skin_founder:        '/game/chars/founder.png',
-            skin_base_king:      '/game/chars/base_king.png',
+            skin_1:             '/game/chars/skin1.png',
+            skin_2:             '/game/chars/skin2.png',
+            skin_default:       '/game/player.png',
+            skin_3:             '/game/chars/skin3.png',
+            skin_4:             '/game/chars/skin4.png',
+            skin_5:             '/game/chars/skin5.png',
+            skin_6:             '/game/chars/skin6.png',
+            skin_7:             '/game/chars/skin7.png',
+            skin_founder:       '/game/chars/founder.png',
+            skin_8:             '/game/chars/skin8.png',
+            skin_9:             '/game/chars/skin9.png',
+            skin_10:            '/game/chars/skin10.png',
+            skin_11:            '/game/chars/skin11.png',
+            skin_base_king:     '/game/chars/base_king.png',
           };
           const TRAIL_SPRITES = { trail_sparkle: '/nft/images/trail_sparkle.png', trail_hearts: '/nft/images/trail_hearts.png', trail_fire: '/nft/images/trail_fire.png', trail_coins: '/nft/images/trail_coins.png', trail_rainbow: '/nft/images/trail_rainbow.png' };
           const previewHtml = (_prize.type === 'skin' && SKIN_SPRITES[itemId])

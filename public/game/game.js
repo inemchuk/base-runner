@@ -1613,7 +1613,8 @@ const Player = (() => {
     state.col = newCol;
 
     // --- Обновляем рекорд и счёт ---
-    if (state.row > state.maxRow) {
+    const _isNewRow = state.row > state.maxRow;
+    if (_isNewRow) {
       state.maxRow = state.row;
       state.score  = state.row - 1;
     }
@@ -1624,6 +1625,11 @@ const Player = (() => {
     const coinValue   = (typeof Shop !== 'undefined' && Shop.hasBoosted('boost_double')) ? 2 : 1;
     const playerX = state.col * CELL + CELL / 2;
     const playerY = World.rowToY(state.row) + CELL / 2;
+
+    // --- Score "+1" popup on new row ---
+    if (_isNewRow && typeof Renderer !== 'undefined') {
+      Renderer.addScoreEffect(playerX, playerY);
+    }
     for (let dc = -magnetRange; dc <= magnetRange; dc++) {
       const checkCol = state.col + dc;
       if (checkCol < 0 || checkCol >= COLS) continue;
@@ -2032,8 +2038,10 @@ const Renderer = (() => {
   }
 
   // ── Coin pickup effects ──────────────────────────────────
-  const coinEffects = [];   // { x, y, age }
-  const COIN_EFFECT_DUR = 0.7;
+  const coinEffects  = [];   // { x, y, age }
+  const COIN_EFFECT_DUR  = 0.7;
+  const scoreEffects = [];   // { x, y, age } — row-advance "+1"
+  const SCORE_EFFECT_DUR = 0.55;
 
   // ── Magnet attract animations ───────────────────────────
   const magnetCoins = [];   // { fromX, fromY, toX, toY, age, col, rowIdx }
@@ -2702,6 +2710,7 @@ const Renderer = (() => {
     drawTrails();
     drawPlayer();
     drawCoinEffects(dt_approx);
+    drawScoreEffects(dt_approx);
     // Draw death particles in world space (before restore)
     if (deathActive) {
       drawDeathAnimation(dt_approx);
@@ -4330,6 +4339,10 @@ const Renderer = (() => {
     coinEffects.push({ x, y, age: 0 });
   }
 
+  function addScoreEffect(x, y) {
+    scoreEffects.push({ x, y, age: 0 });
+  }
+
   function addMagnetCoin(fromX, fromY, toX, toY, col, rowIdx) {
     magnetCoins.push({ fromX, fromY, toX, toY, age: 0, col, rowIdx });
   }
@@ -4389,6 +4402,31 @@ const Renderer = (() => {
       ctx.textBaseline = 'middle';
       ctx.strokeText('+1', e.x, e.y - rise);
       ctx.fillText  ('+1', e.x, e.y - rise);
+      ctx.restore();
+    }
+  }
+
+  function drawScoreEffects(dt) {
+    for (let i = scoreEffects.length - 1; i >= 0; i--) {
+      const e = scoreEffects[i];
+      e.age += dt;
+      if (e.age >= SCORE_EFFECT_DUR) { scoreEffects.splice(i, 1); continue; }
+      const t     = e.age / SCORE_EFFECT_DUR;
+      // Ease-out rise: fast start, slow finish
+      const rise  = CELL * 1.3 * (1 - Math.pow(1 - t, 2));
+      // Fade: stays opaque until halfway, then fades
+      const alpha = t < 0.5 ? 1 : 1 - (t - 0.5) * 2;
+      ctx.save();
+      ctx.globalAlpha  = alpha;
+      ctx.font         = `bold ${Math.round(CELL * 0.38)}px Arial`;
+      ctx.textAlign    = 'center';
+      ctx.textBaseline = 'middle';
+      const py = e.y - rise - CELL * 0.5;   // starts above player head
+      ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+      ctx.lineWidth   = 3;
+      ctx.strokeText('+1', e.x, py);
+      ctx.fillStyle   = '#FFFFFF';
+      ctx.fillText  ('+1', e.x, py);
       ctx.restore();
     }
   }
@@ -4664,7 +4702,7 @@ const Renderer = (() => {
   function _dbgWeather(state) { weatherState = state; weatherRatio = 0; if (state===3) { rainInitDone=false; initRain(STORM_RAIN_COUNT); } else if (state===1) { rainInitDone=false; initRain(RAIN_COUNT); } }
   let _dbgNightForce = null;
   function _dbgNight(on) { _dbgNightForce = on; nightTarget = on ? 1 : 0; _nightOn = on; }
-  return { init, resize, updateCamera, draw, setScore, setWeather, triggerDeath, triggerShake, isDying, deathDone, stopDeath, resetWeather, addTrail, addCoinEffect, addMagnetCoin, reloadPlayerSprite, _dbgWeather, _dbgNight };
+  return { init, resize, updateCamera, draw, setScore, setWeather, triggerDeath, triggerShake, isDying, deathDone, stopDeath, resetWeather, addTrail, addCoinEffect, addScoreEffect, addMagnetCoin, reloadPlayerSprite, _dbgWeather, _dbgNight };
 
 })();
 

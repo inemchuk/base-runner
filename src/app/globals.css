@@ -251,25 +251,33 @@
       background: linear-gradient(135deg, #0052FF 0%, #7B2FFF 60%, #B800FF 100%);
       color: #fff;
       border: 1.5px solid rgba(180,120,255,0.5);
-      box-shadow:
-        0 5px 0 rgba(0,20,120,0.7),
-        0 0 18px rgba(100,60,255,0.55),
-        0 0 40px rgba(80,0,255,0.25);
-      animation: spinBtnPulse 2.2s ease-in-out infinite;
+      box-shadow: 0 5px 0 rgba(0,20,120,0.7); /* static bottom shadow only */
+      position: relative;
+      transform: translateZ(0); /* own GPU layer — no flicker from canvas behind */
+      will-change: transform;
+    }
+    #btn-do-ci::after {
+      content: '';
+      position: absolute; inset: 0;
+      border-radius: inherit;
+      box-shadow: 0 0 22px rgba(120,60,255,0.70), 0 0 50px rgba(100,0,255,0.35);
+      opacity: 0.55;
+      animation: glowPulse 2.2s ease-in-out infinite;
+      pointer-events: none;
     }
     #btn-do-ci:active {
-      transform: scale(0.95);
+      transform: scale(0.95) translateZ(0);
       box-shadow: none;
-      animation: none;
     }
+    #btn-do-ci:active::after  { opacity: 0; animation: none; }
     #btn-do-ci:disabled {
       background: rgba(60,60,100,0.5);
       border-color: rgba(255,255,255,0.1);
       box-shadow: none;
-      animation: none;
       cursor: default;
       opacity: 0.5;
     }
+    #btn-do-ci:disabled::after { opacity: 0; animation: none; }
     .btn-back   { background: rgba(255,255,255,0.07); color: #aaa; box-shadow: 0 5px 0 rgba(255,255,255,0.09); border: 1.5px solid rgba(255,255,255,0.1); margin-top: 20px; }
     .btn-restart      { background: var(--danger); color: #fff; box-shadow: 0 5px 0 #7f0000; }
     .btn-submit-score { background: linear-gradient(135deg,#0050FF,#0080FF); color:#fff; box-shadow: 0 5px 0 #003399; }
@@ -1208,20 +1216,26 @@
       border: 1.5px solid rgba(100,80,255,0.45);
       border-radius: 16px;
       cursor: pointer;
-      backdrop-filter: blur(8px);
+      /* backdrop-filter removed — GPU-expensive on Android */
       text-align: left;
+      position: relative;
+      transform: translateZ(0); /* own GPU layer */
       transition: transform 0.12s, filter 0.12s;
     }
-    .spin-banner:active { transform: scale(0.97); filter: brightness(1.1); }
+    .spin-banner:active { transform: scale(0.97) translateZ(0); filter: brightness(1.1); }
     .spin-banner.hidden { display: none; }
     .spin-banner.ci-banner-available {
       border-color: rgba(76,175,80,0.6);
       background: linear-gradient(135deg, rgba(0,80,40,0.85) 0%, rgba(20,120,60,0.75) 100%);
-      animation: ciBannerPulse 2.2s ease-in-out infinite;
     }
-    @keyframes ciBannerPulse {
-      0%,100% { box-shadow: 0 0 10px rgba(76,175,80,0.3); }
-      50%      { box-shadow: 0 0 22px rgba(76,175,80,0.6); }
+    .spin-banner.ci-banner-available::after {
+      content: '';
+      position: absolute; inset: 0;
+      border-radius: inherit;
+      box-shadow: 0 0 10px rgba(76,175,80,0.45), 0 0 28px rgba(76,175,80,0.25);
+      opacity: 0.55;
+      animation: glowPulse 2.2s ease-in-out infinite;
+      pointer-events: none;
     }
     .spin-banner-icon { font-size: 1.8rem; flex-shrink: 0; }
     .spin-banner-text { flex: 1; display: flex; flex-direction: column; gap: 2px; }
@@ -1255,6 +1269,12 @@
     @keyframes spinResultPop {
       from { transform: scale(0.7); opacity: 0; }
       to   { transform: scale(1);   opacity: 1; }
+    }
+
+    /* Shared GPU-composited glow pulse — animates opacity only, no box-shadow repaints */
+    @keyframes glowPulse {
+      0%, 100% { opacity: 0.55; }
+      50%       { opacity: 1.0; }
     }
 
     /* ── Unified Spin Prize Card (result + NFT claim) ── */
@@ -1343,39 +1363,33 @@
     #btn-do-spin {
       background: linear-gradient(135deg, #0052FF 0%, #7B2FFF 60%, #B800FF 100%);
       border: 1.5px solid rgba(180,120,255,0.5);
-      box-shadow:
-        0 5px 0 rgba(0,20,120,0.7),
-        0 0 18px rgba(100,60,255,0.55),
-        0 0 40px rgba(80,0,255,0.25);
-      animation: spinBtnPulse 2.2s ease-in-out infinite;
+      box-shadow: 0 5px 0 rgba(0,20,120,0.7); /* static bottom shadow only */
+      position: relative;
+      transform: translateZ(0); /* own GPU layer — no flicker from canvas behind */
+      will-change: transform;
+    }
+    #btn-do-spin::after {
+      content: '';
+      position: absolute; inset: 0;
+      border-radius: inherit;
+      box-shadow: 0 0 18px rgba(100,60,255,0.70), 0 0 50px rgba(80,0,255,0.35);
+      opacity: 0.55;
+      animation: glowPulse 2.2s ease-in-out infinite;
+      pointer-events: none;
     }
     #btn-do-spin:active {
-      transform: scale(0.95);
+      transform: scale(0.95) translateZ(0);
       box-shadow: none;
-      animation: none;
     }
+    #btn-do-spin:active::after  { opacity: 0; animation: none; }
     #btn-do-spin:disabled {
       background: rgba(60,60,100,0.5);
       border-color: rgba(255,255,255,0.1);
       box-shadow: none;
-      animation: none;
       cursor: default;
       opacity: 0.6;
     }
-    @keyframes spinBtnPulse {
-      0%, 100% {
-        box-shadow:
-          0 5px 0 rgba(0,20,120,0.7),
-          0 0 18px rgba(100,60,255,0.55),
-          0 0 40px rgba(80,0,255,0.25);
-      }
-      50% {
-        box-shadow:
-          0 5px 0 rgba(0,20,120,0.7),
-          0 0 28px rgba(140,60,255,0.85),
-          0 0 60px rgba(120,0,255,0.45);
-      }
-    }
+    #btn-do-spin:disabled::after { opacity: 0; animation: none; }
 
     /* ── Starter Pack overlay ─────────────────────────────────────────── */
     .starter-pack-overlay {

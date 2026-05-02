@@ -2065,6 +2065,11 @@ const Renderer = (() => {
   let deathType      = 'car';
   let deathParticles = [];
 
+  // ── Screen shake ─────────────────────────────────────────
+  let shakeTimer = 0;    // seconds remaining
+  let shakePeak  = 0;    // peak magnitude in screen pixels
+  const SHAKE_DUR = 0.38;
+
   function triggerDeath(x, y, type) {
     deathActive    = true;
     deathTimer     = 0;
@@ -2072,6 +2077,15 @@ const Renderer = (() => {
     deathY         = y;
     deathType      = type || 'car';
     deathParticles = buildParticles(x, y, type);
+    // Screen shake — car hit is punchy, water is soft (drowning)
+    shakeTimer = SHAKE_DUR;
+    shakePeak  = type === 'water' ? 5 : 11;
+  }
+
+  // Boost shake from an external caller (e.g. train)
+  function triggerShake(mag, dur) {
+    shakePeak  = Math.max(shakePeak, mag || 8);
+    shakeTimer = Math.max(shakeTimer, dur || SHAKE_DUR);
   }
 
   function buildParticles(x, y, type) {
@@ -2588,6 +2602,20 @@ const Renderer = (() => {
       deathTimer += dt_approx;
     }
 
+    // Advance screen shake
+    if (shakeTimer > 0) {
+      shakeTimer -= dt_approx;
+      if (shakeTimer < 0) shakeTimer = 0;
+    }
+    // Quadratic decay: maximum impulse at impact, fades quickly
+    let shakeX = 0, shakeY = 0;
+    if (shakeTimer > 0) {
+      const t   = shakeTimer / SHAKE_DUR;          // 1→0
+      const mag = shakePeak * t * t;               // quadratic: hits hard, fades fast
+      shakeX = (Math.random() * 2 - 1) * mag;
+      shakeY = (Math.random() * 2 - 1) * mag;
+    }
+
     // Smoothly advance nightRatio toward target (slower for cinematic feel)
     const NIGHT_SPEED = 0.005;
     if (nightRatio < nightTarget) nightRatio = Math.min(nightRatio + NIGHT_SPEED, nightTarget);
@@ -2638,7 +2666,7 @@ const Renderer = (() => {
     const scaledW = worldW * scale;
     const offsetX = (W - scaledW) / 2;
     ctx.save();
-    ctx.translate(offsetX, 0);
+    ctx.translate(offsetX + shakeX, shakeY);
     ctx.scale(scale, scale);
     ctx.translate(0, -cameraY);
     // Set current biome for global elements (sky)
@@ -4533,7 +4561,7 @@ const Renderer = (() => {
   function _dbgWeather(state) { weatherState = state; weatherRatio = 0; if (state===3) { rainInitDone=false; initRain(STORM_RAIN_COUNT); } else if (state===1) { rainInitDone=false; initRain(RAIN_COUNT); } }
   let _dbgNightForce = null;
   function _dbgNight(on) { _dbgNightForce = on; nightTarget = on ? 1 : 0; _nightOn = on; }
-  return { init, resize, updateCamera, draw, setScore, setWeather, triggerDeath, isDying, deathDone, stopDeath, resetWeather, addTrail, addCoinEffect, addMagnetCoin, reloadPlayerSprite, _dbgWeather, _dbgNight };
+  return { init, resize, updateCamera, draw, setScore, setWeather, triggerDeath, triggerShake, isDying, deathDone, stopDeath, resetWeather, addTrail, addCoinEffect, addMagnetCoin, reloadPlayerSprite, _dbgWeather, _dbgNight };
 
 })();
 
@@ -6616,7 +6644,10 @@ function gameLoop(timestamp) {
         // Вибрация при смерти
         if (type === 'water') Vibrate.water();
         else                  Vibrate.death();
-        if (row && row.type === 'train') navigator.vibrate && navigator.vibrate([80, 30, 120]);
+        if (row && row.type === 'train') {
+          navigator.vibrate && navigator.vibrate([80, 30, 120]);
+          Renderer.triggerShake(16, 0.55); // trains hit harder
+        }
         // Death sounds
         if (typeof Sound !== 'undefined') {
           if (type === 'water') Sound.splash();

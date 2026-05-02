@@ -4418,7 +4418,7 @@ const Renderer = (() => {
       const alpha = t < 0.5 ? 1 : 1 - (t - 0.5) * 2;
       ctx.save();
       ctx.globalAlpha  = alpha;
-      ctx.font         = `bold ${Math.round(CELL * 0.38)}px Arial`;
+      ctx.font         = `bold ${Math.round(CELL * 0.28)}px Arial`;
       ctx.textAlign    = 'center';
       ctx.textBaseline = 'middle';
       const py = e.y - rise - CELL * 0.5;   // starts above player head

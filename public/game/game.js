@@ -4496,12 +4496,21 @@ const Renderer = (() => {
         sqY = 1 - a;  sqX = 1 + a * 0.5;
       }
 
+      // ── Idle breath — only when fully grounded, no active squash ──
+      let idleBobY = 0;
+      if (!ps.jumping && squashTimer <= 0) {
+        const s = Math.sin(Date.now() * 0.0018);   // period ~3.5s
+        idleBobY = s * CELL * 0.022;               // ±~1.5px vertical float
+        sqY *= 1 + s * 0.018;                      // synced scale: taller at top, shorter at bottom
+        sqX *= 1 - s * 0.008;                      // opposing X (volume conservation)
+      }
+
       // Мигание при инвизе (щит активен)
       const invincible = Player.isInvincible();
       const blinkAlpha = invincible ? (Math.sin(Date.now() / 80) > 0 ? 1.0 : 0.15) : 1.0;
       ctx.save();
       ctx.globalAlpha = blinkAlpha;
-      ctx.translate(x, baseY + bobY);
+      ctx.translate(x, baseY + bobY + idleBobY);
       ctx.scale(flip * sqX, sqY);
       ctx.drawImage(playerImg, -size / 2, -size * 0.72, size, size);
       ctx.restore();
@@ -4524,6 +4533,15 @@ const Renderer = (() => {
       sqYp=1-a; sqXp=1+a*0.5;
     }
 
+    // Idle breath for procedural fallback
+    let idleBobYp = 0;
+    if (!ps.jumping && squashTimer <= 0) {
+      const s = Math.sin(Date.now() * 0.0018);
+      idleBobYp = s * CELL * 0.022;
+      sqYp *= 1 + s * 0.018;
+      sqXp *= 1 - s * 0.008;
+    }
+
     // ── Walk cycle parameters ──────────────────────────────
     // walkPhase drives all limb swings (0→2π per step cycle)
     const WALK_FREQ  = 9;    // cycles per second
@@ -4534,7 +4552,7 @@ const Renderer = (() => {
       ? Math.sin(Math.PI * Math.min(ps.jumpTimer / 0.16, 1)) * CELL * 0.18
       : 0;  // body lift during jump arc
 
-    const baseY = y - jumpArc;  // whole character lifts during jump
+    const baseY = y - jumpArc + idleBobYp;  // whole character lifts during jump / idle
 
     // ── Shadow (squishes on jump peak) ───────────────────
     const shadowScale = ps.jumping ? Math.max(0.5, 1 - jumpArc / (CELL * 0.3)) : 1;

@@ -1,11 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAccount } from 'wagmi';
 import { spinCost } from '@/config/spin-contract';
 
 export interface SpinPrize {
-  type: 'coins' | 'booster' | 'trail' | 'skin';
+  type: 'coins' | 'booster' | 'trail' | 'skin' | 'nothing';
   value: string | number;
   label: string;
   icon: string;
@@ -20,6 +20,10 @@ export function useDailySpin() {
   const [nextAt,     setNextAt]     = useState(0);
   const [spinsToday, setSpinsToday] = useState(0);
   const [nextCost,   setNextCost]   = useState(0); // 0 = free
+
+  // Ref mirrors isPending so the doSpin closure never reads a stale value
+  const pendingRef = useRef(false);
+
   // ── Fetch spin state from Redis on mount / address change ─────────────────
   const fetchState = useCallback(async () => {
     if (!address) return;
@@ -35,7 +39,7 @@ export function useDailySpin() {
   useEffect(() => { fetchState(); }, [fetchState]);
 
   // ── POST /api/spin → deduct coins + get prize ─────────────────────────────
-  async function _fetchPrize(addr: string) {
+  const _fetchPrize = useCallback(async (addr: string) => {
     try {
       const r = await fetch('/api/spin', {
         method:  'POST',
@@ -58,18 +62,20 @@ export function useDailySpin() {
         window.dispatchEvent(new CustomEvent('spin-prize', { detail: d.prize }));
       }
     } catch {}
-  }
+  }, []);
 
-  // ── Main spin — Redis-only, no wallet interaction needed ─────────────────
+  // ── Main spin — uses ref instead of stale closure ─────────────────────────
   const doSpin = useCallback(async () => {
-    if (!address || isPending) return;
+    if (!address || pendingRef.current) return;
+    pendingRef.current = true;
     setIsPending(true);
     try {
       await _fetchPrize(address);
     } finally {
+      pendingRef.current = false;
       setIsPending(false);
     }
-  }, [address, isPending]);
+  }, [address, _fetchPrize]);
 
   // ── Expose to game.js ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -82,7 +88,7 @@ export function useDailySpin() {
       delete (window as any).__SPIN_DO;
       delete (window as any).__SPIN_FETCH;
     };
-  }, [isPending, nextCost, spinsToday, nextAt, doSpin, address]);
+  }, [isPending, nextCost, spinsToday, nextAt, doSpin, address, _fetchPrize]);
 
   return { isPending, prize, nextCost, spinsToday, nextAt, doSpin };
 }

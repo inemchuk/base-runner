@@ -606,6 +606,24 @@
       letter-spacing: 3px;
       font-variant-numeric: tabular-nums;
     }
+    .ci-countdown-label {
+      display: block;
+      font-size: 0.65rem;
+      color: #666;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      margin-top: 2px;
+    }
+
+    /* ── Compact mode: when already claimed today ── */
+    .ci-compact .ci-header { margin-bottom: 4px; }
+    .ci-compact .ci-header .screen-title { font-size: clamp(1rem, 4.5vw, 1.4rem); }
+    .ci-compact .ci-streak-row { margin-bottom: 8px; gap: 6px; }
+    .ci-compact .ci-streak-num { font-size: clamp(1.4rem, 7vw, 2rem); }
+    .ci-compact .ci-streak-lbl { font-size: 0.65rem; }
+    .ci-compact .ci-status-box { padding: 8px 0; }
+    .ci-compact .ci-countdown { font-size: 1.05rem; letter-spacing: 2px; }
+    .ci-compact .ci-countdown-label { font-size: 0.58rem; }
 
     h2.screen-title {
       color: #fff;
@@ -732,7 +750,7 @@
       transition: transform 0.1s, opacity 0.2s;
     }
     .shop-btn:active { transform: scale(0.94); }
-    .shop-btn-equip, .shop-btn-equip-death { background: #0052FF; color: #fff; }
+    .shop-btn-equip, .shop-btn-equip-death, .shop-btn-equip-trail { background: #0052FF; color: #fff; }
     .shop-btn-buy   { background: #FFD700; color: #1a0a00; display:inline-flex; align-items:center; justify-content:center; gap:4px; }
     .shop-btn-buy.disabled { opacity: 0.4; cursor: not-allowed; }
     .shop-btn-claim-equip {
@@ -1301,6 +1319,53 @@
       font-size: 1rem; font-weight: 700; color: #fff;
       letter-spacing: 0.5px; text-align: center;
     }
+
+    /* ── Rarity badge ── */
+    .spin-rarity-badge {
+      font-size: 0.65rem; font-weight: 700; letter-spacing: 1.5px;
+      text-transform: uppercase; padding: 2px 12px; border-radius: 20px;
+      line-height: 1.4;
+    }
+    .rarity-badge-common    { background: rgba(160,160,180,0.2); color: rgba(200,200,210,0.8); }
+    .rarity-badge-uncommon  { background: rgba(76,175,80,0.18);  color: #66BB6A; }
+    .rarity-badge-rare      { background: rgba(33,150,243,0.18); color: #42A5F5; }
+    .rarity-badge-epic      { background: rgba(156,39,176,0.2);  color: #CE93D8; }
+    .rarity-badge-legendary { background: rgba(255,215,0,0.15);  color: #FFD700; }
+
+    /* ── Rarity card borders & glow ── */
+    .spin-prize-card.rarity-common {
+      border-color: rgba(160,160,180,0.3);
+    }
+    .spin-prize-card.rarity-uncommon {
+      border-color: rgba(76,175,80,0.5);
+      box-shadow: 0 0 18px rgba(76,175,80,0.2);
+    }
+    .spin-prize-card.rarity-rare {
+      border-color: rgba(33,150,243,0.5);
+      box-shadow: 0 0 22px rgba(33,150,243,0.25);
+    }
+    .spin-prize-card.rarity-epic {
+      border-color: rgba(156,39,176,0.55);
+      box-shadow: 0 0 28px rgba(156,39,176,0.3);
+      animation: spinResultPop 0.4s cubic-bezier(0.34,1.56,0.64,1), rarityEpicGlow 2.5s ease-in-out infinite;
+    }
+    .spin-prize-card.rarity-legendary {
+      border-color: rgba(255,215,0,0.6);
+      box-shadow: 0 0 35px rgba(255,215,0,0.3), 0 0 80px rgba(255,170,0,0.12);
+      animation: spinResultPop 0.4s cubic-bezier(0.34,1.56,0.64,1), rarityLegendaryGlow 2s ease-in-out infinite;
+    }
+
+    /* Rarity glow keyframes — GPU-composited via ::after would be ideal,
+       but prize card is short-lived so box-shadow is acceptable here */
+    @keyframes rarityEpicGlow {
+      0%, 100% { box-shadow: 0 0 28px rgba(156,39,176,0.3); }
+      50%      { box-shadow: 0 0 40px rgba(156,39,176,0.5), 0 0 80px rgba(180,60,220,0.15); }
+    }
+    @keyframes rarityLegendaryGlow {
+      0%, 100% { box-shadow: 0 0 35px rgba(255,215,0,0.3), 0 0 80px rgba(255,170,0,0.12); }
+      50%      { box-shadow: 0 0 50px rgba(255,215,0,0.55), 0 0 100px rgba(255,170,0,0.25); }
+    }
+
     /* NFT section inside the card */
     .spin-nft-section {
       display: flex; flex-direction: column; align-items: center; gap: 8px;

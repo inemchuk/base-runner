@@ -738,6 +738,7 @@ const World = (() => {
   let rows         = [];
   let topRowIdx    = 0;
   let currentScore = 0;   // обновляется снаружи через setScore()
+  let recentTypes  = [];  // row-type history for pattern diversity
   let lastTrainRow = -50; // следим чтобы поезда не шли подряд
 
   // ── Biome system ──────────────────────────────────────────
@@ -1359,7 +1360,7 @@ const World = (() => {
   }
 
   function _resetSiren() {
-    if (sirenRow) {
+    if (sirenRow && rows.includes(sirenRow)) {
       sirenRow.sirenLocked = false;
       // Rebuild spawn queue so normal traffic resumes
       const diff = getDifficulty();
@@ -2183,6 +2184,7 @@ const Renderer = (() => {
   // Transitions smoothly when score crosses 100
   let nightRatio  = 0;   // current blend value
   let nightTarget = 0;   // target (0 or 1)
+  let _now        = 0;   // cached Date.now() — set once per draw(), shared by all sub-functions
 
   // Call this every frame from main.js with current score
   let _lastNightScore = -1;
@@ -2349,33 +2351,18 @@ const Renderer = (() => {
   };
 
   function _buildGrassTile(biome) {
+    // Crossy Road style: clean flat tile, no noisy specks.
+    // Depth is achieved in drawGrassRow via edge shadow + bottom highlight.
     const cfg  = _GRASS_TILE_CFG[biome] || _GRASS_TILE_CFG.default;
     const SIZE = 128;
     const oc   = typeof OffscreenCanvas !== 'undefined'
       ? new OffscreenCanvas(SIZE, SIZE)
       : (() => { const c = document.createElement('canvas'); c.width = c.height = SIZE; return c; })();
     const ox   = oc.getContext('2d');
-    const rng  = _seedRng(biome === 'desert' ? 0xDEAD : biome === 'snow' ? 0xC0DE : 0xBEEF);
 
+    // Solid base — no noise
     ox.fillStyle = cfg.base;
     ox.fillRect(0, 0, SIZE, SIZE);
-
-    // Dark specks — irregular blobs
-    for (let i = 0; i < 55; i++) {
-      const x = rng() * SIZE, y = rng() * SIZE;
-      const w = 1 + rng() * 4, h = 1 + rng() * 2.5;
-      ox.globalAlpha = cfg.darkAlpha * (0.5 + rng() * 0.8);
-      ox.fillStyle = cfg.dark;
-      ox.fillRect(Math.floor(x), Math.floor(y), Math.ceil(w), Math.ceil(h));
-    }
-    // Light specks — highlights
-    for (let i = 0; i < 30; i++) {
-      const x = rng() * SIZE, y = rng() * SIZE;
-      const w = 1 + rng() * 3, h = 1 + rng() * 2;
-      ox.globalAlpha = cfg.lightAlpha * (0.5 + rng() * 0.8);
-      ox.fillStyle = cfg.light;
-      ox.fillRect(Math.floor(x), Math.floor(y), Math.ceil(w), Math.ceil(h));
-    }
 
     return oc;
   }
@@ -2388,24 +2375,8 @@ const Renderer = (() => {
     }
   }
 
-  function _applyGrassTexture(y, bi) {
-    const patA = _GRASS_PATTERNS[bi.biome];
-    const patB = bi.nextBiome ? _GRASS_PATTERNS[bi.nextBiome] : null;
-    if (!patA && !patB) return;
-    ctx.save();
-    ctx.globalCompositeOperation = 'multiply';
-    const t = bi.blendT || 0;
-    if (patA) {
-      ctx.globalAlpha = 0.60 * (1 - t);
-      ctx.fillStyle = patA;
-      ctx.fillRect(0, y, COLS * CELL, CELL);
-    }
-    if (patB && t > 0) {
-      ctx.globalAlpha = 0.60 * t;
-      ctx.fillStyle = patB;
-      ctx.fillRect(0, y, COLS * CELL, CELL);
-    }
-    ctx.restore();
+  function _applyGrassTexture(/* y, bi — unused now; kept for signature compat */) {
+    // Crossy Road style: no texture overlay — depth comes from edge shadows in drawGrassRow
   }
 
   // Environment sprite images
@@ -2428,31 +2399,34 @@ const Renderer = (() => {
     }
   }
 
-  // Per-type config: size multiplier, shadow (sw=half-width, sh=half-height, dy=vertical offset)
+  // Per-type config for environment sprites
+  // size:  sprite scale (× CELL)
+  // sw:    shadow ellipse half-width (× CELL)
+  // sh:    shadow ellipse half-height (× CELL)
+  // base:  ground-contact point in cell (0 = top, 1 = bottom)
   const _ENV_SPRITE_CFG = {
-    bush:       { size: 0.82, sw: 0.26, sh: 0.07, dy: 0.30 },
-    tree:       { size: 1.05, sw: 0.30, sh: 0.08, dy: 0.38 },
-    rock:       { size: 0.72, sw: 0.26, sh: 0.06, dy: 0.22 },
-    cactus:     { size: 0.88, sw: 0.22, sh: 0.05, dy: 0.28 },
-    tumbleweed: { size: 0.65, sw: 0.18, sh: 0.05, dy: 0.18 },
-    pine:       { size: 1.05, sw: 0.26, sh: 0.05, dy: 0.38 },
-    snowman:    { size: 0.80, sw: 0.22, sh: 0.06, dy: 0.28 },
+    bush:       { size: 0.82, sw: 0.32, sh: 0.09, base: 0.92 },
+    tree:       { size: 1.05, sw: 0.30, sh: 0.08, base: 0.94 },
+    rock:       { size: 0.72, sw: 0.28, sh: 0.08, base: 0.90 },
+    cactus:     { size: 0.88, sw: 0.22, sh: 0.07, base: 0.94 },
+    tumbleweed: { size: 0.65, sw: 0.20, sh: 0.06, base: 0.92 },
+    pine:       { size: 1.05, sw: 0.28, sh: 0.08, base: 0.94 },
+    snowman:    { size: 0.80, sw: 0.22, sh: 0.07, base: 0.92 },
   };
 
   function drawEnvSprite(type, cx, cy) {
     const img = _ENV_SPRITES[type];
     if (!img || !img.complete || !img.naturalWidth) return false;
-    const cfg  = _ENV_SPRITE_CFG[type] || { size: 0.85, sw: 0.24, sh: 0.06, dy: 0.26 };
-    const size = CELL * cfg.size;
-    // Shadow ellipse under the sprite
-    ctx.save();
+    const cfg    = _ENV_SPRITE_CFG[type] || { size: 0.85, sw: 0.28, sh: 0.08, base: 0.92 };
+    const size   = CELL * cfg.size;
+    const baseY  = cy - CELL * 0.5 + CELL * cfg.base; // ground contact
+    // Simple filled ellipse shadow (matches player shadow style)
     ctx.fillStyle = 'rgba(0,0,0,0.18)';
     ctx.beginPath();
-    ctx.ellipse(cx, cy + CELL * cfg.dy, CELL * cfg.sw, CELL * cfg.sh, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx, baseY, CELL * cfg.sw, CELL * cfg.sh, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.restore();
-    // Sprite image centered on (cx, cy)
-    ctx.drawImage(img, cx - size / 2, cy - size / 2, size, size);
+    // Sprite: image bottom sits at baseY
+    ctx.drawImage(img, cx - size / 2, baseY - size, size, size);
     return true;
   }
 
@@ -2499,6 +2473,19 @@ const Renderer = (() => {
     img.onload = () => { coinImg = img; };
     img.src = '/game/coin.png';
   }
+
+  // ── Car headlight / taillight pixel positions (allocated once) ──────────
+  const _CAR_LIGHT_MAP = {
+    taxi:        { front: [{x:92,y:8},{x:92,y:38}],  rear: [{x:5,y:8},{x:5,y:38}] },
+    police:      { front: [{x:90,y:8},{x:90,y:38}],  rear: [{x:6,y:8},{x:6,y:38}] },
+    orange:      { front: [{x:92,y:10},{x:92,y:36}], rear: [{x:7,y:8},{x:7,y:38}] },
+    green_taxi:  { front: [{x:93,y:12},{x:93,y:34}], rear: [{x:7,y:9},{x:7,y:37}] },
+    yellow_taxi: { front: [{x:92,y:8},{x:92,y:38}],  rear: [{x:7,y:8},{x:7,y:38}] },
+    ambulance:   { front: [{x:122,y:9},{x:122,y:38}],rear: [{x:4,y:7},{x:4,y:39}] },
+    truck:       { front: [{x:187,y:9},{x:187,y:36}],rear: [{x:3,y:9},{x:3,y:38}] },
+    firetruck:   { front: [{x:186,y:10},{x:186,y:35}],rear:[{x:4,y:8},{x:4,y:37}] },
+    bus:         { front: [{x:188,y:8},{x:188,y:38}],rear: [{x:3,y:9},{x:3,y:37}] },
+  };
 
   // ── Car sprites loaded from embedded base64 ──────────────
   // Weighted sprite pool — police is rare, siren police is very rare
@@ -2561,6 +2548,7 @@ const Renderer = (() => {
     if (!canvas) return;
     const W = canvas.width;
     const H = canvas.height;
+    _now = Date.now(); // single timestamp for all animations this frame
 
     // Advance water animation
     const dt_approx = 0.016;
@@ -2574,6 +2562,7 @@ const Renderer = (() => {
     // Advance weather blend (slower for smoother transitions)
     const targetRatio = weatherState > 0 ? 1 : 0;
     weatherRatio += (targetRatio - weatherRatio) * 0.012;
+    if (weatherRatio < 0.005) weatherRatio = 0; // snap to zero — stop residual work
 
     // Advance rain particles (rain + storm)
     if (weatherState === 1 || weatherState === 3 || weatherRatio > 0.05) {
@@ -2750,7 +2739,7 @@ const Renderer = (() => {
   function drawStars(W, H) {
     const alpha = nightRatio;
     for (const s of STAR_POSITIONS) {
-      const twinkle = 0.6 + 0.4 * Math.sin(Date.now() * 0.001 + s.x * 20);
+      const twinkle = 0.6 + 0.4 * Math.sin(_now * 0.001 + s.x * 20);
       ctx.fillStyle = `rgba(255,255,220,${alpha * twinkle * 0.9})`;
       ctx.beginPath();
       ctx.arc(s.x * W, s.y * H * 0.5, s.r, 0, Math.PI * 2);
@@ -2822,18 +2811,25 @@ const Renderer = (() => {
     }
     ctx.fillStyle = grassColor;
     ctx.fillRect(0, y, COLS * CELL, CELL);
-    _applyGrassTexture(y, bi);
 
-    // Row-top depth shadow (Crossy Road style)
-    const edgeGrad = ctx.createLinearGradient(0, y, 0, y + CELL * 0.22);
-    edgeGrad.addColorStop(0,   'rgba(0,0,0,0.22)');
-    edgeGrad.addColorStop(1,   'rgba(0,0,0,0)');
-    ctx.fillStyle = edgeGrad;
-    ctx.fillRect(0, y, COLS * CELL, CELL * 0.22);
+    // ── Crossy Road 3D depth: top shadow + bottom highlight ──
+    // Top shadow — darker band simulating voxel depth
+    const topGrad = ctx.createLinearGradient(0, y, 0, y + CELL * 0.18);
+    topGrad.addColorStop(0, 'rgba(0,0,0,0.28)');
+    topGrad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = topGrad;
+    ctx.fillRect(0, y, COLS * CELL, CELL * 0.18);
+
+    // Bottom highlight — subtle light edge (as if light hits the front face)
+    const botGrad = ctx.createLinearGradient(0, y + CELL * 0.85, 0, y + CELL);
+    botGrad.addColorStop(0, 'rgba(255,255,255,0)');
+    botGrad.addColorStop(1, 'rgba(255,255,255,0.07)');
+    ctx.fillStyle = botGrad;
+    ctx.fillRect(0, y + CELL * 0.85, COLS * CELL, CELL * 0.15);
 
     // Coins
     if (row.coins) {
-      const t = Date.now() / 600;
+      const t = _now / 600;
       const size = CELL * 0.72;
       for (const coin of row.coins) {
         if (coin.collected) continue;
@@ -2885,7 +2881,7 @@ const Renderer = (() => {
     // Decorations — wind/storm sway
     if (row.decorations) {
       const windSway = (weatherState === 4 || weatherState === 3) && weatherRatio > 0.1
-        ? Math.sin(Date.now() * 0.003 + y * 0.05) * weatherRatio * (weatherState === 3 ? 4 : 3)
+        ? Math.sin(_now * 0.003 + y * 0.05) * weatherRatio * (weatherState === 3 ? 4 : 3)
         : 0;
       for (const d of row.decorations) {
         const cx = d.col * CELL + CELL / 2;
@@ -3171,18 +3167,7 @@ const Renderer = (() => {
         const sx = car.width / sprW;
         const sy = car.height / 46;
 
-        const LIGHT_MAP = {
-          taxi:        { front: [{x:92,y:8},{x:92,y:38}],  rear: [{x:5,y:8},{x:5,y:38}] },
-          police:      { front: [{x:90,y:8},{x:90,y:38}],  rear: [{x:6,y:8},{x:6,y:38}] },
-          orange:      { front: [{x:92,y:10},{x:92,y:36}], rear: [{x:7,y:8},{x:7,y:38}] },
-          green_taxi:  { front: [{x:93,y:12},{x:93,y:34}], rear: [{x:7,y:9},{x:7,y:37}] },
-          yellow_taxi: { front: [{x:92,y:8},{x:92,y:38}],  rear: [{x:7,y:8},{x:7,y:38}] },
-          ambulance:   { front: [{x:122,y:9},{x:122,y:38}],rear: [{x:4,y:7},{x:4,y:39}] },
-          truck:       { front: [{x:187,y:9},{x:187,y:36}],rear: [{x:3,y:9},{x:3,y:38}] },
-          firetruck:   { front: [{x:186,y:10},{x:186,y:35}],rear:[{x:4,y:8},{x:4,y:37}] },
-          bus:         { front: [{x:188,y:8},{x:188,y:38}],rear: [{x:3,y:9},{x:3,y:37}] }
-        };
-        const lights = LIGHT_MAP[imageKey] || LIGHT_MAP.taxi;
+        const lights = _CAR_LIGHT_MAP[imageKey] || _CAR_LIGHT_MAP.taxi;
         const facingRight = car.speed > 0;
         const lightR = 2.5 * sx;
         const beamDir = facingRight ? 1 : -1;
@@ -3508,7 +3493,7 @@ const Renderer = (() => {
 
     // Drifting fog wisps — subtle horizontal bands
     const wispCount = 5;
-    const time = Date.now() * 0.0003;
+    const time = _now * 0.0003;
     for (let i = 0; i < wispCount; i++) {
       const baseY = H * (0.2 + i * 0.15);
       const drift = Math.sin(time + i * 1.7) * W * 0.08;
@@ -4499,7 +4484,7 @@ const Renderer = (() => {
       // ── Idle breath — only when fully grounded, no active squash ──
       let idleBobY = 0;
       if (!ps.jumping && squashTimer <= 0) {
-        const s = Math.sin(Date.now() * 0.0018);   // period ~3.5s
+        const s = Math.sin(_now * 0.0018);   // period ~3.5s
         idleBobY = s * CELL * 0.022;               // ±~1.5px vertical float
         sqY *= 1 + s * 0.018;                      // synced scale: taller at top, shorter at bottom
         sqX *= 1 - s * 0.008;                      // opposing X (volume conservation)
@@ -4507,7 +4492,7 @@ const Renderer = (() => {
 
       // Мигание при инвизе (щит активен)
       const invincible = Player.isInvincible();
-      const blinkAlpha = invincible ? (Math.sin(Date.now() / 80) > 0 ? 1.0 : 0.15) : 1.0;
+      const blinkAlpha = invincible ? (Math.sin(_now / 80) > 0 ? 1.0 : 0.15) : 1.0;
       ctx.save();
       ctx.globalAlpha = blinkAlpha;
       ctx.translate(x, baseY + bobY + idleBobY);
@@ -4536,7 +4521,7 @@ const Renderer = (() => {
     // Idle breath for procedural fallback
     let idleBobYp = 0;
     if (!ps.jumping && squashTimer <= 0) {
-      const s = Math.sin(Date.now() * 0.0018);
+      const s = Math.sin(_now * 0.0018);
       idleBobYp = s * CELL * 0.022;
       sqYp *= 1 + s * 0.018;
       sqXp *= 1 - s * 0.008;
@@ -5008,7 +4993,11 @@ const UI = (() => {
 
     const statusEl = document.getElementById('ci-status-text');
     const claimBtn = document.getElementById('btn-do-ci');
+    const screenEl = document.getElementById('screen-ci');
     _stopCiTimer();
+
+    // Toggle compact mode — shrink UI when already claimed
+    if (screenEl) screenEl.classList.toggle('ci-compact', !available && !isPending);
 
     if (isPending) {
       // Transaction in progress
@@ -5019,6 +5008,7 @@ const UI = (() => {
       if (claimBtn) {
         claimBtn.disabled      = true;
         claimBtn.style.opacity = '0.5';
+        claimBtn.style.display = '';
         claimBtn.textContent   = '⏳ Confirming...';
       }
     } else if (available) {
@@ -5029,20 +5019,20 @@ const UI = (() => {
       if (claimBtn) {
         claimBtn.disabled      = false;
         claimBtn.style.opacity = '1';
+        claimBtn.style.display = '';
         claimBtn.innerHTML     = `<span style="display:inline-flex;align-items:center;gap:6px;vertical-align:middle;font-weight:bold;letter-spacing:2px;">${todayReward.icon} Claim +${todayReward.coins}</span>`;
       }
     } else {
       if (statusEl) statusEl.className = 'ci-status unavail';
+      // Hide the useless disabled button in compact mode
       if (claimBtn) {
-        claimBtn.disabled      = true;
-        claimBtn.style.opacity = '0.35';
-        claimBtn.textContent   = '✓ Claimed today';
+        claimBtn.style.display = 'none';
       }
 
       // Live countdown
       const tick = () => {
         const ms = _msUntilUTCMidnight();
-        if (statusEl) statusEl.innerHTML = `<span class="ci-countdown">${_formatCountdown(ms)}</span><br><span style="font-size:0.72rem;color:#666;letter-spacing:1px">UNTIL NEXT CHECK-IN</span>`;
+        if (statusEl) statusEl.innerHTML = `<span class="ci-countdown">${_formatCountdown(ms)}</span><span class="ci-countdown-label">until next check-in</span>`;
         if (ms <= 1000) { _stopCiTimer(); showCheckIn(); }
       };
       tick();
@@ -5154,11 +5144,15 @@ const Shop = (() => {
 
   const SAVE_KEY = 'shop_v1';
   let shopTab = 'skins'; // 'skins' | 'boosters' | 'trails' | 'effects'
+  let _shopCache = null; // in-memory cache — avoids localStorage + JSON.parse every frame
 
   function loadShopData() {
-    try { return JSON.parse(localStorage.getItem(SAVE_KEY) || '{}'); } catch { return {}; }
+    if (_shopCache) return _shopCache;
+    try { _shopCache = JSON.parse(localStorage.getItem(SAVE_KEY) || '{}'); } catch { _shopCache = {}; }
+    return _shopCache;
   }
   function saveShopData(d) {
+    _shopCache = d; // update cache
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(d)); } catch {}
     _syncToServer(d);
   }
@@ -6090,6 +6084,9 @@ const DailySpin = (() => {
     if (prize.type === 'skin') {
       return { shirtImg: true, label: 'Skin' };
     }
+    if (prize.type === 'nothing') {
+      return { icon: '🔥', label: 'Fire' };
+    }
     return { icon: '🎁', label: prize.label || '?' };
   }
 
@@ -6107,8 +6104,9 @@ const DailySpin = (() => {
     } else {
       const slotsByType = {
         skin:    [1],
-        trail:   [2, 7],
+        trail:   [2],
         booster: [4],
+        nothing: [7],
       };
       const slots = (prize && slotsByType[prize.type]) || [0];
       _winIndex = slots[Math.floor(Math.random() * slots.length)];
@@ -6169,6 +6167,7 @@ const DailySpin = (() => {
   // ── Apply prize locally ───────────────────────────────────────────────────
   function _applyPrize(prize) {
     if (!prize) return;
+    if (prize.type === 'nothing') return; // Fire — empty slot, no reward
     if (prize.type === 'coins') {
       // Server already credited Redis; mirror to localStorage
       const newBal = Save.addCoins(Number(prize.value));
@@ -6259,6 +6258,7 @@ const DailySpin = (() => {
   // ── After animation completes ─────────────────────────────────────────────
   function _onSpinComplete() {
     if (_safetyTimeout) { clearTimeout(_safetyTimeout); _safetyTimeout = null; }
+    try {
     _applyPrize(_prize);
 
     const cardEl  = document.getElementById('spin-prize-card');
@@ -6286,10 +6286,31 @@ const DailySpin = (() => {
       } else if (_prize.type === 'coins') {
         iconEl.innerHTML = IMG('/game/coin.png', '56px');
         labelEl.textContent = _prize.label || `${_prize.value} Coins`;
+      } else if (_prize.type === 'nothing') {
+        iconEl.textContent = '🔥';
+        labelEl.textContent = 'Better luck next time!';
       } else {
         iconEl.textContent = _prize.icon || '🎁';
         labelEl.textContent = _prize.label || 'Prize!';
       }
+
+      // ── Rarity badge ────────────────────────────────────────────────────
+      const rarity = _prize.rarity || 'common';
+      // Remove previous rarity classes
+      cardEl.className = cardEl.className.replace(/\brarity-\w+/g, '').trim();
+      cardEl.classList.add('rarity-' + rarity);
+      // Rarity label element
+      let badgeEl = cardEl.querySelector('.spin-rarity-badge');
+      if (!badgeEl) {
+        badgeEl = document.createElement('div');
+        badgeEl.className = 'spin-rarity-badge';
+        // Insert after icon, before label
+        cardEl.insertBefore(badgeEl, labelEl);
+      }
+      const RARITY_LABELS = { common: 'Common', uncommon: 'Uncommon', rare: 'Rare', epic: 'Epic', legendary: 'Legendary' };
+      badgeEl.textContent = RARITY_LABELS[rarity] || rarity;
+      badgeEl.className = 'spin-rarity-badge rarity-badge-' + rarity;
+
       cardEl.classList.remove('hidden');
     }
 
@@ -6311,7 +6332,10 @@ const DailySpin = (() => {
         }
       }
     }
+    } catch (err) { console.error('_onSpinComplete error:', err); }
 
+    // ALWAYS reset phase — even if display code above threw
+    _animPhase = 'idle';
     _updateDoBtn();
     _startCountdown();
   }
@@ -6333,7 +6357,13 @@ const DailySpin = (() => {
     const doBtn = document.getElementById('btn-do-spin');
     if (doBtn) { doBtn.disabled = true; doBtn.textContent = '⏳ Spinning…'; }
     const cardEl = document.getElementById('spin-prize-card');
-    if (cardEl) cardEl.classList.add('hidden');
+    if (cardEl) {
+      cardEl.classList.add('hidden');
+      // Reset rarity styling from previous spin
+      cardEl.className = cardEl.className.replace(/\brarity-\w+/g, '').trim();
+      const oldBadge = cardEl.querySelector('.spin-rarity-badge');
+      if (oldBadge) oldBadge.remove();
+    }
     _mintItemId = null;
 
     spinFn();
@@ -6443,7 +6473,8 @@ const DailySpin = (() => {
     const timerEl  = document.getElementById('spin-timer');
     const cardEl   = document.getElementById('spin-prize-card');
 
-    if (cardEl) cardEl.classList.toggle('hidden', _animPhase !== 'done');
+    // Always hide prize card when (re-)entering spin screen — user saw result already
+    if (cardEl) cardEl.classList.add('hidden');
 
     if (!avail) {
       _startCountdown();
@@ -6467,6 +6498,10 @@ const DailySpin = (() => {
     if (cardEl && iconEl && labelEl) {
       iconEl.textContent  = '😔';
       labelEl.textContent = 'Not enough coins';
+      // Strip rarity styling from previous spin
+      cardEl.className = cardEl.className.replace(/\brarity-\w+/g, '').trim();
+      const oldBadge = cardEl.querySelector('.spin-rarity-badge');
+      if (oldBadge) oldBadge.remove();
       // Hide NFT section if visible
       const nftSection = document.getElementById('spin-nft-section');
       if (nftSection) nftSection.classList.add('hidden');
@@ -7360,6 +7395,7 @@ function _initUI() {
   _bind('btn-go-menu', 'click', () => {
     currentState = GameState.MENU;
     UI.show('menu');
+    initMenuBackground(); // restart menu RAF loop (it exited when state left MENU)
   });
   // Coins are auto-synced at game over, no claim button needed
 
@@ -7509,6 +7545,14 @@ function _initUI() {
     // Re-render current shop tab
     if (typeof Shop !== 'undefined' && Shop._refreshNft) Shop._refreshNft();
 
+    // ── Reset spin NFT claim button on success ──────────────────────────
+    const spinMintBtn  = document.getElementById('btn-spin-nft');
+    const spinNftSec   = document.getElementById('spin-nft-section');
+    if (spinMintBtn) { spinMintBtn.textContent = '✓ Claimed!'; spinMintBtn.disabled = true; }
+    const spinLater = document.getElementById('btn-spin-nft-later');
+    if (spinLater) spinLater.style.display = 'none';
+    if (spinNftSec) setTimeout(() => spinNftSec.classList.add('hidden'), 1500);
+
     // ── Starter Pack bonus (coins + booster + hide overlay) ─────────────
     if (itemId === 'skin_cryptokid') {
       // Award 100 coins (local + Redis sync)
@@ -7540,6 +7584,12 @@ function _initUI() {
       btn.textContent = 'Claim';
       btn.disabled    = false;
     });
+    // Reset spin NFT claim button on error
+    const spinMintBtn = document.getElementById('btn-spin-nft');
+    if (spinMintBtn && spinMintBtn.disabled) {
+      spinMintBtn.textContent = 'Claim';
+      spinMintBtn.disabled    = false;
+    }
   });
 
   // ── Starter Pack wiring ─────────────────────────────────────────────

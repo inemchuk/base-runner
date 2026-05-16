@@ -355,11 +355,7 @@ export default function Game() {
             <button className="lb-tab" id="btn-lb-global">Global</button>
             <button className="lb-tab" id="btn-lb-coins">Coins</button>
           </div>
-          <div className="lb-period-tabs hidden" id="lb-period-tabs">
-            <button className="lb-period-tab lb-period-active" id="btn-lb-alltime">All Time</button>
-            <button className="lb-period-tab" id="btn-lb-month">Month</button>
-            <button className="lb-period-tab" id="btn-lb-week">Week</button>
-          </div>
+          {/* Period tabs removed — all-time only */}
           <div id="lb-list" style={{width:'min(320px,90vw)'}}></div>
         </div>
         <div className="scroll-back-bar">

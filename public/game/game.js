@@ -235,29 +235,7 @@ const CheckIn = (() => {
 const Leaderboard = (() => {
 
   const MEDALS = ['🥇', '🥈', '🥉'];
-  let mode   = 'personal'; // 'personal' | 'global' | 'coins'
-  let period = 'alltime';  // 'alltime' | 'month' | 'week'
-
-  function _updatePeriodTabs() {
-    const tabs = document.getElementById('lb-period-tabs');
-    if (!tabs) return;
-    tabs.classList.toggle('hidden', mode !== 'global');
-    ['alltime', 'month', 'week'].forEach(p => {
-      const btn = document.getElementById(`btn-lb-${p}`);
-      if (btn) btn.className = 'lb-period-tab' + (p === period ? ' lb-period-active' : '');
-    });
-  }
-
-  function setPeriod(p) {
-    period = p;
-    _updatePeriodTabs();
-    // Fetch global lb for chosen period
-    const fetchFn = window.__BASE_FETCH_SCORE_LB;
-    if (fetchFn) {
-      document.getElementById('lb-list').innerHTML = '<p class="lb-empty">Loading…</p>';
-      fetchFn(p);
-    }
-  }
+  let mode = 'personal'; // 'personal' | 'global' | 'coins'
 
   function setMode(m) {
     mode = m;
@@ -267,15 +245,13 @@ const Leaderboard = (() => {
     if (btnP) btnP.className = 'lb-tab' + (m === 'personal' ? ' lb-tab-active' : '');
     if (btnG) btnG.className = 'lb-tab' + (m === 'global'   ? ' lb-tab-active' : '');
     if (btnC) btnC.className = 'lb-tab' + (m === 'coins'    ? ' lb-tab-active' : '');
-    _updatePeriodTabs();
     if (m === 'coins') {
       renderCoins();
       const fetchFn = window.__BASE_FETCH_COIN_LB;
       if (fetchFn) fetchFn();
     } else if (m === 'global') {
-      // Fetch with current period
       const fetchFn = window.__BASE_FETCH_SCORE_LB;
-      if (fetchFn) fetchFn(period);
+      if (fetchFn) fetchFn('alltime');
       render();
     } else {
       render();
@@ -363,7 +339,7 @@ const Leaderboard = (() => {
     if (mode === 'coins') renderCoins();
   });
 
-  return { render, setMode, setPeriod };
+  return { render, setMode };
 
 })();
 
@@ -7466,9 +7442,7 @@ function _initUI() {
   _bind('btn-lb-personal', 'click', () => Leaderboard.setMode('personal'));
   _bind('btn-lb-global',   'click', () => Leaderboard.setMode('global'));
   _bind('btn-lb-coins',    'click', () => Leaderboard.setMode('coins'));
-  _bind('btn-lb-alltime',  'click', () => Leaderboard.setPeriod('alltime'));
-  _bind('btn-lb-month',    'click', () => Leaderboard.setPeriod('month'));
-  _bind('btn-lb-week',     'click', () => Leaderboard.setPeriod('week'));
+  // Period tabs removed — all-time leaderboard only
 
   // Кнопки check-in
   _bind('btn-do-ci', 'click', () => {

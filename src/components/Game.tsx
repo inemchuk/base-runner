@@ -54,7 +54,7 @@ export default function Game() {
   }, []);
 
   return (
-    <>
+    <div id="game-container" className="game-container">
       {/* Game Scripts */}
       <Script src="/game/game.js" strategy="afterInteractive" />
 
@@ -496,6 +496,6 @@ export default function Game() {
         <button className="btn btn-start" id="btn-do-ci">Claim</button>
         <button className="btn btn-back" id="btn-ci-back">← BACK</button>
       </div>
-    </>
+    </div>
   );
 }

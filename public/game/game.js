@@ -2522,8 +2522,16 @@ const Renderer = (() => {
 
   function resize() {
     if (!canvas) return;
-    canvas.width  = window.innerWidth;
-    canvas.height = window.innerHeight;
+    // Use game-container bounds on desktop, fallback to window
+    const container = document.getElementById('game-container');
+    if (container) {
+      const rect = container.getBoundingClientRect();
+      canvas.width  = rect.width;
+      canvas.height = rect.height;
+    } else {
+      canvas.width  = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
   }
 
   function updateCamera(dt) {
@@ -5922,7 +5930,9 @@ const DailySpin = (() => {
 
   function _sizeCanvas() {
     if (!_canvas) return;
-    const size = Math.min(Math.floor(Math.min(window.innerWidth, 360) * 0.82), 300);
+    const container = document.getElementById('game-container');
+    const refW = container ? container.getBoundingClientRect().width : window.innerWidth;
+    const size = Math.min(Math.floor(Math.min(refW, 360) * 0.82), 300);
     _canvas.width  = size;
     _canvas.height = size;
   }
@@ -6345,6 +6355,19 @@ const DailySpin = (() => {
     if (_animPhase !== 'idle') return;
     const spinFn = window.__SPIN_DO;
     if (!spinFn) return;
+
+    // ── Deduct spin cost from local balance (server deducts from Redis) ──
+    const info    = window.__SPIN || {};
+    const cost    = info.nextCost || 0;
+    if (cost > 0) {
+      const balance = typeof Save !== 'undefined' ? Save.getCoins() : 0;
+      if (balance < cost) return; // guard: can't afford
+      const d = Save.load();
+      d.coins = Math.max(0, d.coins - cost);
+      Save.save(d);
+      if (typeof UI !== 'undefined') UI.updateCoins(d.coins);
+      if (typeof window.__BASE_SYNC_COINS === 'function') window.__BASE_SYNC_COINS(d.coins);
+    }
 
     _prize     = null;
     _segments  = [...DISPLAY_POOL];

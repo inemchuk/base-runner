@@ -8,6 +8,9 @@
       -webkit-touch-callout: none; /* no long-press callout on iOS */
     }
 
+    /* Hide scrollbars everywhere but keep scroll functional */
+    *::-webkit-scrollbar { display: none; }
+
     :root {
       --green:  #4CAF50;
       --green2: #388E3C;
@@ -157,6 +160,7 @@
       flex: 1;
       overflow-y: auto;
       -webkit-overflow-scrolling: touch;
+      scrollbar-width: none; /* Firefox */
       overscroll-behavior: contain;   /* prevent scroll chaining to body */
       touch-action: pan-y;            /* allow vertical scroll, block zoom */
       padding: 8vh 16px calc(16px + env(safe-area-inset-bottom, 0px));
@@ -191,6 +195,7 @@
     .profile-scroll {
       flex: 1; overflow-y: auto;
       -webkit-overflow-scrolling: touch;
+      scrollbar-width: none; /* Firefox */
       padding: 6vh 0 16px;
       display: flex; flex-direction: column; align-items: center;
     }
@@ -1604,4 +1609,63 @@
       letter-spacing: 0.5px;
     }
     .starter-skip-btn:active { opacity: 0.6; }
+
+    /* ===== DESKTOP WEB OPTIMIZATION ===== */
+    /* Mobile: container is full-screen as before */
+    .game-container {
+      position: relative;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Desktop: card-sized game centered with blur sides */
+    @media (min-width: 768px) {
+      body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #050814;
+      }
+
+      /* Blurred ambient background on sides */
+      body::before {
+        content: '';
+        position: fixed;
+        inset: 0;
+        background:
+          radial-gradient(ellipse at 30% 40%, rgba(0, 82, 255, 0.15), transparent 60%),
+          radial-gradient(ellipse at 70% 60%, rgba(77, 143, 255, 0.1), transparent 50%),
+          radial-gradient(ellipse at 50% 80%, rgba(0, 40, 120, 0.12), transparent 50%);
+        filter: blur(60px);
+        z-index: 0;
+        pointer-events: none;
+      }
+
+      .game-container {
+        position: relative;
+        width: 430px;
+        max-width: 430px;
+        height: min(100vh, 932px);
+        height: min(100dvh, 932px);
+        margin: 0 auto;
+        overflow: hidden;
+        border-radius: 24px;
+        box-shadow:
+          0 0 80px rgba(0, 82, 255, 0.12),
+          0 0 0 1px rgba(77, 143, 255, 0.15);
+        z-index: 1;
+      }
+
+      /* Canvas stays inside the container — JS sets pixel dimensions via container bounds */
+      #gameCanvas {
+        position: absolute;
+        top: 0;
+        left: 0;
+      }
+
+      /* All screens confined to container */
+      .game-container .screen {
+        border-radius: 24px;
+      }
+    }
 

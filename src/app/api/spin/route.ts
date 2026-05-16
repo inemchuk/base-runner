@@ -4,35 +4,35 @@ import { spinCost } from '@/config/spin-contract';
 // ── Prize pool (server picks, never client) ───────────────────────────────
 const PRIZES = [
   // ── Nothing (Fire — empty slot) ────────────────────────────────────────────
-  { type: 'nothing', value: 0,                weight: 15, label: 'Nothing',       icon: '🔥', rarity: 'common'    },
+  { type: 'nothing', value: 0,                weight: 20, label: 'Nothing',       icon: '🔥', rarity: 'common'    },
   // ── Common (small coins) ──────────────────────────────────────────────────
-  { type: 'coins',   value: 10,               weight: 25, label: '10 Coins',      icon: '🪙', rarity: 'common'    },
-  { type: 'coins',   value: 25,               weight: 20, label: '25 Coins',      icon: '🪙', rarity: 'common'    },
+  { type: 'coins',   value: 10,               weight: 30, label: '10 Coins',      icon: '🪙', rarity: 'common'    },
+  { type: 'coins',   value: 25,               weight: 25, label: '25 Coins',      icon: '🪙', rarity: 'common'    },
   // ── Uncommon (bigger coins + boosters) ────────────────────────────────────
-  { type: 'coins',   value: 50,               weight: 13, label: '50 Coins',      icon: '💰', rarity: 'uncommon'  },
-  { type: 'coins',   value: 100,              weight: 7,  label: '100 Coins',     icon: '💰', rarity: 'uncommon'  },
-  { type: 'booster', value: 'boost_magnet',   weight: 8,  label: 'Coin Magnet',   icon: '🧲', rarity: 'uncommon'  },
-  { type: 'booster', value: 'boost_double',   weight: 7,  label: 'Double Coins',  icon: '💰', rarity: 'uncommon'  },
-  { type: 'booster', value: 'boost_shield',   weight: 6,  label: 'Second Chance', icon: '🛡️', rarity: 'uncommon'  },
-  // ── Rare (cheap trails + cheap skins) ─────────────────────────────────────
+  { type: 'coins',   value: 50,               weight: 15, label: '50 Coins',      icon: '💰', rarity: 'uncommon'  },
+  { type: 'coins',   value: 100,              weight: 8,  label: '100 Coins',     icon: '💰', rarity: 'uncommon'  },
+  { type: 'booster', value: 'boost_magnet',   weight: 10, label: 'Coin Magnet',   icon: '🧲', rarity: 'uncommon'  },
+  { type: 'booster', value: 'boost_double',   weight: 8,  label: 'Double Coins',  icon: '💰', rarity: 'uncommon'  },
+  { type: 'booster', value: 'boost_shield',   weight: 7,  label: 'Second Chance', icon: '🛡️', rarity: 'uncommon'  },
+  // ── Rare (trails + cheap skins) ────────────────────────────────────────────
   { type: 'trail',   value: 'trail_sparkle',  weight: 6,  label: 'Sparkle Trail', icon: '✨', rarity: 'rare'      }, // 150 coins
   { type: 'trail',   value: 'trail_hearts',   weight: 5,  label: 'Hearts Trail',  icon: '💖', rarity: 'rare'      }, // 200 coins
-  { type: 'skin', value: 'skin_street_runner', weight: 5, label: 'Street Runner', icon: '🏃', rarity: 'rare'      }, // 150 coins
-  { type: 'skin', value: 'skin_1',              weight: 4, label: 'Neon Runner',   icon: '🌟', rarity: 'rare'      }, // 200 coins
-  { type: 'skin', value: 'skin_2',              weight: 4, label: 'Pixel Dude',    icon: '👾', rarity: 'rare'      }, // 200 coins
+  { type: 'skin', value: 'skin_street_runner', weight: 2, label: 'Street Runner', icon: '🏃', rarity: 'rare'      }, // 150 coins
+  { type: 'skin', value: 'skin_1',              weight: 1, label: 'Neon Runner',   icon: '🌟', rarity: 'rare'      }, // 200 coins
+  { type: 'skin', value: 'skin_2',              weight: 1, label: 'Pixel Dude',    icon: '👾', rarity: 'rare'      }, // 200 coins
   // ── Epic (mid-tier trails + skins) ────────────────────────────────────────
   { type: 'trail',   value: 'trail_fire',     weight: 3,  label: 'Fire Trail',    icon: '🔥', rarity: 'epic'      }, // 300 coins
   { type: 'trail',   value: 'trail_coins',    weight: 2,  label: 'Coins Trail',   icon: '🪙', rarity: 'epic'      }, // 400 coins
-  { type: 'skin', value: 'skin_default',       weight: 3, label: 'Builder',       icon: '👷', rarity: 'epic'      }, // 300 coins
-  { type: 'skin', value: 'skin_3',              weight: 3, label: 'Shadow',        icon: '🌑', rarity: 'epic'      }, // 300 coins
-  { type: 'skin', value: 'skin_4',              weight: 3, label: 'Gold Rush',     icon: '💛', rarity: 'epic'      }, // 350 coins
-  { type: 'skin', value: 'skin_5',              weight: 2, label: 'Cyber Punk',    icon: '⚡', rarity: 'epic'      }, // 400 coins
-  { type: 'skin', value: 'skin_6',              weight: 2, label: 'Ocean Rider',   icon: '🌊', rarity: 'epic'      }, // 450 coins
-  { type: 'skin', value: 'skin_7',              weight: 2, label: 'Flame Chaser',  icon: '🔥', rarity: 'epic'      }, // 500 coins
-  { type: 'skin', value: 'skin_founder',       weight: 2, label: 'Founder',       icon: '🏗️', rarity: 'epic'      }, // 500 coins
-  // ── Legendary (most expensive skins + trails) ─────────────────────────────
-  { type: 'trail',   value: 'trail_rainbow',  weight: 1,  label: 'Rainbow Trail', icon: '🌈', rarity: 'legendary' }, // 600 coins
-  { type: 'skin', value: 'skin_8',              weight: 2, label: 'Arctic',        icon: '❄️', rarity: 'legendary' }, // 600 coins
+  { type: 'skin', value: 'skin_default',       weight: 1, label: 'Builder',       icon: '👷', rarity: 'epic'      }, // 300 coins
+  { type: 'skin', value: 'skin_3',              weight: 1, label: 'Shadow',        icon: '🌑', rarity: 'epic'      }, // 300 coins
+  { type: 'skin', value: 'skin_4',              weight: 1, label: 'Gold Rush',     icon: '💛', rarity: 'epic'      }, // 350 coins
+  { type: 'skin', value: 'skin_5',              weight: 1, label: 'Cyber Punk',    icon: '⚡', rarity: 'epic'      }, // 400 coins
+  { type: 'skin', value: 'skin_6',              weight: 1, label: 'Ocean Rider',   icon: '🌊', rarity: 'epic'      }, // 450 coins
+  { type: 'skin', value: 'skin_7',              weight: 1, label: 'Flame Chaser',  icon: '🔥', rarity: 'epic'      }, // 500 coins
+  { type: 'skin', value: 'skin_founder',       weight: 1, label: 'Founder',       icon: '🏗️', rarity: 'epic'      }, // 500 coins
+  // ── Legendary (trails + most expensive skins) ─────────────────────────────
+  { type: 'trail',   value: 'trail_rainbow',  weight: 2,  label: 'Rainbow Trail', icon: '🌈', rarity: 'legendary' }, // 600 coins
+  { type: 'skin', value: 'skin_8',              weight: 1, label: 'Arctic',        icon: '❄️', rarity: 'legendary' }, // 600 coins
   { type: 'skin', value: 'skin_9',              weight: 1, label: 'Desert Storm',  icon: '🌵', rarity: 'legendary' }, // 700 coins
   { type: 'skin', value: 'skin_10',             weight: 1, label: 'Thunder',       icon: '🌩️', rarity: 'legendary' }, // 800 coins
   { type: 'skin', value: 'skin_11',             weight: 1, label: 'Diamond Hands', icon: '💎', rarity: 'legendary' }, // 900 coins

@@ -314,36 +314,40 @@ export default function Game() {
       </div>
 
       {/* Daily Spin Screen */}
-      <div id="screen-spin" className="screen hidden" style={{justifyContent:'flex-start',paddingTop:'5vh',alignItems:'center'}}>
-        <h2 style={{color:'#fff',fontSize:'clamp(1.2rem,6vw,1.8rem)',marginBottom:'4px',letterSpacing:'3px'}}>🎰 DAILY SPIN</h2>
-        <p style={{color:'rgba(255,255,255,0.45)',fontSize:'clamp(0.75rem,3vw,0.9rem)',marginBottom:'16px',letterSpacing:'1px'}}>Free once a day · resets at 00:00 UTC</p>
+      <div id="screen-spin" className="screen hidden spin-screen">
+        <div className="spin-scroll">
+          <h2 style={{color:'#fff',fontSize:'clamp(1.2rem,6vw,1.8rem)',marginBottom:'4px',letterSpacing:'3px'}}>🎰 DAILY SPIN</h2>
+          <p style={{color:'rgba(255,255,255,0.45)',fontSize:'clamp(0.75rem,3vw,0.9rem)',marginBottom:'16px',letterSpacing:'1px'}}>Free once a day · resets at 00:00 UTC</p>
 
-        {/* Wheel canvas */}
-        <div className="spin-wheel-wrap">
-          <canvas id="spin-wheel-canvas" />
-          {/* Fixed pointer at top */}
-          <div className="spin-pointer" />
-        </div>
-
-        {/* Unified prize card — result + optional NFT claim */}
-        <div id="spin-prize-card" className="spin-prize-card hidden">
-          <div id="spin-prize-icon" className="spin-prize-icon"></div>
-          <div id="spin-prize-label" className="spin-prize-label"></div>
-          <div id="spin-nft-section" className="spin-nft-section hidden">
-            <div className="spin-nft-divider" />
-            <div className="spin-nft-sub">Claim as NFT on Base</div>
-            <button className="spin-nft-btn" id="btn-spin-nft">Claim</button>
-            <button className="spin-nft-later" id="btn-spin-nft-later">Later →</button>
+          {/* Wheel canvas */}
+          <div className="spin-wheel-wrap">
+            <canvas id="spin-wheel-canvas" />
+            {/* Fixed pointer at top */}
+            <div className="spin-pointer" />
           </div>
+
+          {/* Unified prize card — result + optional NFT claim */}
+          <div id="spin-prize-card" className="spin-prize-card hidden">
+            <div id="spin-prize-icon" className="spin-prize-icon"></div>
+            <div id="spin-prize-label" className="spin-prize-label"></div>
+            <div id="spin-nft-section" className="spin-nft-section hidden">
+              <div className="spin-nft-divider" />
+              <div className="spin-nft-sub">Claim as NFT on Base</div>
+              <button className="spin-nft-btn" id="btn-spin-nft">Claim</button>
+              <button className="spin-nft-later" id="btn-spin-nft-later">Later →</button>
+            </div>
+          </div>
+
+          {/* Countdown when already spun */}
+          <div id="spin-timer" className="spin-timer hidden" />
+
+          <button className="btn" id="btn-do-spin" style={{color:'#fff',marginBottom:'10px',width:'min(280px,85vw)',fontSize:'clamp(1rem,4.5vw,1.2rem)',letterSpacing:'2px'}}>
+            🎰 SPIN
+          </button>
         </div>
-
-        {/* Countdown when already spun */}
-        <div id="spin-timer" className="spin-timer hidden" />
-
-        <button className="btn" id="btn-do-spin" style={{color:'#fff',marginBottom:'10px',width:'min(280px,85vw)',fontSize:'clamp(1rem,4.5vw,1.2rem)',letterSpacing:'2px'}}>
-          🎰 SPIN
-        </button>
-        <button className="btn btn-back" id="btn-spin-back" style={{width:'min(280px,85vw)'}}>← BACK</button>
+        <div className="spin-back-bar">
+          <button className="btn btn-back" id="btn-spin-back" style={{width:'min(280px,85vw)'}}>← BACK</button>
+        </div>
       </div>
 
       {/* Leaderboard Screen */}

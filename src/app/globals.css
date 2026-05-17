@@ -1267,6 +1267,26 @@
     .spin-banner-arrow { color: rgba(255,255,255,0.5); font-size: 1.4rem; flex-shrink: 0; }
 
     /* Wheel */
+    /* Spin screen layout — scrollable content + fixed back button */
+    .spin-screen {
+      display: flex; flex-direction: column;
+      justify-content: flex-start;
+      padding: 0;
+    }
+    .spin-scroll {
+      flex: 1; overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      padding: 5vh 16px 16px;
+      display: flex; flex-direction: column; align-items: center;
+    }
+    .spin-back-bar {
+      flex-shrink: 0;
+      padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+      display: flex; justify-content: center;
+      background: linear-gradient(to top, var(--ui-bg) 60%, transparent);
+    }
+
     .spin-wheel-wrap {
       position: relative;
       margin-bottom: 16px;

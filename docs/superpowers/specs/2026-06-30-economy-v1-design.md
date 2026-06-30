@@ -140,7 +140,7 @@ fragmentProgress: {
 
 V1 must not introduce universal fragments. If the current Focus Item is already
 ready to craft and the player has not selected a new focus, fragment rewards
-convert to coins using the source's fallback value.
+convert to coins using the fallback conversion table in Reward Design.
 
 Deployment rule: fragments and craft state can be local-only during prototype
 work, but the deployable implementation must award fragments and process
@@ -160,15 +160,19 @@ Suggested V1 tiers:
 
 | Tier | Examples | Fragment Target | Craft Fee | Direct Price |
 | --- | --- | ---: | ---: | ---: |
-| Common | early trails, simple death effects | 10 | 80 | 150-200 |
-| Rare | early skins, better trails | 20 | 180 | 450-650 |
-| Epic | premium skins/effects | 35 | 350 | 900-1400 |
-| Legendary | top skins/trails | 60 | 750 | fragment-only or 2500-4000 |
+| Common | early trails, simple death effects | 10 | 40 | 150-200 |
+| Rare | early skins, better trails | 20 | 100 | 450-650 |
+| Epic | premium skins/effects | 35 | 220 | 900-1400 |
+| Legendary | top skins/trails | 60 | 500 | fragment-only or 2500-4000 |
 
 Direct prices for common items can stay close to current values. Rare and above
 need wider separation so direct coin purchase does not bypass the collectible
 loop. Legendary items should default to fragment-only in V1 unless there is a
 specific event/store reason to sell them directly.
+
+Craft fees are intentionally lower than direct prices. Their job is to keep
+coins relevant at unlock time, not to become a second long grind after fragments
+are complete.
 
 ## Reward Design
 
@@ -212,10 +216,10 @@ Proposed 7-day cycle:
 
 Every 28 total check-ins:
 
-- guaranteed cosmetic unlock, or
-- legendary crate, if direct unlock feels too generous.
+- guaranteed non-legendary cosmetic unlock, or
+- legendary crate/progress bundle.
 
-Recommended V1: use legendary crate rather than guaranteed legendary item.
+Recommended V1: use legendary crate rather than a direct full-item unlock.
 
 ### Daily Spin
 
@@ -276,6 +280,9 @@ This gives each quest an identity:
 ### Level Rewards
 
 Levels should feel like guaranteed milestones. Avoid too many plain coin levels.
+Level milestones may grant full common/rare/epic cosmetics, but V1 should not
+grant full legendary cosmetics directly. Legendary level milestones should grant
+legendary crates, large Focus progress, or seasonal/prestige progress.
 
 Suggested early/mid track:
 
@@ -285,16 +292,82 @@ Suggested early/mid track:
 | 3 | first trail unlock |
 | 5 | Focus chest |
 | 7 | death effect |
-| 10 | guaranteed skin |
+| 10 | guaranteed rare skin |
 | 12 | Focus chest |
 | 15 | epic trail |
 | 20 | rare skin |
 | 25 | epic crate |
-| 30 | legendary skin |
-| 35 | legendary trail |
+| 30 | legendary crate |
+| 35 | legendary Focus progress bundle |
 | 40+ | prestige variants / seasonal crates |
 
 Coin-only level rewards should be reduced or paired with fragments.
+
+### Reward Containers
+
+Crates and chests must have explicit expected value. They are part of the
+economy budget, not decorative labels.
+
+V1 container definitions:
+
+| Container | Source | Reward |
+| --- | --- | --- |
+| Gear Crate | Check-in day 7 | 5 Focus fragments + 3 random boosters |
+| Focus Chest | Level rewards / shop | 6 Focus fragments |
+| Rare Crate | Quest mid-tier / spin jackpot | 8 Focus fragments + 1 random booster + 40 coins |
+| Epic Crate | Quest capstone / level 25 | 12 Focus fragments + 2 random boosters + 80 coins |
+| Legendary Crate | Day-28 / level 30 | 18 Focus fragments + 3 random boosters + 150 coins |
+| Legendary Focus Bundle | Level 35 | 20 Focus fragments, only for legendary focus items |
+
+Container rules:
+
+- Containers grant fragments to the active Focus Item.
+- If no valid Focus Item exists, the player must choose one before opening.
+- Legendary containers do not grant full legendary cosmetics in V1.
+- If a container would overfill a ready-to-craft item, excess fragment value
+  converts through the fallback conversion table below.
+- Direct full unlocks from containers are allowed only for common/rare/epic
+  items and only when explicitly listed in a later loot table.
+
+### Daily Fragment Chest
+
+This is a coin sink for players who are close to a goal.
+
+V1 rule:
+
+- Limit: 1 purchase/day.
+- Cost: 90 coins.
+- Reward: 3 Focus fragments.
+- Requires a valid Focus Item that is not ready to craft.
+- Disabled when the player owns all craftable cosmetics.
+
+Future expansion, only after telemetry:
+
+- Buy 2: 160 coins for 3 Focus fragments.
+- Buy 3: 240 coins for 3 Focus fragments.
+
+The extra buys are deliberately inefficient. They are for impatience/top-up,
+not the default progression path.
+
+### Fallback Conversion
+
+When a fragment reward cannot be applied because the Focus Item is ready to
+craft, invalid, or missing, convert the fragment portion into capped coins.
+
+Fallback values:
+
+| Source | Coins Per Unapplied Fragment |
+| --- | ---: |
+| Check-in | 8 |
+| Free spin | 10 |
+| Paid spin | 12 |
+| Quest | 12 |
+| Level reward | 15 |
+| Crate/chest | 10 |
+
+Fallback conversion should be a safety valve, not a preferred farming route.
+If fallback conversion becomes common in telemetry, the UI should force focus
+selection earlier or pause fragment rewards until a valid focus is selected.
 
 ## Shop Design
 
@@ -323,7 +396,7 @@ Add more useful coin spending:
 - paid spins
 - craft fees
 - top-up missing fragments near craft completion
-- daily fragment chest, limited to 1-3 buys/day
+- daily fragment chest, limited to 1 buy/day in V1
 - shop refresh/reroll
 - run modifiers in a later phase
 
@@ -366,9 +439,9 @@ Baseline fragment income if the player keeps one Focus Item selected:
 | --- | ---: |
 | Check-in 7-day cycle | 10/week |
 | Free daily spin | about 1.17/day, 8.2/week |
-| Quests | variable, target 4-8/week for active casual players |
-| Level rewards | lumpy, target 4-8/week during early progression |
-| Daily fragment chest | optional coin sink, player-paid |
+| Quests and quest crates | variable, target 4-8/week for active casual players |
+| Level rewards and chests | lumpy, target 4-8/week during early progression |
+| Daily fragment chest | optional player-paid, 3 fragments/day if bought |
 
 Free daily spin estimate:
 
@@ -382,6 +455,15 @@ Expected weekly focus progress:
 - Casual 5 active days/week with check-in/spin: about 13 fragments/week.
 - Casual with natural quest claims: about 17-22 fragments/week.
 - Good active player with quests/levels/chests: about 25-35 fragments/week.
+
+Container EV must be counted using the explicit container table:
+
+- Gear Crate: 5 fragments.
+- Focus Chest: 6 fragments.
+- Rare Crate: 8 fragments.
+- Epic Crate: 12 fragments.
+- Legendary Crate: 18 fragments.
+- Legendary Focus Bundle: 20 fragments.
 
 Expected unlock timing:
 
@@ -413,6 +495,35 @@ Expected total:
 
 - Casual: about 25-65 coins/day.
 - Good active player: about 45-110 coins/day.
+
+### Coin Spend Budget
+
+Craft fees compete with other sinks, so V1 should treat most sinks as optional
+accelerators rather than daily obligations.
+
+Recommended casual budget:
+
+| Sink | Suggested Casual Spend |
+| --- | ---: |
+| Booster packs | 0-120/week, mostly supplemented by rewards |
+| Continue | occasional only, 0-100/week |
+| Paid spins | optional, not expected for baseline progression |
+| Daily fragment chest | optional, only when player wants acceleration |
+| Shop refresh/reroll | later-phase sink, not baseline |
+| Craft fee reserve | protected target, do not design around spending it |
+
+Craft affordability target:
+
+- Common craft fee should be affordable from about 1-2 active days of saved
+  casual coin income.
+- Rare craft fee should be affordable from about 2-4 active days.
+- Epic craft fee should be affordable from about 4-7 active days.
+- Legendary craft fee should be affordable by the time 60 fragments are earned
+  if the player does not heavily spend on optional acceleration.
+
+If telemetry shows many players reaching `ready to craft` without coins, reduce
+craft fees before increasing coin income. Increasing income can weaken all other
+prices; reducing craft fees targets the actual bottleneck.
 
 Direct coin prices must be set so coins do not bypass fragments:
 
@@ -630,8 +741,9 @@ Only after retention and reward sinks work:
    Recommendation: keep scaling cost, but cap meaningful value after several
    spins or add diminishing rewards.
 
-4. Whether day-28 reward is guaranteed cosmetic or crate.
-   Recommendation: crate in V1, guaranteed cosmetic later for seasons.
+4. Whether day-28 reward is guaranteed non-legendary cosmetic or crate.
+   Recommendation: crate in V1, guaranteed non-legendary cosmetic later for
+   seasons.
 
 5. Whether run modifiers belong in Economy V1.
    Recommendation: no. Keep them as a later coin-sink feature because they touch

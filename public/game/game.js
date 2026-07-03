@@ -3013,7 +3013,7 @@ const Renderer = (() => {
         }
         ctx.fillStyle = waterColor;
         ctx.fillRect(0, y, COLS * CELL, CELL);
-        drawWaterEffect(y);
+        drawWaterEffect(y, row.idx);
         drawLogs(row, y, bi);
       } else if (row.type === 'train') {
         drawTrainRow(row, y);
@@ -3548,9 +3548,10 @@ const Renderer = (() => {
 
   const CAR_COLORS = ['#E53935','#1E88E5','#43A047','#FB8C00','#8E24AA','#00ACC1'];
 
-  function drawWaterEffect(rowY) {
+  function drawWaterEffect(rowY, rowIdx) {
     const W  = COLS * CELL;
     const wt = waterTime;
+    const salt = ((rowIdx || 0) * 137) % W; // per-row offset — no vertical glint columns
 
     // Weather-dependent wave boost: rain 1.2x, storm 1.8x, wind 1.3x
     let wBoostVal = 0;
@@ -3597,10 +3598,10 @@ const Renderer = (() => {
         {x: W * 0.92, yo: 30},
       ];
       for (const g of glints) {
-        const flicker = 0.3 + 0.7 * Math.abs(Math.sin(wt * 2.5 + g.x));
+        const flicker = 0.3 + 0.7 * Math.abs(Math.sin(wt * 2.5 + g.x + salt));
         if (flicker > 0.6) {
           ctx.globalAlpha = flicker * (nightRatio > 0.3 ? 0.7 : 0.5);
-          ctx.fillRect(g.x, rowY + g.yo, 2, 2);
+          ctx.fillRect((g.x + salt) % W, rowY + g.yo, 2, 2);
         }
       }
       // Moonlight shimmer on water at night
@@ -3610,10 +3611,10 @@ const Renderer = (() => {
           {x: W * 0.82, yo: 18},
         ];
         for (const mg of moonGlints) {
-          const shimmer = 0.5 + 0.5 * Math.sin(wt * 1.8 + mg.x * 0.1);
+          const shimmer = 0.5 + 0.5 * Math.sin(wt * 1.8 + (mg.x + salt) * 0.1);
           ctx.globalAlpha = shimmer * nightRatio * 0.4;
           ctx.fillStyle = 'rgba(200,220,255,1)';
-          ctx.fillRect(mg.x, rowY + mg.yo, 3, 1.5);
+          ctx.fillRect((mg.x + salt) % W, rowY + mg.yo, 3, 1.5);
         }
       }
       ctx.globalAlpha = 1;
@@ -3626,12 +3627,17 @@ const Renderer = (() => {
       ctx.strokeStyle = `rgba(${r},${gb},255,${ripAlpha})`;
       ctx.lineWidth = 0.8;
       for (let i = 0; i < rippleCount; i++) {
-        const rx = ((wt * 40 + i * W / rippleCount) % W);
-        const ry = rowY + 15 + (i * 13) % 45;
-        const rr = 2 + Math.sin(wt * 3 + i * 2) * 1.5;
-        ctx.globalAlpha = ripAlpha * (0.5 + 0.5 * Math.cos(wt * 4 + i));
+        const cycle = wt * 0.9 + i / rippleCount + (rowIdx || 0) * 0.37;
+        const phase = cycle % 1;                       // 0→1 жизненный цикл
+        const seed  = Math.floor(cycle);               // новая позиция на каждый цикл
+        const hx = Math.abs(Math.sin(seed * 12.9898 + i * 78.233)) % 1;
+        const hy = Math.abs(Math.sin(seed * 39.3468 + i * 11.135)) % 1;
+        const rx = hx * W;
+        const ry = rowY + 10 + hy * 45;
+        const rr = 1 + phase * 6;                      // расширяется
+        ctx.globalAlpha = ripAlpha * (1 - phase);      // и тает
         ctx.beginPath();
-        ctx.ellipse(rx, ry, rr * 1.8, rr * 0.6, 0, 0, Math.PI * 2);
+        ctx.ellipse(rx, ry, rr * 1.6, rr * 0.55, 0, 0, Math.PI * 2);
         ctx.stroke();
       }
       ctx.globalAlpha = 1;

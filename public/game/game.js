@@ -1482,12 +1482,22 @@ const World = (() => {
 
       if (out) {
         obs.splice(i, 1);
-        // Re-queue: зазор соответствует типу ряда.
-        // Дороги: 2–4 клетки (сохраняем плотность). Реки: 2–4 клетки.
+        // Re-queue: зазор соответствует типу ряда
         const rp = smoothProgress(currentScore, 0, 250);
-        const reqMin = _lerp(3, 2, rp);
-        const reqMax = _lerp(5, 3, rp);
-        const requeueDist = (reqMin + Math.random() * (reqMax - reqMin)) * CELL;
+        let requeueDist;
+        if (row.type === 'water') {
+          // Реки: те же 1–2 клетки, что и в makeWaterRow — иначе ряд редеет вдвое
+          const gapMax = Math.round(_lerp(2, 1, rp));
+          requeueDist = (1 + Math.random() * Math.max(0, gapMax - 1)) * CELL;
+        } else if (row.type === 'train') {
+          // Поезда: пауза 3.5–6 с между проходами (gap в px = скорость × секунды)
+          requeueDist = spd * (3.5 + Math.random() * 2.5);
+        } else {
+          // Дороги: 2–5 клеток, плотнее с ростом сложности
+          const reqMin = _lerp(3, 2, rp);
+          const reqMax = _lerp(5, 3, rp);
+          requeueDist = (reqMin + Math.random() * (reqMax - reqMin)) * CELL;
+        }
         row.spawnQueue.push({ width: o.width, height: o.height, gap: o.width + requeueDist, sprite: o.spriteKey || null });
       }
     }

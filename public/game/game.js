@@ -1835,7 +1835,8 @@ const Player = (() => {
     // Инвиз от предыдущего срабатывания щита — только от машин
     if (type !== 'water' && _invincibleTimer > 0) return;
     // Second Chance — даёт инвиз 3 сек, только от машин
-    if (type !== 'water' && !_shieldUsed && typeof Loadout !== 'undefined' && Loadout.isActive('boost_shield')) {
+    if (type !== 'water' && !_shieldUsed && typeof Loadout !== 'undefined' && Loadout.isActive('boost_shield')
+        && typeof Shop !== 'undefined' && Shop.spendBoosterLocal('boost_shield')) {
       _shieldUsed      = true;
       _invincibleTimer = INVINCIBLE_DUR;
       if (typeof Vibrate !== 'undefined') Vibrate.coin();
@@ -7047,7 +7048,12 @@ const Loadout = (() => {
     active = {};
     if (typeof Shop !== 'undefined') {
       for (const id of selected) {
-        if (Shop.spendBoosterLocal(id)) active[id] = true;
+        if (id === 'boost_shield') {
+          // Second Chance is consumed in Player.kill() at the moment it saves the player
+          if (Shop.getBoosterCount(id) > 0) active[id] = true;
+        } else if (Shop.spendBoosterLocal(id)) {
+          active[id] = true;
+        }
       }
     }
     if (typeof UI !== 'undefined' && UI.setRunBoosters) UI.setRunBoosters(active);

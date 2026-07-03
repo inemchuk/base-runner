@@ -3358,6 +3358,12 @@ const Renderer = (() => {
       const x = car.x;
       const y = rowY + (CELL - car.height) / 2;
 
+      // Soft ground shadow — grounds the sprite on the road
+      ctx.fillStyle = 'rgba(0,0,0,0.18)';
+      ctx.beginPath();
+      ctx.ellipse(x + car.width / 2, y + car.height * 0.92, car.width * 0.46, car.height * 0.18, 0, 0, Math.PI * 2);
+      ctx.fill();
+
       // Use explicit spriteKey from world if available, else fall back to pool
       const isSiren    = car.isSirenCar === true;
       const slot       = (car.spriteSlot !== undefined) ? car.spriteSlot : carI;
@@ -3647,7 +3653,13 @@ const Renderer = (() => {
   function drawLogs(row, rowY, bi) {
     for (const log of row.obstacles) {
       const x = log.x;
-      const y = rowY + (CELL - log.height) / 2;
+      // Лёгкое покачивание на воде + тень — бревно "сидит" в воде, а не парит
+      const bob = Math.sin(waterTime * 2 + log.x * 0.01) * 1.5;
+      const y = rowY + (CELL - log.height) / 2 + bob;
+      ctx.fillStyle = 'rgba(0,20,60,0.25)';
+      ctx.beginPath();
+      ctx.ellipse(x + log.width / 2, rowY + CELL * 0.8, log.width * 0.48, 5, 0, 0, Math.PI * 2);
+      ctx.fill();
       if (_logSpriteImg && _logSpriteImg.complete && _logSpriteImg.naturalWidth) {
         ctx.drawImage(_logSpriteImg, x, y, log.width, log.height);
         continue;

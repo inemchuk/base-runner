@@ -1348,6 +1348,23 @@ const World = (() => {
       if (row.type === 'water') processRow(row, dt, MIN_LOG_GAP);
       if (row.type === 'train') {
         processRow(row, dt, CELL);
+        // Re-arm the warning ~1.2s before every train pass (spawnTimer advances in px)
+        const next = row.spawnQueue[0];
+        if (next) {
+          const spd = Math.abs(row.speed);
+          const timeToSpawn = (next.gap - row.spawnTimer) / spd;
+          if (timeToSpawn > 1.6) {
+            row.hornArmed = false; // far away again — allow the next warning
+          } else if (!row.hornArmed && timeToSpawn <= 1.2 && timeToSpawn > 0) {
+            row.warning      = true;
+            row.warningTimer = 0;
+            row.hornArmed    = true;
+            // Horn only for rows near the player (score ≈ max row reached)
+            if (Math.abs(row.idx - currentScore) <= 14 && typeof Sound !== 'undefined') {
+              Sound.trainHorn();
+            }
+          }
+        }
         if (row.warning) {
           row.warningTimer += dt;
           if (row.warningTimer >= 1.2) row.warning = false;

@@ -2624,28 +2624,33 @@ const Renderer = (() => {
     if (total === 0) spritesReady = true;
   }
 
+  // CSS-px view size + device pixel ratio (backing store is scaled by _dpr)
+  let _viewW = 0, _viewH = 0, _dpr = 1;
+
   function resize() {
     if (!canvas) return;
     // Use game-container bounds on desktop, fallback to window
     const container = document.getElementById('game-container');
-    if (container) {
-      const rect = container.getBoundingClientRect();
-      canvas.width  = rect.width;
-      canvas.height = rect.height;
-    } else {
-      canvas.width  = window.innerWidth;
-      canvas.height = window.innerHeight;
-    }
+    const rect = container
+      ? container.getBoundingClientRect()
+      : { width: window.innerWidth, height: window.innerHeight };
+    _dpr   = Math.min(window.devicePixelRatio || 1, 2); // cap: retina sharpness without 3x fill cost
+    _viewW = rect.width;
+    _viewH = rect.height;
+    canvas.width  = Math.round(_viewW * _dpr);
+    canvas.height = Math.round(_viewH * _dpr);
+    canvas.style.width  = _viewW + 'px';
+    canvas.style.height = _viewH + 'px';
   }
 
   function updateCamera(dt) {
     if (!canvas) return;
     const ps = Player.getState();
     const worldY  = World.rowToY(ps.row) + CELL / 2;
-    // Учитываем масштаб: видимая высота в мировых координатах = canvas.height / scale
+    // Учитываем масштаб: видимая высота в мировых координатах = высота вью / scale
     const worldW = COLS * CELL;
-    const scale = Math.min(1, (canvas.width / worldW) * 1.25);
-    const visibleH = canvas.height / scale;
+    const scale = Math.min(1, ((_viewW || canvas.width) / worldW) * 1.25);
+    const visibleH = (_viewH || canvas.height) / scale;
     targetCamY = worldY - visibleH * 0.65;
     // Не показывать пустоту ниже карты: камера не должна показывать область ниже нижних рядов
     // rowToY(-12) = 12*CELL = 768, нижний край экрана = cameraY + visibleH
@@ -2658,8 +2663,8 @@ const Renderer = (() => {
 
   function draw(dt) {
     if (!canvas) return;
-    const W = canvas.width;
-    const H = canvas.height;
+    const W = _viewW || canvas.width;
+    const H = _viewH || canvas.height;
     _now = Date.now(); // single timestamp for all animations this frame
 
     // Real frame delta from the game loop; clamped, with a fallback for stray calls
@@ -2757,6 +2762,7 @@ const Renderer = (() => {
     if (nightRatio < nightTarget) nightRatio = Math.min(nightRatio + NIGHT_STEP, nightTarget);
     if (nightRatio > nightTarget) nightRatio = Math.max(nightRatio - NIGHT_STEP, nightTarget);
 
+    ctx.setTransform(_dpr, 0, 0, _dpr, 0, 0); // all draw code below works in CSS px
     ctx.clearRect(0, 0, W, H);
 
     // Sky — blend with weather tint

@@ -2045,43 +2045,54 @@ const Renderer = (() => {
 
   let _lastWeatherScore = -1;
 
+  // Two-phase weather change: fade current weather out, then swap in the new one
+  let pendingWeather = null;
+
+  function _applyWeatherState(state) {
+    weatherState   = state;
+    pendingWeather = null;
+    // Переинициализировать частицы дождя с правильным количеством
+    if (state === 3)      { rainInitDone = false; initRain(STORM_RAIN_COUNT); }
+    else if (state === 1) { rainInitDone = false; initRain(RAIN_COUNT); }
+  }
+
   function setWeather(score) {
     const threshold = Math.floor(score / 30);
     if (threshold === _lastWeatherScore) return;
     _lastWeatherScore = threshold;
 
     const prevState = weatherState;
+    let next;
 
     if (score < 30) {
-      weatherState = 0;
+      next = 0;
     } else {
       // Взвешенный рандом в зависимости от score
       const r = Math.random();
       if (score < 80) {
         // clear 50%, rain 25%, fog 15%, windy 10%
-        if      (r < 0.50) weatherState = 0;
-        else if (r < 0.75) weatherState = 1;
-        else if (r < 0.90) weatherState = 2;
-        else                weatherState = 4;
+        if      (r < 0.50) next = 0;
+        else if (r < 0.75) next = 1;
+        else if (r < 0.90) next = 2;
+        else                next = 4;
       } else {
         // clear 30%, rain 25%, fog 15%, storm 15%, windy 15%
-        if      (r < 0.30) weatherState = 0;
-        else if (r < 0.55) weatherState = 1;
-        else if (r < 0.70) weatherState = 2;
-        else if (r < 0.85) weatherState = 3;
-        else                weatherState = 4;
+        if      (r < 0.30) next = 0;
+        else if (r < 0.55) next = 1;
+        else if (r < 0.70) next = 2;
+        else if (r < 0.85) next = 3;
+        else                next = 4;
       }
       // Не повторять ту же погоду подряд (кроме clear)
-      if (weatherState !== 0 && weatherState === prevState) {
-        weatherState = 0;
-      }
+      if (next !== 0 && next === prevState) next = 0;
     }
 
-    if (weatherState !== prevState) {
-      weatherRatio = 0;
-      // Переинициализировать частицы дождя с правильным количеством
-      if (weatherState === 3) { rainInitDone = false; initRain(STORM_RAIN_COUNT); }
-      else if (weatherState === 1) { rainInitDone = false; initRain(RAIN_COUNT); }
+    if (next === prevState) {
+      pendingWeather = null; // re-rolled the current weather — cancel any pending swap
+    } else if (prevState === 0 || weatherRatio < 0.05) {
+      _applyWeatherState(next); // nothing visible to fade out — switch immediately
+    } else {
+      pendingWeather = next; // draw() fades the current weather to 0, then swaps
     }
   }
 
@@ -2676,10 +2687,11 @@ const Renderer = (() => {
     const _ps = Player.getState();
     if (_ps.jumping || _ps.onLog) walkTime += dt_approx;
 
-    // Advance weather blend (slower for smoother transitions; 0.012/frame @60fps ≈ 0.72/s)
-    const targetRatio = weatherState > 0 ? 1 : 0;
+    // Advance weather blend; a pending swap first fades the current weather to zero
+    const targetRatio = pendingWeather !== null ? 0 : (weatherState > 0 ? 1 : 0);
     weatherRatio += (targetRatio - weatherRatio) * Math.min(1, dt_approx * 0.72);
     if (weatherRatio < 0.005) weatherRatio = 0; // snap to zero — stop residual work
+    if (pendingWeather !== null && weatherRatio === 0) _applyWeatherState(pendingWeather);
 
     // Advance rain particles (rain + storm)
     if (weatherState === 1 || weatherState === 3 || weatherRatio > 0.05) {
@@ -4887,9 +4899,9 @@ const Renderer = (() => {
   }
 
   function stopDeath() { deathActive = false; deathTimer = 0; deathParticles = []; trails.length = 0; }
-  function resetWeather() { _lastWeatherScore = -1; weatherState = 0; weatherRatio = 0; lightningFlash = 0; lightningTimer = 4; }
+  function resetWeather() { _lastWeatherScore = -1; weatherState = 0; pendingWeather = null; weatherRatio = 0; lightningFlash = 0; lightningTimer = 4; }
   // Debug: force a specific weather state (0=clear,1=rain,2=fog,3=storm,4=windy)
-  function _dbgWeather(state) { weatherState = state; weatherRatio = 0; if (state===3) { rainInitDone=false; initRain(STORM_RAIN_COUNT); } else if (state===1) { rainInitDone=false; initRain(RAIN_COUNT); } }
+  function _dbgWeather(state) { pendingWeather = null; weatherState = state; weatherRatio = 0; if (state===3) { rainInitDone=false; initRain(STORM_RAIN_COUNT); } else if (state===1) { rainInitDone=false; initRain(RAIN_COUNT); } }
   let _dbgNightForce = null;
   function _dbgNight(on) { _dbgNightForce = on; nightTarget = on ? 1 : 0; _nightOn = on; }
   return { init, resize, updateCamera, draw, setScore, setWeather, triggerDeath, triggerShake, isDying, deathDone, stopDeath, resetWeather, addTrail, addCoinEffect, addScoreEffect, addMagnetCoin, addShieldBurst, reloadPlayerSprite, _dbgWeather, _dbgNight };

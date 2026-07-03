@@ -1,5 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createHmac } from 'crypto';
+import { updateLevelProgressFromRun } from '@/lib/economy/levels.ts';
+import { updateQuestProgressFromRun } from '@/lib/economy/quests.ts';
+import {
+  readCheckinRewardState,
+  readLevelState,
+  readQuestState,
+  writeLevelState,
+  writeQuestState,
+} from '@/lib/economy/storage.ts';
 
 const SECRET              = process.env.ANTI_CHEAT_SECRET ?? 'dev_secret_change_in_prod';
 const MAX_ROWS_PER_SEC    = 5;    // generous upper bound on player speed
@@ -50,7 +59,7 @@ async function getRedis() {
 
 export async function POST(req: NextRequest) {
   try {
-    const { address, score, token } = await req.json();
+    const { address, score, sessionCoins, token } = await req.json();
 
     if (!address || typeof score !== 'number' || score <= 0) {
       return NextResponse.json({ ok: false, error: 'invalid params' }, { status: 400 });
@@ -90,6 +99,7 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Persist (best score per period) ─────────────────────────────────
+    let previousBest = 0;
     const redis = await getRedis();
     if (redis) {
       const now   = new Date();
@@ -98,6 +108,7 @@ export async function POST(req: NextRequest) {
 
       // All-time: only update if new personal best
       const current = await redis.zscore('scores', addr);
+      previousBest = Math.max(0, Number(current) || 0);
       if (!current || score > Number(current)) {
         await redis.zadd('scores', { score, member: addr });
       }
@@ -115,10 +126,38 @@ export async function POST(req: NextRequest) {
       }
     } else {
       const current = memStore.get(addr) ?? 0;
+      previousBest = Math.max(0, Number(current) || 0);
       if (score > current) memStore.set(addr, score);
     }
 
-    return NextResponse.json({ ok: true });
+    const [questState, levelState, checkinRewardState] = await Promise.all([
+      readQuestState(addr),
+      readLevelState(addr),
+      readCheckinRewardState(addr),
+    ]);
+    const nextQuestState = updateQuestProgressFromRun(questState, { score, sessionCoins });
+    const levelUpdate = updateLevelProgressFromRun(levelState, {
+      score,
+      sessionCoins,
+      checkinStreak: checkinRewardState.streak,
+      isNewRecord: score > previousBest,
+    });
+
+    await Promise.all([
+      writeQuestState(addr, nextQuestState),
+      writeLevelState(addr, levelUpdate.state),
+    ]);
+
+    return NextResponse.json({
+      ok: true,
+      quests: nextQuestState,
+      levels: levelUpdate.state,
+      xp: {
+        earned: levelUpdate.xpEarned,
+        breakdown: levelUpdate.breakdown,
+      },
+      levelUps: levelUpdate.levelUps,
+    });
   } catch (e) {
     console.error('score/submit error:', e);
     return NextResponse.json({ ok: false }, { status: 500 });

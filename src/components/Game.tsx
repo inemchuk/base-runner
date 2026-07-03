@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, type CSSProperties } from 'react';
 import Script from 'next/script';
 import { useCheckIn } from '@/hooks/useCheckIn';
 import { useLeaderboard } from '@/hooks/useLeaderboard';
@@ -10,6 +10,15 @@ import { useShopSync } from '@/hooks/useShopSync';
 import { useQuestSync } from '@/hooks/useQuestSync';
 import { useDailySpin } from '@/hooks/useDailySpin';
 import { useNftMint } from '@/hooks/useNftMint';
+import { useEconomySync } from '@/hooks/useEconomySync';
+
+type GameWindow = Window & {
+  Renderer?: {
+    resize?: () => void;
+  };
+  __BASE_CHECKIN_CLAIM?: () => void;
+  __BASE_SUBMIT_SCORE?: (score: number, sessionCoins?: number) => Promise<unknown>;
+};
 
 export default function Game() {
   useCheckIn();
@@ -20,29 +29,34 @@ export default function Game() {
   useQuestSync();
   useDailySpin();
   useNftMint();
+  useEconomySync();
 
   useEffect(() => {
+    const gameWindow = window as GameWindow;
+
     // Resize canvas on mount
     const handleResize = () => {
       const canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
-      if (canvas && (window as any).Renderer) {
-        (window as any).Renderer.resize();
+      if (canvas && gameWindow.Renderer?.resize) {
+        gameWindow.Renderer.resize();
       }
     };
     window.addEventListener('resize', handleResize);
 
     // Listen for check-in claim requests from game.js
     const handleClaim = () => {
-      const claimFn = (window as any).__BASE_CHECKIN_CLAIM;
+      const claimFn = gameWindow.__BASE_CHECKIN_CLAIM;
       if (claimFn) claimFn();
     };
     window.addEventListener('base-checkin-claim', handleClaim);
 
     // Auto-submit score after game over (offchain)
     const handleAutoSubmit = (e: Event) => {
-      const score = (e as CustomEvent).detail?.score;
-      const submitFn = (window as any).__BASE_SUBMIT_SCORE;
-      if (submitFn && score) submitFn(score);
+      const detail = (e as CustomEvent<{ score?: number; sessionCoins?: number }>).detail;
+      const score = detail?.score;
+      const sessionCoins = detail?.sessionCoins;
+      const submitFn = gameWindow.__BASE_SUBMIT_SCORE;
+      if (submitFn && score) submitFn(score, sessionCoins);
     };
     window.addEventListener('base-auto-submit-score', handleAutoSubmit);
 
@@ -52,6 +66,24 @@ export default function Game() {
       window.removeEventListener('base-auto-submit-score', handleAutoSubmit);
     };
   }, []);
+
+  const loadoutGearCardStyle: CSSProperties = {
+    minHeight: 146,
+    gridTemplateRows: '82px auto',
+    gap: 8,
+    padding: '12px 8px 10px',
+  };
+  const loadoutGearArrowStyle: CSSProperties = {
+    width: 28,
+    height: 50,
+    fontSize: '1.1rem',
+  };
+  const loadoutGearPreviewStyle: CSSProperties = {
+    width: 82,
+    height: 80,
+    objectFit: 'contain',
+    imageRendering: 'pixelated',
+  };
 
   return (
     <div id="game-container" className="game-container">
@@ -63,26 +95,42 @@ export default function Game() {
 
       {/* HUD */}
       <div id="hud" className="hidden">
-        <div id="score-combined">
-          <div id="score-box" className="score-item">
-            <span className="score-label">STEPS</span>
-            <span className="score-val-num" id="score-val">0</span>
+        <div className="hud-rail">
+          <div id="score-combined">
+            <div id="score-box" className="score-item">
+              <span className="score-label">STEPS</span>
+              <span className="score-val-num" id="score-val">0</span>
+            </div>
+            <div className="score-divider"></div>
+            <div id="best-box" className="score-item">
+              <span className="score-label">RECORD</span>
+              <span className="score-val-num" id="best-val">0</span>
+              <span id="new-record-badge"><img className="record-badge-icon ui-icon" src="/game/ui-icons/leaderboard.png" alt="" aria-hidden="true" />NEW RECORD!</span>
+            </div>
           </div>
-          <div className="score-divider"></div>
-          <div id="best-box" className="score-item">
-            <span className="score-label">RECORD</span>
-            <span className="score-val-num" id="best-val">0</span>
-            <span id="new-record-badge">🏆 NEW RECORD!</span>
+          <div className="hud-economy">
+            <div id="coin-hud">
+              <span className="score-label coin-label">COINS</span>
+              <div className="coin-hud-row">
+                <img src="/game/coin.png" alt="coin" className="coin-icon-hud" />
+                <span className="score-val-num" id="coin-count">0</span>
+              </div>
+              <div id="run-booster-hud" className="run-booster-hud hidden" aria-label="Active run boosters">
+                <span className="run-boost-icon run-boost-magnet hidden" id="run-boost-magnet" aria-label="Coin Magnet active">
+                  <img src="/game/boosters/coin_magnet.png" alt="" />
+                </span>
+                <span className="run-boost-icon run-boost-double hidden" id="run-boost-double" aria-label="Double Coins active">
+                  <img src="/game/boosters/double_coins.png" alt="" />
+                </span>
+                <span className="run-boost-icon run-boost-shield hidden" id="run-boost-shield" aria-label="Second Chance active">
+                  <img src="/game/boosters/second_chance.png" alt="" />
+                </span>
+              </div>
+            </div>
+            <button id="btn-settings-game" className="hud-settings-btn" aria-label="Settings"><img className="hud-settings-icon ui-icon" src="/game/ui-icons/settings.png" alt="" aria-hidden="true" /></button>
           </div>
         </div>
-        <div id="coin-hud">
-          <span className="score-label">COINS</span>
-          <div style={{display:'flex',flexDirection:'row',alignItems:'center',gap:'5px'}}>
-            <img src="/game/coin.png" alt="coin" style={{width:'18px',height:'18px',objectFit:'contain',flexShrink:0}} />
-            <span className="score-val-num" id="coin-count">0</span>
-          </div>
-        </div>
-        <button id="btn-settings-game" className="hud-settings-btn" aria-label="Settings"><span style={{display:'block',lineHeight:1,marginTop:'3px'}}>⚙️</span></button>
+        <div id="run-boost-toast" className="run-boost-toast hidden"></div>
       </div>
 
       {/* Swipe hint */}
@@ -102,45 +150,121 @@ export default function Game() {
 
       {/* Menu Screen */}
       <div id="screen-menu" className="screen">
-        <button id="btn-settings" className="settings-gear-btn" aria-label="Settings"><span style={{display:'block',lineHeight:1,marginTop:'3px'}}>⚙️</span></button>
-        <h1 className="game-title">BASE RUNNER</h1>
-        <p className="subtitle">how far can you go?</p>
-        <div id="menu-coin-balance"><img src="/game/coin.png" className="coin-icon" alt="coin" /> <span id="menu-coin-count">0</span></div>
-        {/* Daily banners row */}
-        <div className="daily-banners">
-          <button id="btn-spin" className="spin-banner hidden">
-            <span className="spin-banner-icon">🎰</span>
-            <div className="spin-banner-text">
-              <span className="spin-banner-title">Daily Spin</span>
-              <span className="spin-banner-sub" id="spin-banner-sub">Free spin available!</span>
+        <button id="btn-settings" className="settings-gear-btn" aria-label="Settings"><img className="settings-gear-icon ui-icon" src="/game/ui-icons/settings.png" alt="" aria-hidden="true" /></button>
+        <div className="menu-shell">
+          <div className="menu-hero">
+            <span className="menu-kicker">Base arcade</span>
+            <h1 className="game-title">BASE RUNNER</h1>
+            <p className="subtitle">how far can you go?</p>
+            <div id="menu-coin-balance"><img src="/game/coin.png" className="coin-icon" alt="coin" /> <span id="menu-coin-count">0</span></div>
+            <button id="menu-focus-strip" className="menu-focus-strip hidden" type="button">
+              <span className="menu-focus-kicker">Focus</span>
+              <span className="menu-focus-title" id="menu-focus-title">Choose a focus</span>
+              <span className="menu-focus-progress" id="menu-focus-progress">0/0</span>
+              <span className="menu-focus-track">
+                <span className="menu-focus-fill" id="menu-focus-fill" />
+              </span>
+            </button>
+          </div>
+          <div className="menu-missions">
+            <span className="menu-section-label">Today</span>
+            <div className="daily-banners">
+              <button id="btn-spin" className="spin-banner hidden">
+                <img className="spin-banner-icon ui-icon" src="/game/ui-icons/daily-spin.png" alt="" aria-hidden="true" />
+                <div className="spin-banner-text">
+                  <span className="spin-banner-title">Daily Spin</span>
+                  <span className="spin-banner-sub" id="spin-banner-sub">Free spin available!</span>
+                </div>
+                <span className="spin-banner-arrow">›</span>
+              </button>
+              <button id="btn-ci-banner" className="spin-banner">
+                <img className="spin-banner-icon ui-icon" src="/game/ui-icons/daily-checkin.png" alt="" aria-hidden="true" />
+                <div className="spin-banner-text">
+                  <span className="spin-banner-title">Daily Check-in</span>
+                  <span className="spin-banner-sub" id="ci-banner-sub">Claim your reward!</span>
+                </div>
+                <span className="spin-banner-arrow">›</span>
+              </button>
+              <button id="btn-starter-pack-banner" className="spin-banner hidden">
+                <img className="spin-banner-icon ui-icon" src="/game/ui-icons/starter-pack.png" alt="" aria-hidden="true" />
+                <div className="spin-banner-text">
+                  <span className="spin-banner-title">Starter Pack</span>
+                  <span className="spin-banner-sub">Claim for free - skins, coins & booster!</span>
+                </div>
+                <span className="spin-banner-arrow">›</span>
+              </button>
             </div>
-            <span className="spin-banner-arrow">›</span>
-          </button>
-          <button id="btn-ci-banner" className="spin-banner">
-            <span className="spin-banner-icon">📅</span>
-            <div className="spin-banner-text">
-              <span className="spin-banner-title">Daily Check-in</span>
-              <span className="spin-banner-sub" id="ci-banner-sub">Claim your reward!</span>
-            </div>
-            <span className="spin-banner-arrow">›</span>
-          </button>
-          <button id="btn-starter-pack-banner" className="spin-banner hidden">
-            <span className="spin-banner-icon">🎁</span>
-            <div className="spin-banner-text">
-              <span className="spin-banner-title">Starter Pack</span>
-              <span className="spin-banner-sub">Claim for free - skins, coins & booster!</span>
-            </div>
-            <span className="spin-banner-arrow">›</span>
-          </button>
+          </div>
+          <div className="menu-spacer" />
+          <nav className="tab-bar" id="menu-tab-bar">
+            <button className="tab-item" id="btn-shop"><img className="tab-icon tab-icon-img ui-icon" src="/game/ui-icons/shop.png" alt="" aria-hidden="true" /><span className="tab-label">Shop</span></button>
+            <button className="tab-item" id="btn-quests"><img className="tab-icon tab-icon-img ui-icon" src="/game/ui-icons/quests.png" alt="" aria-hidden="true" /><span className="tab-label">Quests</span></button>
+            <button className="tab-item tab-play" id="btn-start"><span className="tab-icon">▶</span><span className="tab-label">Play</span></button>
+            <button className="tab-item" id="btn-lb"><img className="tab-icon tab-icon-img ui-icon" src="/game/ui-icons/leaderboard.png" alt="" aria-hidden="true" /><span className="tab-label">Leaders</span></button>
+            <button className="tab-item" id="btn-profile" style={{position:'relative'}}><span className="tab-icon tab-icon-img" id="menu-profile-icon"><img className="ui-icon" src="/game/ui-icons/profile.png" alt="" aria-hidden="true" /></span><span className="tab-label">Profile</span><span className="level-badge" id="profile-level-badge">Lv.1</span></button>
+          </nav>
         </div>
-        <div style={{flex:1}} />
-        <nav className="tab-bar" id="menu-tab-bar">
-          <button className="tab-item" id="btn-shop"><span className="tab-icon">🛒</span><span className="tab-label">Shop</span></button>
-          <button className="tab-item" id="btn-quests"><span className="tab-icon">🎯</span><span className="tab-label">Quests</span></button>
-          <button className="tab-item tab-play" id="btn-start"><span className="tab-icon">▶</span><span className="tab-label">Play</span></button>
-          <button className="tab-item" id="btn-lb"><span className="tab-icon">🏆</span><span className="tab-label">Leaders</span></button>
-          <button className="tab-item" id="btn-profile" style={{position:'relative'}}><span className="tab-icon" id="menu-profile-icon">👤</span><span className="tab-label">Profile</span><span className="level-badge" id="profile-level-badge">Lv.1</span></button>
-        </nav>
+      </div>
+
+      {/* Loadout Screen */}
+      <div id="screen-loadout" className="screen hidden loadout-screen">
+        <div className="loadout-panel">
+          <div className="loadout-head">
+            <h2 className="loadout-title">LOADOUT</h2>
+            <div className="loadout-balance">
+              <img src="/game/coin.png" alt="coin" />
+              <span id="loadout-coin-count">0</span>
+            </div>
+          </div>
+          <div className="loadout-gear" id="loadout-gear">
+            <div className="loadout-gear-row" id="loadout-skin-card" style={loadoutGearCardStyle}>
+              <button className="loadout-arrow" id="btn-loadout-skin-prev" aria-label="Previous skin" style={loadoutGearArrowStyle}>‹</button>
+              <img id="loadout-skin-preview" className="loadout-gear-preview" src="/game/chars/cryptokid.png" alt="Selected skin" style={loadoutGearPreviewStyle} />
+              <div className="loadout-gear-info">
+                <span className="loadout-gear-label">Skin</span>
+                <span className="loadout-gear-name" id="loadout-skin-name">Crypto Kid</span>
+                <span className="loadout-gear-count" id="loadout-skin-count">1/1</span>
+              </div>
+              <button className="loadout-arrow" id="btn-loadout-skin-next" aria-label="Next skin" style={loadoutGearArrowStyle}>›</button>
+            </div>
+            <div className="loadout-gear-row" id="loadout-trail-card" style={loadoutGearCardStyle}>
+              <button className="loadout-arrow" id="btn-loadout-trail-prev" aria-label="Previous trail" style={loadoutGearArrowStyle}>‹</button>
+              <img id="loadout-trail-preview" className="loadout-gear-preview" src="/nft/images/trail_default.png" alt="Selected trail" style={loadoutGearPreviewStyle} />
+              <div className="loadout-gear-info">
+                <span className="loadout-gear-label">Trail</span>
+                <span className="loadout-gear-name" id="loadout-trail-name">Default</span>
+                <span className="loadout-gear-count" id="loadout-trail-count">1/1</span>
+              </div>
+              <button className="loadout-arrow" id="btn-loadout-trail-next" aria-label="Next trail" style={loadoutGearArrowStyle}>›</button>
+            </div>
+          </div>
+          <div className="loadout-grid">
+            <button id="loadout-boost-magnet" className="loadout-card" data-id="boost_magnet">
+              <img src="/game/boosters/coin_magnet.png" alt="Coin Magnet" className="loadout-icon" />
+              <span className="loadout-name">Coin Magnet</span>
+              <span className="loadout-count" id="loadout-count-magnet">×0</span>
+            </button>
+            <button id="loadout-boost-double" className="loadout-card" data-id="boost_double">
+              <img src="/game/boosters/double_coins.png" alt="Double Coins" className="loadout-icon" />
+              <span className="loadout-name">Double Coins</span>
+              <span className="loadout-count" id="loadout-count-double">×0</span>
+            </button>
+            <button id="loadout-boost-shield" className="loadout-card" data-id="boost_shield">
+              <img src="/game/boosters/second_chance.png" alt="Second Chance" className="loadout-icon" />
+              <span className="loadout-name">Second Chance</span>
+              <span className="loadout-count" id="loadout-count-shield">×0</span>
+            </button>
+          </div>
+          <div id="loadout-build-summary" className="loadout-build-summary loadout-build-empty">
+            <span className="loadout-build-kicker">Run build</span>
+            <span id="loadout-build-title" className="loadout-build-title">No boosters selected</span>
+            <span id="loadout-build-hint" className="loadout-build-hint">Pick boosters to shape this run</span>
+          </div>
+          <div className="loadout-actions">
+            <button className="btn btn-start" id="btn-loadout-start">START RUN</button>
+            <button className="btn btn-back" id="btn-loadout-back">← MENU</button>
+          </div>
+        </div>
       </div>
 
       {/* Profile Screen */}
@@ -148,8 +272,8 @@ export default function Game() {
         {/* Scrollable content */}
         <div className="profile-scroll">
           <div className="profile-header">
-            <img id="profile-avatar" className="profile-avatar" src="" alt="" style={{display:'none'}} />
-            <div id="profile-avatar-placeholder" className="profile-avatar" style={{display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.5rem'}}>👤</div>
+            <img id="profile-avatar" className="profile-avatar" alt="" style={{display:'none'}} />
+            <div id="profile-avatar-placeholder" className="profile-avatar" style={{display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.5rem'}}><img className="profile-placeholder-icon ui-icon" src="/game/ui-icons/profile.png" alt="" aria-hidden="true" /></div>
             <div className="profile-info">
               <span className="profile-name" id="profile-name">Not connected</span>
               <span className="profile-address" id="profile-address"></span>
@@ -224,17 +348,25 @@ export default function Game() {
             <div className="profile-equipped-row">
               <div className="equipped-card">
                 <span className="equipped-type-label">Skin</span>
-                <img className="equipped-sprite" id="equipped-skin-sprite" src="/game/chars/cryptokid.png" alt="skin" />
+                <div className="equipped-picker">
+                  <button className="equipped-arrow" id="btn-profile-skin-prev" aria-label="Previous skin">‹</button>
+                  <img className="equipped-sprite" id="equipped-skin-sprite" src="/game/chars/cryptokid.png" alt="skin" />
+                  <button className="equipped-arrow" id="btn-profile-skin-next" aria-label="Next skin">›</button>
+                </div>
                 <span className="equipped-name" id="equipped-skin-name">Crypto Kid</span>
-                <button className="equipped-change-btn" id="btn-change-skin">Change</button>
+                <span className="equipped-count" id="equipped-skin-count">1/1</span>
               </div>
               <div className="equipped-card">
                 <span className="equipped-type-label">Trail</span>
-                <span className="equipped-trail-bubble" id="equipped-trail-bubble">
-                  <span id="equipped-trail-icon">👣</span>
-                </span>
+                <div className="equipped-picker">
+                  <button className="equipped-arrow" id="btn-profile-trail-prev" aria-label="Previous trail">‹</button>
+                  <span className="equipped-trail-bubble" id="equipped-trail-bubble">
+                    <span id="equipped-trail-icon"><img className="equipped-trail-icon-img" src="/nft/images/trail_default.png" alt="Default trail" /></span>
+                  </span>
+                  <button className="equipped-arrow" id="btn-profile-trail-next" aria-label="Next trail">›</button>
+                </div>
                 <span className="equipped-name" id="equipped-trail-name">None</span>
-                <button className="equipped-change-btn" id="btn-change-trail">Change</button>
+                <span className="equipped-count" id="equipped-trail-count">1/1</span>
               </div>
             </div>
           </div>
@@ -259,11 +391,11 @@ export default function Game() {
           <img src="/game/coin.png" alt="coin" style={{width:'18px',height:'18px',objectFit:'contain'}} /> +<span id="go-coins-earned">0</span> COINS
         </p>
         <div id="go-xp-row" className="go-xp-row" style={{display:'none'}}>
-          <span className="go-xp-main">⭐ +<span id="go-xp-earned">0</span> XP</span>
+          <span className="go-xp-main"><img className="go-xp-icon ui-icon" src="/game/ui-icons/celebration.png" alt="" aria-hidden="true" />+<span id="go-xp-earned">0</span> XP</span>
           <span id="go-xp-multi" className="go-xp-multi" style={{display:'none'}}></span>
           <span id="go-xp-bonus" className="go-xp-bonus" style={{display:'none'}}></span>
         </div>
-        <p id="go-quest-notify" className="quest-notify" style={{display:'none'}}>🎯 Quest complete! Tap to claim</p>
+        <p id="go-quest-notify" className="quest-notify" style={{display:'none'}}><img className="quest-notify-icon ui-icon" src="/game/ui-icons/quests.png" alt="" aria-hidden="true" />Quest complete! Tap to claim</p>
         <button className="btn btn-restart" id="btn-restart">↺ PLAY AGAIN</button>
         <button className="btn btn-back" id="btn-go-menu">← MENU</button>
       </div>
@@ -282,7 +414,7 @@ export default function Game() {
       {/* Level-up Modal */}
       <div id="levelup-modal" className="levelup-modal hidden">
         <div className="levelup-card">
-          <div className="levelup-icon" id="levelup-icon">⭐</div>
+          <div className="levelup-icon" id="levelup-icon"><img className="levelup-icon-img ui-icon" src="/game/ui-icons/celebration.png" alt="" aria-hidden="true" /></div>
           <div className="levelup-title">LEVEL UP!</div>
           <div className="levelup-level" id="levelup-level">Lv.2</div>
           <div className="levelup-reward" id="levelup-reward">+100 Coins</div>
@@ -316,7 +448,7 @@ export default function Game() {
       {/* Daily Spin Screen */}
       <div id="screen-spin" className="screen hidden spin-screen">
         <div className="spin-scroll">
-          <h2 style={{color:'#fff',fontSize:'clamp(1.2rem,6vw,1.8rem)',marginBottom:'4px',letterSpacing:'3px'}}>🎰 DAILY SPIN</h2>
+          <h2 className="icon-screen-title" style={{color:'#fff',fontSize:'clamp(1.2rem,6vw,1.8rem)',marginBottom:'4px',letterSpacing:'3px'}}><img className="screen-title-icon ui-icon" src="/game/ui-icons/daily-spin.png" alt="" aria-hidden="true" />DAILY SPIN</h2>
           <p style={{color:'rgba(255,255,255,0.45)',fontSize:'clamp(0.75rem,3vw,0.9rem)',marginBottom:'16px',letterSpacing:'1px'}}>Free once a day · resets at 00:00 UTC</p>
 
           {/* Wheel canvas */}
@@ -342,7 +474,7 @@ export default function Game() {
           <div id="spin-timer" className="spin-timer hidden" />
 
           <button className="btn" id="btn-do-spin" style={{color:'#fff',marginBottom:'10px',width:'min(280px,85vw)',fontSize:'clamp(1rem,4.5vw,1.2rem)',letterSpacing:'2px'}}>
-            🎰 SPIN
+            <img className="btn-inline-icon ui-icon" src="/game/ui-icons/daily-spin.png" alt="" aria-hidden="true" /> SPIN
           </button>
         </div>
         <div className="spin-back-bar">
@@ -353,7 +485,7 @@ export default function Game() {
       {/* Leaderboard Screen */}
       <div id="screen-lb" className="screen hidden scroll-screen">
         <div className="scroll-screen-body">
-          <h2 style={{color:'#fff',fontSize:'clamp(1.2rem,6vw,2rem)',marginBottom:'16px',letterSpacing:'3px'}}>🏆 LEADERBOARD</h2>
+          <h2 className="icon-screen-title" style={{color:'#fff',fontSize:'clamp(1.2rem,6vw,2rem)',marginBottom:'16px',letterSpacing:'3px'}}><img className="screen-title-icon ui-icon" src="/game/ui-icons/leaderboard.png" alt="" aria-hidden="true" />LEADERBOARD</h2>
           <div className="lb-tabs">
             <button className="lb-tab lb-tab-active" id="btn-lb-personal">Personal</button>
             <button className="lb-tab" id="btn-lb-global">Global</button>
@@ -370,7 +502,7 @@ export default function Game() {
       {/* Shop Screen */}
       <div id="screen-shop" className="screen hidden scroll-screen">
         <div className="scroll-screen-body">
-          <h2 style={{color:'#fff',fontSize:'clamp(1.2rem,6vw,2rem)',marginBottom:'8px',letterSpacing:'3px'}}>🛒 SHOP</h2>
+          <h2 className="icon-screen-title" style={{color:'#fff',fontSize:'clamp(1.2rem,6vw,2rem)',marginBottom:'8px',letterSpacing:'3px'}}><img className="screen-title-icon ui-icon" src="/game/ui-icons/shop.png" alt="" aria-hidden="true" />SHOP</h2>
           <div id="shop-balance" style={{color:'#FFD700',fontSize:'clamp(1rem,4.5vw,1.3rem)',marginBottom:'20px',fontWeight:'bold',display:'flex',alignItems:'center',gap:'6px',justifyContent:'center'}}>
             <img src="/game/coin.png" alt="coin" style={{width:'22px',height:'22px',objectFit:'contain'}} />
             <span id="shop-coin-count">0</span>
@@ -390,7 +522,7 @@ export default function Game() {
       {/* Quests Screen */}
       <div id="screen-quests" className="screen hidden scroll-screen">
         <div className="scroll-screen-body">
-          <h2 style={{color:'#fff',fontSize:'clamp(1.2rem,6vw,2rem)',marginBottom:'16px',letterSpacing:'3px'}}>🎯 QUESTS</h2>
+          <h2 className="icon-screen-title" style={{color:'#fff',fontSize:'clamp(1.2rem,6vw,2rem)',marginBottom:'16px',letterSpacing:'3px'}}><img className="screen-title-icon ui-icon" src="/game/ui-icons/quests.png" alt="" aria-hidden="true" />QUESTS</h2>
           <div id="quest-list" style={{width:'min(340px,90vw)'}}></div>
         </div>
         <div className="scroll-back-bar">
@@ -401,12 +533,12 @@ export default function Game() {
       {/* Settings Screen */}
       <div id="screen-settings" className="screen hidden scroll-screen">
         <div className="scroll-screen-body settings-screen-body">
-          <h2 style={{color:'#fff',fontSize:'clamp(1.2rem,6vw,2rem)',marginBottom:'32px',letterSpacing:'3px'}}>⚙️ SETTINGS</h2>
+          <h2 className="icon-screen-title" style={{color:'#fff',fontSize:'clamp(1.2rem,6vw,2rem)',marginBottom:'32px',letterSpacing:'3px'}}><img className="screen-title-icon ui-icon" src="/game/ui-icons/settings.png" alt="" aria-hidden="true" />SETTINGS</h2>
           <div className="settings-list">
             {/* Music Volume */}
             <div className="settings-row">
               <div className="settings-row-info">
-                <span className="settings-row-icon">🎵</span>
+                <img className="settings-row-icon settings-row-icon-img ui-icon" src="/game/ui-icons/music.png" alt="" aria-hidden="true" />
                 <span className="settings-row-label">Music</span>
               </div>
               <div className="settings-slider-wrap">
@@ -418,7 +550,7 @@ export default function Game() {
             {/* SFX Volume */}
             <div className="settings-row">
               <div className="settings-row-info">
-                <span className="settings-row-icon">🔊</span>
+                <img className="settings-row-icon settings-row-icon-img ui-icon" src="/game/ui-icons/sound.png" alt="" aria-hidden="true" />
                 <span className="settings-row-label">Sound Effects</span>
               </div>
               <div className="settings-slider-wrap">
@@ -430,7 +562,7 @@ export default function Game() {
             {/* Vibration */}
             <div className="settings-row">
               <div className="settings-row-info">
-                <span className="settings-row-icon">📳</span>
+                <img className="settings-row-icon settings-row-icon-img ui-icon" src="/game/ui-icons/vibration.png" alt="" aria-hidden="true" />
                 <span className="settings-row-label">Vibration</span>
               </div>
               <label className="settings-toggle">
@@ -451,7 +583,7 @@ export default function Game() {
       <div id="starter-pack-overlay" className="starter-pack-overlay hidden">
         <div className="starter-pack-card">
           <div className="starter-pack-badge">FREE</div>
-          <h2 className="starter-pack-title">STARTER PACK</h2>
+          <h2 className="starter-pack-title"><img className="screen-title-icon ui-icon" src="/game/ui-icons/starter-pack.png" alt="" aria-hidden="true" />STARTER PACK</h2>
           <p className="starter-pack-desc">Claim your starter pack and gear up for your first run! Get 100 bonus coins, an on-chain character with starter skin and trails, and a booster for extra lives - all free on Base!</p>
           <div className="starter-pack-items">
             <div className="starter-item">
@@ -483,7 +615,7 @@ export default function Game() {
       {/* Check-in Screen */}
       <div id="screen-ci" className="screen hidden">
         <div className="ci-header">
-          <h2 className="screen-title">📅 DAILY CHECK-IN</h2>
+          <h2 className="screen-title"><img className="screen-title-icon ui-icon" src="/game/ui-icons/daily-checkin.png" alt="" aria-hidden="true" />DAILY CHECK-IN</h2>
         </div>
         <div className="ci-streak-row">
           <span id="ci-streak" className="ci-streak-num">0</span>

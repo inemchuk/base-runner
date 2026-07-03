@@ -160,10 +160,10 @@ Suggested V1 tiers:
 
 | Tier | Examples | Fragment Target | Craft Fee | Direct Price |
 | --- | --- | ---: | ---: | ---: |
-| Common | early trails, simple death effects | 10 | 40 | 150-200 |
-| Rare | early skins, better trails | 20 | 100 | 450-650 |
-| Epic | premium skins/effects | 35 | 220 | 900-1400 |
-| Legendary | top skins/trails | 60 | 500 | fragment-only or 2500-4000 |
+| Common | early trails, simple death effects | 10 | 40 | 150-250 |
+| Rare | early skins, better trails | 20 | 100 | 750-900 |
+| Epic | premium skins/effects | 35 | 220 | 1200-1600 |
+| Legendary | top skins/trails | 60 | 500 | fragment-only |
 
 Direct prices for common items can stay close to current values. Rare and above
 need wider separation so direct coin purchase does not bypass the collectible
@@ -206,13 +206,20 @@ Proposed 7-day cycle:
 
 | Day | Reward |
 | ---: | --- |
-| 1 | 15 coins |
-| 2 | 1 random booster |
+| 1 | 20 coins |
+| 2 | 15 coins + 1 random booster |
 | 3 | 2 Focus fragments |
-| 4 | 25 coins + 1 random booster |
-| 5 | 3 Focus fragments |
-| 6 | 40 coins + 50 XP |
-| 7 | Gear Crate: 5 Focus fragments + 3 boosters |
+| 4 | 35 coins + 1 random booster |
+| 5 | 20 coins + 3 Focus fragments |
+| 6 | 50 coins + 75 XP |
+| 7 | Gear Crate: 50 coins + 5 Focus fragments + 3 random boosters |
+
+Weekly check-in value:
+
+- 190 coins
+- 10 Focus fragments
+- 5 booster charges
+- 75 XP
 
 Every 28 total check-ins:
 
@@ -230,18 +237,27 @@ Recommended prize pool:
 
 | Prize Type | Weight | Notes |
 | --- | ---: | --- |
-| Small coins | 24% | 15-50 coins |
-| Booster charges | 24% | 1-2 charges |
-| Focus fragments | 26% | 1-4 fragments |
+| Small coins | 25% | 15-75 coins, average about 45 |
+| Booster charges | 25% | 1-2 charges |
+| Focus fragments | 24% | 1-3 fragments, average about 2 |
 | XP burst | 10% | 50-150 XP |
-| Fragment burst | 8% | 5-8 Focus fragments |
-| Direct trail/skin unlock | 5% | duplicate protected |
-| Jackpot cosmetic/crate | 2% | rare/legendary |
+| Fragment burst | 8% | 4-6 Focus fragments, average about 5 |
+| Crate | 5% | crate reward, average about 6 Focus fragments plus utility |
+| Direct trail/skin unlock | 2% | common/rare only, duplicate protected |
 | Empty/light miss | 1% | optional; keep very low |
 
 Current spin has too much direct skin/trail outcome weight for a controlled
 collectible economy. V1 should make full unlocks rare and make fragments the
 main reward.
+
+Spin fragment EV:
+
+- Without the crate slot: `24% * 2 + 8% * 5 = 0.88` Focus fragments/day.
+- Including crate EV: about `1.15-1.20` Focus fragments/day.
+
+Direct full cosmetic prizes from normal daily spin must not include legendary
+items in V1. Epic full unlocks should be reserved for explicit level/event
+milestones, not ordinary daily spin.
 
 Duplicate handling:
 
@@ -268,14 +284,14 @@ Suggested per-quest pattern:
 | 5 | larger Focus fragments |
 | 6 | rare crate |
 | 7 | large Focus fragments |
-| 8 | exclusive cosmetic or epic crate |
+| 8 | epic crate or legendary crate depending on quest difficulty |
 
 This gives each quest an identity:
 
-- `Marathon Runner`: trails and movement-themed rewards.
-- `Coin Collector`: coin trail, gold skin variants, coin packs.
+- `Marathon Runner`: movement-themed crates, trail progress, and Focus fragments.
+- `Coin Collector`: coin packs, booster economy, and Focus progress.
 - `Dedicated Player`: booster packs and daily-style crates.
-- `High Scorer`: prestige cosmetics and rare crates.
+- `High Scorer`: prestige crates and large Focus progress.
 
 ### Level Rewards
 
@@ -288,20 +304,23 @@ Suggested early/mid track:
 
 | Level | Reward |
 | ---: | --- |
-| 2 | booster pack |
-| 3 | first trail unlock |
+| 2 | 75 coins + 1 random booster |
+| 3 | first common trail unlock |
 | 5 | Focus chest |
-| 7 | death effect |
+| 7 | common death effect |
 | 10 | guaranteed rare skin |
 | 12 | Focus chest |
-| 15 | epic trail |
-| 20 | rare skin |
+| 15 | 100 coins + 8 Focus fragments |
+| 20 | guaranteed epic skin/trail |
 | 25 | epic crate |
 | 30 | legendary crate |
 | 35 | legendary Focus progress bundle |
 | 40+ | prestige variants / seasonal crates |
 
 Coin-only level rewards should be reduced or paired with fragments.
+The level 20 epic cosmetic is an explicit one-time milestone exception. If
+telemetry shows it makes epic progression feel too fast, replace it with an
+Epic Crate before adding more full epic unlocks.
 
 ### Reward Containers
 
@@ -312,7 +331,7 @@ V1 container definitions:
 
 | Container | Source | Reward |
 | --- | --- | --- |
-| Gear Crate | Check-in day 7 | 5 Focus fragments + 3 random boosters |
+| Gear Crate | Check-in day 7 | 50 coins + 5 Focus fragments + 3 random boosters |
 | Focus Chest | Level rewards / shop | 6 Focus fragments |
 | Rare Crate | Quest mid-tier / spin jackpot | 8 Focus fragments + 1 random booster + 40 coins |
 | Epic Crate | Quest capstone / level 25 | 12 Focus fragments + 2 random boosters + 80 coins |
@@ -438,16 +457,18 @@ Baseline fragment income if the player keeps one Focus Item selected:
 | Source | Expected Focus Fragments |
 | --- | ---: |
 | Check-in 7-day cycle | 10/week |
-| Free daily spin | about 1.17/day, 8.2/week |
+| Free daily spin | 0.88/day before crates, about 1.15-1.20/day with crate EV |
 | Quests and quest crates | variable, target 4-8/week for active casual players |
 | Level rewards and chests | lumpy, target 4-8/week during early progression |
 | Daily fragment chest | optional player-paid, 3 fragments/day if bought |
 
 Free daily spin estimate:
 
-- `Focus fragments`: 26% * average 2.5 fragments = 0.65/day.
-- `Fragment burst`: 8% * average 6.5 fragments = 0.52/day.
-- Combined free-spin fragment EV: about 1.17/day.
+- `Focus fragments`: 24% * average 2 fragments = 0.48/day.
+- `Fragment burst`: 8% * average 5 fragments = 0.40/day.
+- Base free-spin fragment EV before crates: 0.88/day.
+- Crate slot: 5% * average about 6 fragments = 0.30/day.
+- Combined free-spin fragment EV with crates: about 1.18/day.
 
 Expected weekly focus progress:
 
@@ -487,14 +508,14 @@ Expected coin income:
 | --- | ---: |
 | Runs, casual 3-6/day | 6-30/day |
 | Runs, active/good 8-15/day | 20-75/day |
-| Check-in proposed cycle | 80/week, about 11/day |
-| Free spin coins | about 8/day from small coin slots |
+| Check-in proposed cycle | 190/week, about 27/day |
+| Free spin coins | about 11/day from small coin slots |
 | Quests | variable, target 5-15/day equivalent early |
 
 Expected total:
 
-- Casual: about 25-65 coins/day.
-- Good active player: about 45-110 coins/day.
+- Casual: about 45-75 coins/day.
+- Good active player: about 65-125 coins/day.
 
 ### Coin Spend Budget
 
@@ -528,8 +549,8 @@ prices; reducing craft fees targets the actual bottleneck.
 Direct coin prices must be set so coins do not bypass fragments:
 
 - Common direct buy can be reachable in a few active days.
-- Rare direct buy should usually take 1-2 weeks unless the player spends saved
-  coins.
+- Rare direct buy should usually take 10-20 active days unless the player spends
+  saved coins.
 - Epic direct buy should take multiple weeks.
 - Legendary direct buy should be disabled or priced as a whale/prestige path,
   not as the normal path.

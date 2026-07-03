@@ -35,23 +35,27 @@ export function useLeaderboard() {
     }
   }, [address]);
 
-  const submit = useCallback(async (score: number) => {
-    if (!address) return;
+  const submit = useCallback(async (score: number, sessionCoins = 0) => {
+    if (!address) return { ok: false, error: 'no_address' };
     try {
-      await fetch('/api/score/submit', {
+      const res = await fetch('/api/score/submit', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({
           address,
           score,
+          sessionCoins,
           token: sessionTokenRef.current,
         }),
       });
+      const data = await res.json();
       sessionTokenRef.current = null; // consume — one token per game
       await fetchLeaderboard();
-      window.dispatchEvent(new CustomEvent('base-score-submitted'));
+      window.dispatchEvent(new CustomEvent('base-score-submitted', { detail: data }));
+      return data;
     } catch (err) {
       console.error('score submit error:', err);
+      return { ok: false, error: 'submit_failed' };
     }
   }, [address, fetchLeaderboard]);
 

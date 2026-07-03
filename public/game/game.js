@@ -5,6 +5,17 @@
  * Все данные сохраняются в браузере пользователя.
  */
 
+function _imgHtml(src, className = '', alt = '', attrs = '') {
+  const cls = className ? ` class="${className}"` : '';
+  const safeAlt = String(alt).replace(/"/g, '&quot;');
+  return `<img src="${src}"${cls} alt="${safeAlt}"${attrs}>`;
+}
+
+function _uiIconHtml(name, className = '', alt = '') {
+  const cls = `${className ? className + ' ' : ''}ui-icon`;
+  return _imgHtml(`/game/ui-icons/${name}.png`, cls, alt, ' aria-hidden="true"');
+}
+
 const Save = (() => {
 
   const KEY = 'crossy_save_v1';
@@ -95,6 +106,34 @@ const Save = (() => {
 })();
 
 
+const BOOSTER_IDS = ['boost_magnet', 'boost_double', 'boost_shield'];
+
+const REWARD_CONTAINERS_LOCAL = Object.freeze({
+  gear_crate: { coins: 50, fragments: 5, boosters: 3 },
+  focus_chest: { fragments: 6 },
+  rare_crate: { coins: 40, fragments: 8, boosters: 1 },
+  epic_crate: { coins: 80, fragments: 12, boosters: 2 },
+  legendary_crate: { coins: 150, fragments: 18, boosters: 3 },
+  legendary_focus_bundle: { fragments: 20 },
+});
+
+const CHECKIN_REWARD_CYCLE = [
+  { coins: 20, icon: () => _imgHtml('/game/coin.png', 'ci-reward-icon-img', 'coins') },
+  { coins: 15, boosters: 1, icon: () => _uiIconHtml('coin-pouch', 'ci-reward-icon-img', 'coin pouch') },
+  { fragments: 2, icon: () => _uiIconHtml('gem', 'ci-reward-icon-img', 'fragments') },
+  { coins: 35, boosters: 1, icon: () => _uiIconHtml('starter-pack', 'ci-reward-icon-img', 'booster') },
+  { coins: 20, fragments: 3, icon: () => _uiIconHtml('gem', 'ci-reward-icon-img', 'fragments') },
+  { coins: 50, xp: 75, icon: () => _uiIconHtml('xp', 'ci-reward-icon-img', 'xp') },
+  { container: 'gear_crate', icon: () => _uiIconHtml('starter-pack', 'ci-reward-icon-img', 'gear crate') },
+];
+
+const DAILY_FRAGMENT_CHEST_COST = 90;
+const DAILY_FRAGMENT_CHEST_FRAGMENTS = 3;
+const DAILY_FRAGMENT_CHEST_LIMIT = 1;
+const DAILY_FRAGMENT_CHEST_LOCAL_KEY = 'daily_fragment_chest_v1';
+const FRAGMENT_FALLBACK_COINS = 10;
+
+
 /* ===== checkin.js ===== */
 /**
  * checkin.js — Система ежедневного Check-in
@@ -166,9 +205,8 @@ const CheckIn = (() => {
     let newStreak = (ci.lastDate === yesterday) ? ci.streak + 1 : 1;
     let newTotal  = ci.total + 1;
 
-    const DAY_COINS = [5, 5, 5, 10, 10, 20, 30];
     const daySlot = (newStreak - 1) % 7;
-    const reward  = DAY_COINS[daySlot];
+    const reward  = RewardEconomy.getCheckInReward(daySlot);
 
     const newCheckin = {
       lastDate: today,
@@ -177,14 +215,15 @@ const CheckIn = (() => {
     };
 
     Save.saveCheckin(newCheckin);
-    Save.addCoins(reward);
+    const applied = RewardEconomy.applyBundleLocal(reward, 'checkin');
 
     return {
       success: true,
       streak:  newStreak,
       total:   newTotal,
-      coins:   reward,
-      message: `+${reward} coins! 🎉`,
+      coins:   applied.coins || 0,
+      reward,
+      message: `${applied.label}!`,
     };
   }
 
@@ -193,14 +232,15 @@ const CheckIn = (() => {
     // On-chain state
     if (_hasOnChain()) {
       const oc = window.__BASE_CHECKIN;
-      const DAY_COINS = [5, 5, 5, 10, 10, 20, 30];
       const nextStreak = oc.isAvailable ? oc.streak + 1 : oc.streak;
+      const reward = RewardEconomy.getCheckInReward((Math.max(0, nextStreak - 1)) % 7);
       return {
         streak:    oc.streak,
         total:     oc.total,
         available: oc.isAvailable,
         isPending: oc.isPending,
-        reward:    DAY_COINS[(Math.max(0, nextStreak - 1)) % 7],
+        reward:    RewardEconomy.label(reward),
+        rewardBundle: reward,
       };
     }
 
@@ -213,9 +253,12 @@ const CheckIn = (() => {
       available,
       isPending: false,
       reward:    (() => {
-        const DAY_COINS = [5, 5, 5, 10, 10, 20, 30];
         const nextStreak = available ? ci.streak + 1 : ci.streak;
-        return DAY_COINS[(Math.max(0, nextStreak - 1)) % 7];
+        return RewardEconomy.label(RewardEconomy.getCheckInReward((Math.max(0, nextStreak - 1)) % 7));
+      })(),
+      rewardBundle: (() => {
+        const nextStreak = available ? ci.streak + 1 : ci.streak;
+        return RewardEconomy.getCheckInReward((Math.max(0, nextStreak - 1)) % 7);
       })(),
     };
   }
@@ -234,7 +277,11 @@ const CheckIn = (() => {
 
 const Leaderboard = (() => {
 
-  const MEDALS = ['🥇', '🥈', '🥉'];
+  const MEDALS = [
+    _uiIconHtml('medal-gold', 'lb-medal-img', 'gold medal'),
+    _uiIconHtml('medal-silver', 'lb-medal-img', 'silver medal'),
+    _uiIconHtml('medal-bronze', 'lb-medal-img', 'bronze medal'),
+  ];
   let mode = 'personal'; // 'personal' | 'global' | 'coins'
 
   function setMode(m) {
@@ -263,7 +310,7 @@ const Leaderboard = (() => {
     if (!container) return;
     const scores = Save.getScores();
     if (scores.length === 0) {
-      container.innerHTML = '<p class="lb-empty">No scores yet.<br>Play to set a record! 🐔</p>';
+      container.innerHTML = `<p class="lb-empty">${_uiIconHtml('gamepad', 'lb-empty-icon', 'gamepad')}No scores yet.<br>Play to set a record!</p>`;
       return;
     }
     container.innerHTML = scores.map((score, i) => {
@@ -392,7 +439,11 @@ const Sound = (() => {
 
   function updateMuteBtn() {
     const btn = document.getElementById('btn-mute');
-    if (btn) btn.textContent = muted ? '🔇' : '🔊';
+    if (btn) {
+      btn.innerHTML = _uiIconHtml('sound', 'settings-row-icon-img', 'sound');
+      btn.classList.toggle('is-muted', muted);
+      btn.setAttribute('aria-label', muted ? 'Unmute sound' : 'Mute sound');
+    }
   }
 
   // ── Sound primitives ─────────────────────────────────
@@ -1555,11 +1606,6 @@ const Player = (() => {
     state.visualY  = World.rowToY(state.row) + CELL / 2;
     state.jumpFrom = { x: state.visualX, y: state.visualY };
     resetShield();
-    // Списать заряды активных бустеров на начало игры
-    if (typeof Shop !== 'undefined') {
-      Shop.useBooster('boost_magnet');
-      Shop.useBooster('boost_double');
-    }
   }
 
   // ===== Движение в направлении (dRow, dCol) =====
@@ -1597,9 +1643,9 @@ const Player = (() => {
     }
 
     // --- Сбор монеты (+ магнит: радиус 2 клетки с анимацией) ---
-    const hasMagnet   = (typeof Shop !== 'undefined' && Shop.hasBoosted('boost_magnet'));
+    const hasMagnet   = (typeof Loadout !== 'undefined' && Loadout.isActive('boost_magnet'));
     const magnetRange = hasMagnet ? 2 : 0;
-    const coinValue   = (typeof Shop !== 'undefined' && Shop.hasBoosted('boost_double')) ? 2 : 1;
+    const coinValue   = (typeof Loadout !== 'undefined' && Loadout.isActive('boost_double')) ? 2 : 1;
     const playerX = state.col * CELL + CELL / 2;
     const playerY = World.rowToY(state.row) + CELL / 2;
 
@@ -1615,14 +1661,16 @@ const Player = (() => {
         _sessionCoins += coinValue;
         if (typeof Vibrate !== 'undefined') Vibrate.coin();
         if (typeof UI !== 'undefined') UI.updateCoins(newTotal, _sessionCoins);
+        if (coinValue > 1 && typeof UI !== 'undefined' && UI.triggerRunBoosterFeedback) {
+          UI.triggerRunBoosterFeedback('boost_double');
+        }
         if (dc === 0) {
-          // Direct pickup — instant effect
-          if (typeof Renderer !== 'undefined') Renderer.addCoinEffect(playerX, playerY);
+          if (typeof Renderer !== 'undefined') Renderer.addCoinEffect(playerX, playerY, coinValue);
         } else {
-          // Magnet pickup — fly animation to player
           const coinX = checkCol * CELL + CELL / 2;
           const coinY = World.rowToY(state.row) + CELL / 2;
-          if (typeof Renderer !== 'undefined') Renderer.addMagnetCoin(coinX, coinY, playerX, playerY, checkCol, state.row);
+          if (typeof UI !== 'undefined' && UI.triggerRunBoosterFeedback) UI.triggerRunBoosterFeedback('boost_magnet');
+          if (typeof Renderer !== 'undefined') Renderer.addMagnetCoin(coinX, coinY, playerX, playerY, checkCol, state.row, coinValue);
         }
       }
     }
@@ -1705,8 +1753,8 @@ const Player = (() => {
     }
 
     // --- Магнит: подбираем монеты в радиусе даже без шага ---
-    if (!state.jumping && typeof Shop !== 'undefined' && Shop.hasBoosted('boost_magnet')) {
-      const coinValue = Shop.hasBoosted('boost_double') ? 2 : 1;
+    if (!state.jumping && typeof Loadout !== 'undefined' && Loadout.isActive('boost_magnet')) {
+      const coinValue = Loadout.isActive('boost_double') ? 2 : 1;
       const playerX = state.col * CELL + CELL / 2;
       const playerY = World.rowToY(state.row) + CELL / 2;
       for (let dc = -2; dc <= 2; dc++) {
@@ -1720,7 +1768,11 @@ const Player = (() => {
           if (typeof UI !== 'undefined') UI.updateCoins(newTotal, _sessionCoins);
           const coinX = checkCol * CELL + CELL / 2;
           const coinY = World.rowToY(state.row) + CELL / 2;
-          if (typeof Renderer !== 'undefined') Renderer.addMagnetCoin(coinX, coinY, playerX, playerY, checkCol, state.row);
+          if (typeof UI !== 'undefined' && UI.triggerRunBoosterFeedback) {
+            UI.triggerRunBoosterFeedback('boost_magnet');
+            if (coinValue > 1) UI.triggerRunBoosterFeedback('boost_double');
+          }
+          if (typeof Renderer !== 'undefined') Renderer.addMagnetCoin(coinX, coinY, playerX, playerY, checkCol, state.row, coinValue);
         }
       }
     }
@@ -1752,11 +1804,18 @@ const Player = (() => {
     // Инвиз от предыдущего срабатывания щита — только от машин
     if (type !== 'water' && _invincibleTimer > 0) return;
     // Second Chance — даёт инвиз 3 сек, только от машин
-    if (type !== 'water' && !_shieldUsed && typeof Shop !== 'undefined' && Shop.hasBoosted('boost_shield')) {
+    if (type !== 'water' && !_shieldUsed && typeof Loadout !== 'undefined' && Loadout.isActive('boost_shield')) {
       _shieldUsed      = true;
       _invincibleTimer = INVINCIBLE_DUR;
-      Shop.useBooster('boost_shield');
       if (typeof Vibrate !== 'undefined') Vibrate.coin();
+      if (typeof UI !== 'undefined') {
+        if (UI.triggerRunBoosterFeedback) UI.triggerRunBoosterFeedback('boost_shield', 'Saved');
+        if (UI.markRunBoosterUsed) UI.markRunBoosterUsed('boost_shield');
+      }
+      if (typeof Renderer !== 'undefined') {
+        Renderer.addShieldBurst(state.visualX, state.visualY);
+        Renderer.triggerShake(4, 0.16);
+      }
       return; // saved — активирован инвиз
     }
     state.alive   = false;
@@ -1915,6 +1974,18 @@ const CAR_SPRITES_B64 = {
   yellow_taxi: "data:image/png;base64,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",
 };
 
+const CAR_SPRITE_SRCS = {
+  taxi: '/game/vehicles/traffic-premium-v1/taxi.png',
+  yellow_taxi: '/game/vehicles/traffic-premium-v1/yellow_taxi.png',
+  green_taxi: '/game/vehicles/traffic-premium-v1/green_taxi.png',
+  orange: '/game/vehicles/traffic-premium-v1/orange.png',
+  police: '/game/vehicles/traffic-premium-v1/police.png',
+  ambulance: '/game/vehicles/traffic-premium-v1/ambulance.png',
+  truck: '/game/vehicles/traffic-premium-v1/truck.png',
+  bus: '/game/vehicles/traffic-premium-v1/bus.png',
+  firetruck: '/game/vehicles/traffic-premium-v1/firetruck.png',
+};
+
 
 /* ===== renderer.js ===== */
 const Renderer = (() => {
@@ -2015,14 +2086,18 @@ const Renderer = (() => {
   }
 
   // ── Coin pickup effects ──────────────────────────────────
-  const coinEffects  = [];   // { x, y, age }
+  const coinEffects  = [];   // { x, y, age, value }
   const COIN_EFFECT_DUR  = 0.7;
   const scoreEffects = [];   // { x, y, age } — row-advance "+1"
   const SCORE_EFFECT_DUR = 0.55;
 
   // ── Magnet attract animations ───────────────────────────
-  const magnetCoins = [];   // { fromX, fromY, toX, toY, age, col, rowIdx }
+  const magnetCoins = [];   // { fromX, fromY, toX, toY, age, col, rowIdx, value }
   const MAGNET_DUR  = 0.25; // seconds for coin to fly to player
+
+  // ── Booster moment effects ──────────────────────────────
+  const shieldBursts = [];  // { x, y, age }
+  const SHIELD_BURST_DUR = 0.55;
 
   // ── Footprint / landing trails ───────────────────────────
   // Each trail: { x, y, age, maxAge, type, seed, particles? }
@@ -2308,6 +2383,8 @@ const Renderer = (() => {
   }
 
   let playerImg = null;
+  let playerImgSrc = '';
+  let pendingPlayerImgSrc = '';
   let coinImg   = null;
 
   // ── Procedural grass tile (offscreen canvas, built once at init) ──
@@ -2366,6 +2443,10 @@ const Renderer = (() => {
     pine:       '/game/env/pine.png',
     snowman:    '/game/env/snowman.png',
   };
+  const TRAIN_SPRITE_SRC = '/game/vehicles/train-premium-v1.png';
+  const LOG_SPRITE_SRC   = '/game/env/log.png';
+  let _trainSpriteImg = null;
+  let _logSpriteImg = null;
 
   function loadEnvSprites() {
     for (const [key, src] of Object.entries(_ENV_SPRITE_SRCS)) {
@@ -2375,15 +2456,28 @@ const Renderer = (() => {
     }
   }
 
+  function loadTrainSprite() {
+    const img = new Image();
+    img.onload = () => { _trainSpriteImg = img; };
+    img.src = TRAIN_SPRITE_SRC;
+  }
+
+  function loadLogSprite() {
+    const img = new Image();
+    img.onload = () => { _logSpriteImg = img; };
+    img.src = LOG_SPRITE_SRC;
+  }
+
   // Per-type config for environment sprites
   // size:  sprite scale (× CELL)
   // sw:    shadow ellipse half-width (× CELL)
   // sh:    shadow ellipse half-height (× CELL)
   // base:  ground-contact point in cell (0 = top, 1 = bottom)
+  // shadowLift: raises shadow to match visible sprite base when PNG has bottom padding
   const _ENV_SPRITE_CFG = {
-    bush:       { size: 0.82, sw: 0.32, sh: 0.09, base: 0.92 },
+    bush:       { size: 0.82, sw: 0.32, sh: 0.09, base: 0.92, shadowLift: 0.14 },
     tree:       { size: 1.05, sw: 0.30, sh: 0.08, base: 0.94 },
-    rock:       { size: 0.72, sw: 0.28, sh: 0.08, base: 0.90 },
+    rock:       { size: 0.72, sw: 0.28, sh: 0.08, base: 0.90, shadowLift: 0.12 },
     cactus:     { size: 0.88, sw: 0.22, sh: 0.07, base: 0.94 },
     tumbleweed: { size: 0.65, sw: 0.20, sh: 0.06, base: 0.92 },
     pine:       { size: 1.05, sw: 0.28, sh: 0.08, base: 0.94 },
@@ -2396,10 +2490,11 @@ const Renderer = (() => {
     const cfg    = _ENV_SPRITE_CFG[type] || { size: 0.85, sw: 0.28, sh: 0.08, base: 0.92 };
     const size   = CELL * cfg.size;
     const baseY  = cy - CELL * 0.5 + CELL * cfg.base; // ground contact
+    const shadowY = baseY - CELL * (cfg.shadowLift || 0);
     // Simple filled ellipse shadow (matches player shadow style)
     ctx.fillStyle = 'rgba(0,0,0,0.18)';
     ctx.beginPath();
-    ctx.ellipse(cx, baseY, CELL * cfg.sw, CELL * cfg.sh, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx, shadowY, CELL * cfg.sw, CELL * cfg.sh, 0, 0, Math.PI * 2);
     ctx.fill();
     // Sprite: image bottom sits at baseY
     ctx.drawImage(img, cx - size / 2, baseY - size, size, size);
@@ -2414,34 +2509,45 @@ const Renderer = (() => {
     loadPlayerSprite();
     loadCoinSprite();
     loadEnvSprites();
+    loadTrainSprite();
+    loadLogSprite();
     loadGrassTextures();
     resize();
   }
 
-  function loadPlayerSprite() {
-    // Определяем спрайт исходя из выбранного персонажа в магазине
+  function getEquippedPlayerSpriteSrc() {
     let src = '/game/chars/cryptokid.png';
     if (typeof Shop !== 'undefined') {
       const equippedId = Shop.getEquipped();
       const spriteSrc  = Shop.getSprite(equippedId);
       if (spriteSrc) src = spriteSrc;
     }
+    return src;
+  }
+
+  function loadPlayerSprite(src = getEquippedPlayerSpriteSrc()) {
+    if (playerImg && playerImgSrc === src) return;
+    if (pendingPlayerImgSrc === src) return;
+
+    pendingPlayerImgSrc = src;
     const img = new Image();
-    img.onload = () => { playerImg = img; };
+    img.onload = () => {
+      if (pendingPlayerImgSrc !== src) return;
+      playerImg = img;
+      playerImgSrc = src;
+      pendingPlayerImgSrc = '';
+    };
     img.onerror = () => {
-      // Fallback на дефолтный спрайт если файл не найден
+      if (pendingPlayerImgSrc === src) pendingPlayerImgSrc = '';
       if (src !== '/game/chars/cryptokid.png') {
-        const fallback = new Image();
-        fallback.onload = () => { playerImg = fallback; };
-        fallback.src = '/game/chars/cryptokid.png';
+        loadPlayerSprite('/game/chars/cryptokid.png');
       }
     };
     img.src = src;
   }
 
   function reloadPlayerSprite() {
-    playerImg = null;
-    loadPlayerSprite();
+    loadPlayerSprite(getEquippedPlayerSpriteSrc());
   }
 
   function loadCoinSprite() {
@@ -2482,15 +2588,37 @@ const Renderer = (() => {
   let spritesReady = false;
 
   function loadCarSprites() {
-    if (typeof CAR_SPRITES_B64 === 'undefined') return;
-    // Load ALL sprites from CAR_SPRITES_B64
-    const allNames = Object.keys(CAR_SPRITES_B64);
+    const embedded = (typeof CAR_SPRITES_B64 !== 'undefined') ? CAR_SPRITES_B64 : {};
+    const external = (typeof CAR_SPRITE_SRCS !== 'undefined') ? CAR_SPRITE_SRCS : {};
+    const allNames = Array.from(new Set([
+      ...Object.keys(embedded),
+      ...Object.keys(external),
+    ]));
     let loaded = 0;
     const total = allNames.length;
+
+    const markLoaded = () => {
+      if (++loaded === total) spritesReady = true;
+    };
+
     allNames.forEach(name => {
       const img = new Image();
-      img.onload = () => { if (++loaded === total) spritesReady = true; };
-      img.src = CAR_SPRITES_B64[name];
+      const externalSrc = external[name];
+      const fallbackSrc = embedded[name];
+      let triedFallback = false;
+
+      img.onload = markLoaded;
+      img.onerror = () => {
+        if (!triedFallback && fallbackSrc && externalSrc) {
+          triedFallback = true;
+          img.src = fallbackSrc;
+          return;
+        }
+        delete carImages[name];
+        markLoaded();
+      };
+
+      img.src = externalSrc || fallbackSrc;
       carImages[name] = img;
     });
     if (total === 0) spritesReady = true;
@@ -2682,6 +2810,7 @@ const Renderer = (() => {
     drawRows();
     drawTrails();
     drawPlayer();
+    drawShieldBursts(dt_approx);
     drawCoinEffects(dt_approx);
     drawScoreEffects(dt_approx);
     // Draw death particles in world space (before restore)
@@ -2756,7 +2885,8 @@ const Renderer = (() => {
   }
 
   function drawRows() {
-    for (const row of World.getRows()) {
+    const rows = [...World.getRows()].sort((a, b) => b.idx - a.idx);
+    for (const row of rows) {
       const y = World.rowToY(row.idx);
       const bi = { biome: row.biome || 'default', nextBiome: row.nextBiome || null, blendT: row.blendT || 0 };
       if (row.type === 'grass') {
@@ -3404,6 +3534,11 @@ const Renderer = (() => {
     for (const log of row.obstacles) {
       const x = log.x;
       const y = rowY + (CELL - log.height) / 2;
+      if (_logSpriteImg && _logSpriteImg.complete && _logSpriteImg.naturalWidth) {
+        ctx.drawImage(_logSpriteImg, x, y, log.width, log.height);
+        continue;
+      }
+
       ctx.fillStyle = dcBiome('logDk', bi);
       roundRect(ctx, x, y, log.width, log.height, 8);
       ctx.fill();
@@ -3884,6 +4019,33 @@ const Renderer = (() => {
   }
 
   function drawTrain(train, rowY, dir) {
+    if (drawTrainSprite(train, rowY, dir)) return;
+    drawTrainFallback(train, rowY, dir);
+  }
+
+  function drawTrainSprite(train, rowY, dir) {
+    if (!_trainSpriteImg || !_trainSpriteImg.complete || !_trainSpriteImg.naturalWidth) return false;
+
+    const CELL = World.CELL;
+    const drawW = train.width;
+    const drawH = Math.min(CELL * 0.92, train.height * 1.08);
+    const centerX = train.x + train.width / 2;
+    const centerY = rowY + CELL / 2;
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.24)';
+    ctx.beginPath();
+    ctx.ellipse(centerX, centerY + drawH * 0.13, drawW * 0.48, drawH * 0.26, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.translate(centerX, centerY);
+    ctx.scale(dir > 0 ? -1 : 1, 1);
+    ctx.drawImage(_trainSpriteImg, -drawW / 2, -drawH / 2, drawW, drawH);
+    ctx.restore();
+    return true;
+  }
+
+  function drawTrainFallback(train, rowY, dir) {
     const CELL   = World.CELL;
     const CARS   = 4;
     const carW   = CELL * 2;
@@ -4304,16 +4466,20 @@ const Renderer = (() => {
     }
   }
 
-  function addCoinEffect(x, y) {
-    coinEffects.push({ x, y, age: 0 });
+  function addCoinEffect(x, y, value = 1) {
+    coinEffects.push({ x, y, age: 0, value });
   }
 
   function addScoreEffect(x, y) {
     scoreEffects.push({ x, y, age: 0 });
   }
 
-  function addMagnetCoin(fromX, fromY, toX, toY, col, rowIdx) {
-    magnetCoins.push({ fromX, fromY, toX, toY, age: 0, col, rowIdx });
+  function addMagnetCoin(fromX, fromY, toX, toY, col, rowIdx, value = 1) {
+    magnetCoins.push({ fromX, fromY, toX, toY, age: 0, col, rowIdx, value });
+  }
+
+  function addShieldBurst(x, y) {
+    shieldBursts.push({ x, y, age: 0 });
   }
 
   function drawMagnetCoins(dt) {
@@ -4322,8 +4488,7 @@ const Renderer = (() => {
       m.age += dt;
       if (m.age >= MAGNET_DUR) {
         magnetCoins.splice(i, 1);
-        // Trigger "+1" effect at destination
-        addCoinEffect(m.toX, m.toY);
+        addCoinEffect(m.toX, m.toY, m.value || 1);
         continue;
       }
       const t = m.age / MAGNET_DUR;
@@ -4337,6 +4502,13 @@ const Renderer = (() => {
       const scale = 1 - t * 0.3; // shrink slightly as it flies
 
       ctx.save();
+      ctx.globalAlpha = 0.50 * (1 - t);
+      ctx.strokeStyle = 'rgba(76,205,255,0.72)';
+      ctx.lineWidth = Math.max(1.4, CELL * 0.045 * (1 - t * 0.35));
+      ctx.beginPath();
+      ctx.moveTo(m.fromX, m.fromY);
+      ctx.quadraticCurveTo((m.fromX + m.toX) / 2, (m.fromY + m.toY) / 2 - CELL * 0.44, x, y + arc);
+      ctx.stroke();
       ctx.globalAlpha = 1;
       ctx.translate(x, y + arc);
       if (coinImg) {
@@ -4352,6 +4524,29 @@ const Renderer = (() => {
     }
   }
 
+  function drawShieldBursts(dt) {
+    for (let i = shieldBursts.length - 1; i >= 0; i--) {
+      const b = shieldBursts[i];
+      b.age += dt;
+      if (b.age >= SHIELD_BURST_DUR) { shieldBursts.splice(i, 1); continue; }
+      const t = b.age / SHIELD_BURST_DUR;
+      const ease = 1 - Math.pow(1 - t, 3);
+      const alpha = 1 - t;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = 'rgba(102,146,255,0.78)';
+      ctx.lineWidth = Math.max(1, CELL * 0.075 * (1 - t));
+      ctx.beginPath();
+      ctx.ellipse(b.x, b.y, CELL * (0.38 + ease * 1.08), CELL * (0.18 + ease * 0.42), 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = `rgba(102,146,255,${0.16 * alpha})`;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y - CELL * 0.18, CELL * (0.28 + ease * 0.48), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
   function drawCoinEffects(dt) {
     drawMagnetCoins(dt);
     for (let i = coinEffects.length - 1; i >= 0; i--) {
@@ -4363,14 +4558,16 @@ const Renderer = (() => {
       const rise  = CELL * 0.9 * t;
       ctx.save();
       ctx.globalAlpha = alpha;
-      ctx.fillStyle   = '#FFD700';
-      ctx.strokeStyle = '#7A5800';
+      const value = e.value || 1;
+      const isDouble = value > 1;
+      ctx.fillStyle   = isDouble ? '#FFE86A' : '#FFD700';
+      ctx.strokeStyle = isDouble ? '#5B3B00' : '#7A5800';
       ctx.lineWidth   = 2;
-      ctx.font = `bold ${Math.round(CELL * 0.32)}px Arial`;
+      ctx.font = `bold ${Math.round(CELL * (isDouble ? 0.37 : 0.32))}px Arial`;
       ctx.textAlign    = 'center';
       ctx.textBaseline = 'middle';
-      ctx.strokeText('+1', e.x, e.y - rise);
-      ctx.fillText  ('+1', e.x, e.y - rise);
+      ctx.strokeText(`+${value}`, e.x, e.y - rise);
+      ctx.fillText  (`+${value}`, e.x, e.y - rise);
       ctx.restore();
     }
   }
@@ -4689,7 +4886,7 @@ const Renderer = (() => {
   function _dbgWeather(state) { weatherState = state; weatherRatio = 0; if (state===3) { rainInitDone=false; initRain(STORM_RAIN_COUNT); } else if (state===1) { rainInitDone=false; initRain(RAIN_COUNT); } }
   let _dbgNightForce = null;
   function _dbgNight(on) { _dbgNightForce = on; nightTarget = on ? 1 : 0; _nightOn = on; }
-  return { init, resize, updateCamera, draw, setScore, setWeather, triggerDeath, triggerShake, isDying, deathDone, stopDeath, resetWeather, addTrail, addCoinEffect, addScoreEffect, addMagnetCoin, reloadPlayerSprite, _dbgWeather, _dbgNight };
+  return { init, resize, updateCamera, draw, setScore, setWeather, triggerDeath, triggerShake, isDying, deathDone, stopDeath, resetWeather, addTrail, addCoinEffect, addScoreEffect, addMagnetCoin, addShieldBurst, reloadPlayerSprite, _dbgWeather, _dbgNight };
 
 })();
 
@@ -4708,6 +4905,7 @@ const UI = (() => {
   // Все экраны игры
   const SCREENS = {
     menu:     document.getElementById('screen-menu'),
+    loadout:  document.getElementById('screen-loadout'),
     gameover: document.getElementById('screen-gameover'),
     lb:       document.getElementById('screen-lb'),
     ci:       document.getElementById('screen-ci'),
@@ -4723,7 +4921,7 @@ const UI = (() => {
   const bestVal   = document.getElementById('best-val');
   // ===== Показать нужный экран =====
   // Screens where music plays
-  const MUSIC_SCREENS = new Set(['menu','profile','lb','shop','quests','spin','ci','settings']);
+  const MUSIC_SCREENS = new Set(['menu','loadout','profile','lb','shop','quests','spin','ci','settings']);
 
   function show(name) {
     if (name !== 'ci') _stopCiTimer();
@@ -4767,6 +4965,7 @@ const UI = (() => {
       }
       // Update daily spin banner visibility
       if (typeof DailySpin !== 'undefined') DailySpin.updateBanner();
+      if (typeof Shop !== 'undefined' && Shop.renderFocusStrip) Shop.renderFocusStrip();
       _updateCiBanner();
       // Tick the banner every second while on menu
       if (_menuCiInterval) clearInterval(_menuCiInterval);
@@ -4848,10 +5047,10 @@ const UI = (() => {
       if (xpMultiEl) xpMultiEl.style.display = 'none';
       // Bonus chips
       const bonuses = [];
-      if (xpBreakdown.recordBonus)  bonuses.push(`🏆 +${xpBreakdown.recordBonus}`);
-      if (xpBreakdown.streakBonus)  bonuses.push(`🔥 +${xpBreakdown.streakBonus}`);
+      if (xpBreakdown.recordBonus)  bonuses.push(`${_uiIconHtml('leaderboard', 'go-xp-bonus-icon', 'record')} +${xpBreakdown.recordBonus}`);
+      if (xpBreakdown.streakBonus)  bonuses.push(`${_uiIconHtml('fire', 'go-xp-bonus-icon', 'streak')} +${xpBreakdown.streakBonus}`);
       if (xpBonusEl) {
-        xpBonusEl.textContent   = bonuses.join('  ');
+        xpBonusEl.innerHTML     = bonuses.map(item => `<span class="go-xp-bonus-chip">${item}</span>`).join('');
         xpBonusEl.style.display = bonuses.length ? '' : 'none';
       }
       if (xpRow) xpRow.style.display = 'flex';
@@ -4873,16 +5072,12 @@ const UI = (() => {
   let _ciTimerInterval = null;
 
   // Rewards per day (day 1-7 in a streak cycle)
-  const COIN_IMG_HTML = '<img src="/game/coin.png" style="width:18px;height:18px;object-fit:contain;vertical-align:middle;position:relative;top:-1px;">';
-  const DAY_REWARDS = [
-    { coins: 5,  icon: COIN_IMG_HTML },
-    { coins: 5,  icon: COIN_IMG_HTML },
-    { coins: 5,  icon: COIN_IMG_HTML },
-    { coins: 10, icon: '💰' },
-    { coins: 10, icon: '💰' },
-    { coins: 20, icon: '💎' },
-    { coins: 30, icon: '👑', booster: true },
-  ];
+  const DAY_REWARDS = CHECKIN_REWARD_CYCLE.map(day => ({
+    ...day,
+    icon: typeof day.icon === 'function'
+      ? day.icon()
+      : _uiIconHtml('starter-pack', 'ci-reward-icon-img', 'reward'),
+  }));
 
   function _msUntilUTCMidnight() {
     const now = new Date();
@@ -4904,6 +5099,27 @@ const UI = (() => {
 
   function _stopCiTimer() {
     if (_ciTimerInterval) { clearInterval(_ciTimerInterval); _ciTimerInterval = null; }
+  }
+
+  function _rewardParts(bundle) {
+    const totals = RewardEconomy.collect(bundle);
+    const parts = [];
+    if (totals.coins) parts.push({ kind: 'coins', value: totals.coins, label: 'coins', icon: _imgHtml('/game/coin.png', 'ci-reward-chip-icon', 'coins') });
+    if (totals.fragments) parts.push({ kind: 'frags', value: totals.fragments, label: 'frags', icon: _uiIconHtml('gem', 'ci-reward-chip-icon', 'fragments') });
+    if (totals.boosters) parts.push({ kind: 'boost', value: totals.boosters, label: totals.boosters === 1 ? 'boost' : 'boosts', icon: _uiIconHtml('starter-pack', 'ci-reward-chip-icon', 'boosters') });
+    if (totals.xp) parts.push({ kind: 'xp', value: totals.xp, label: 'XP', icon: _uiIconHtml('xp', 'ci-reward-chip-icon', 'xp') });
+    return parts;
+  }
+
+  function _rewardChipsHtml(bundle, variant = '') {
+    const parts = _rewardParts(bundle);
+    if (!parts.length) return '';
+    return `<div class="ci-reward-chips${variant ? ' ' + variant : ''}">${parts.map(part => `
+      <span class="ci-reward-chip ci-reward-chip-${part.kind}">
+        ${part.icon}
+        <span class="ci-reward-chip-value">${part.value}</span>
+        <span class="ci-reward-chip-label">${part.label}</span>
+      </span>`).join('')}</div>`;
   }
 
   function _renderDays(streak, available) {
@@ -4944,8 +5160,8 @@ const UI = (() => {
           <div class="ci-day-icon">${day.icon}</div>
           <div class="ci-day-final-text">
             <span class="ci-day-final-badge">Weekly Reward</span>
-            <span class="ci-day-coins">+${day.coins} <span style="font-size:0.65em;opacity:0.8">coins</span></span>
-            <span class="ci-day-final-extra">+ Random Booster</span>
+            <span class="ci-day-final-title">Gear Crate</span>
+            ${_rewardChipsHtml(REWARD_CONTAINERS_LOCAL[day.container], 'ci-reward-chips-final')}
             <span class="ci-day-label">Day 7</span>
           </div>
         </div>`;
@@ -4954,7 +5170,7 @@ const UI = (() => {
       return `<div class="${cls}" style="${opacity}">
         ${checkMark}
         <div class="ci-day-icon">${day.icon}</div>
-        <div class="ci-day-coins">+${day.coins}</div>
+        ${_rewardChipsHtml(day)}
         <div class="ci-day-label">Day ${dayNum}</div>
       </div>`;
     }).join('');
@@ -5004,7 +5220,7 @@ const UI = (() => {
         claimBtn.disabled      = false;
         claimBtn.style.opacity = '1';
         claimBtn.style.display = '';
-        claimBtn.innerHTML     = `<span style="display:inline-flex;align-items:center;gap:6px;vertical-align:middle;font-weight:bold;letter-spacing:2px;">${todayReward.icon} Claim +${todayReward.coins}</span>`;
+        claimBtn.innerHTML     = `<span class="ci-claim-content">${todayReward.icon}<span class="ci-claim-copy">Claim</span>${_rewardChipsHtml(todayReward, 'ci-reward-chips-claim')}</span>`;
       }
     } else {
       if (statusEl) statusEl.className = 'ci-status unavail';
@@ -5037,6 +5253,16 @@ const UI = (() => {
   // hudVal — монеты этой сессии (HUD во время игры); если не передан — равен total
   const coinCountEl     = document.getElementById('coin-count');
   const menuCoinCountEl = document.getElementById('menu-coin-count');
+  const runBoosterHud   = document.getElementById('run-booster-hud');
+  const runBoostToast   = document.getElementById('run-boost-toast');
+  const runBoostEls = {
+    boost_magnet: document.getElementById('run-boost-magnet'),
+    boost_double: document.getElementById('run-boost-double'),
+    boost_shield: document.getElementById('run-boost-shield'),
+  };
+  let _runToastTimer = null;
+  let _coinHudPopTimer = null;
+
   function updateCoins(total, hudVal) {
     const hud = hudVal !== undefined ? hudVal : total;
     if (coinCountEl)     coinCountEl.textContent     = hud;
@@ -5045,7 +5271,66 @@ const UI = (() => {
     if (shopEl) shopEl.textContent = total;
   }
 
-  return { show, updateScore, updateBest, showGameOver, showCheckIn, showLeaderboard, updateCoins };
+  function setRunBoosters(activeBoosters) {
+    const activeIds = new Set(Object.keys(activeBoosters || {}).filter(id => activeBoosters[id]));
+    if (runBoosterHud) runBoosterHud.classList.toggle('hidden', activeIds.size === 0);
+    for (const [id, el] of Object.entries(runBoostEls)) {
+      if (!el) continue;
+      const isActive = activeIds.has(id);
+      el.classList.toggle('hidden', !isActive);
+      el.classList.remove('pulse');
+      el.classList.toggle('used', false);
+    }
+    if (runBoostToast) {
+      runBoostToast.classList.add('hidden');
+      runBoostToast.classList.remove('show');
+    }
+  }
+
+  function _restartAnimation(el, className) {
+    if (!el) return;
+    el.classList.remove(className);
+    void el.offsetWidth;
+    el.classList.add(className);
+  }
+
+  function _showRunBoostToast(label) {
+    if (!runBoostToast || !label) return;
+    runBoostToast.textContent = label;
+    runBoostToast.classList.remove('hidden');
+    _restartAnimation(runBoostToast, 'show');
+    if (_runToastTimer) clearTimeout(_runToastTimer);
+    _runToastTimer = setTimeout(() => {
+      runBoostToast.classList.add('hidden');
+      runBoostToast.classList.remove('show');
+    }, 760);
+  }
+
+  function _popCoinHud() {
+    const coinHud = document.getElementById('coin-hud');
+    if (!coinHud) return;
+    coinHud.classList.remove('coin-hud-pop');
+    void coinHud.offsetWidth;
+    coinHud.classList.add('coin-hud-pop');
+    if (_coinHudPopTimer) clearTimeout(_coinHudPopTimer);
+    _coinHudPopTimer = setTimeout(() => coinHud.classList.remove('coin-hud-pop'), 180);
+  }
+
+  function triggerRunBoosterFeedback(id, label) {
+    const el = runBoostEls[id];
+    if (!el || el.classList.contains('hidden')) return;
+    _restartAnimation(el, 'pulse');
+    if (id === 'boost_double') _popCoinHud();
+    _showRunBoostToast(label);
+  }
+
+  function markRunBoosterUsed(id) {
+    const el = runBoostEls[id];
+    if (!el) return;
+    el.classList.add('used');
+  }
+
+  return { show, updateScore, updateBest, showGameOver, showCheckIn, showLeaderboard, updateCoins, setRunBoosters, triggerRunBoosterFeedback, markRunBoosterUsed };
 
 })();
 
@@ -5074,7 +5359,7 @@ function _bindNftBtns(container) {
       const itemId = btn.dataset.id;
       const mintFn = window.__NFT_MINT;
       if (!mintFn || window.__NFT_PENDING) return;
-      btn.textContent = '⏳ Claiming…';
+      btn.textContent = 'Claiming...';
       btn.disabled = true;
       mintFn(itemId);
     });
@@ -5085,48 +5370,87 @@ function _bindNftBtns(container) {
 const Shop = (() => {
   // ── Скины ──
   const ITEMS = [
-    { id: 'skin_cryptokid',    name: 'Crypto Kid',    price: 0,    icon: '🧒', desc: 'Born on-chain',         sprite: '/game/chars/cryptokid.png'     },
-    { id: 'skin_street_runner',name: 'Street Runner', price: 150,  icon: '🏃', desc: 'Fast on the streets',   sprite: '/game/chars/street_runner.png' },
-    { id: 'skin_1',             name: 'Neon Runner',   price: 200,  icon: '🌟', desc: 'Glowing in the dark',   sprite: '/game/chars/skin1.png'         },
-    { id: 'skin_2',             name: 'Pixel Dude',    price: 200,  icon: '👾', desc: '8-bit and proud',       sprite: '/game/chars/skin2.png'         },
-    { id: 'skin_default',      name: 'Builder',       price: 300,  icon: '👷', desc: 'Default character',     sprite: '/game/player.png'              },
-    { id: 'skin_3',             name: 'Shadow',        price: 300,  icon: '🌑', desc: 'Moves like a ghost',    sprite: '/game/chars/skin3.png'         },
-    { id: 'skin_4',             name: 'Gold Rush',     price: 350,  icon: '💛', desc: 'All that glitters',     sprite: '/game/chars/skin4.png'         },
-    { id: 'skin_5',             name: 'Cyber Punk',    price: 400,  icon: '⚡', desc: 'Born from the grid',    sprite: '/game/chars/skin5.png'         },
-    { id: 'skin_6',             name: 'Ocean Rider',   price: 450,  icon: '🌊', desc: 'Rides the blue wave',   sprite: '/game/chars/skin6.png'         },
-    { id: 'skin_7',             name: 'Flame Chaser',  price: 500,  icon: '🔥', desc: 'Always on fire',        sprite: '/game/chars/skin7.png'         },
-    { id: 'skin_founder',      name: 'Founder',       price: 500,  icon: '🏗️', desc: 'Building the future',   sprite: '/game/chars/founder.png'       },
-    { id: 'skin_8',             name: 'Arctic',        price: 600,  icon: '❄️', desc: 'Cool under pressure',   sprite: '/game/chars/skin8.png'         },
-    { id: 'skin_9',             name: 'Desert Storm',  price: 700,  icon: '🌵', desc: 'Forged in the heat',    sprite: '/game/chars/skin9.png'         },
-    { id: 'skin_10',            name: 'Thunder',       price: 800,  icon: '🌩️', desc: 'Speed of lightning',    sprite: '/game/chars/skin10.png'        },
-    { id: 'skin_11',            name: 'Diamond Hands', price: 900,  icon: '💎', desc: 'Never gonna sell',      sprite: '/game/chars/skin11.png'        },
-    { id: 'skin_base_king',    name: 'Base King',     price: 1000, icon: '👑', desc: 'Rule the chain',        sprite: '/game/chars/base_king.png'     },
+    { id: 'skin_cryptokid',     name: 'Crypto Kid',    price: 0,    desc: 'Born on-chain',         sprite: '/game/chars/cryptokid.png'     },
+    { id: 'skin_street_runner', name: 'Street Runner', price: 150,  desc: 'Fast on the streets',   sprite: '/game/chars/street_runner.png' },
+    { id: 'skin_1',             name: 'Neon Runner',   price: 750,  desc: 'Glowing in the dark',   sprite: '/game/chars/skin1.png'         },
+    { id: 'skin_2',             name: 'Pixel Dude',    price: 750,  desc: '8-bit and proud',       sprite: '/game/chars/skin2.png'         },
+    { id: 'skin_default',       name: 'Builder',       price: 800,  desc: 'Default character',     sprite: '/game/player.png'              },
+    { id: 'skin_3',             name: 'Shadow',        price: 800,  desc: 'Moves like a ghost',    sprite: '/game/chars/skin3.png'         },
+    { id: 'skin_4',             name: 'Gold Rush',     price: 850,  desc: 'All that glitters',     sprite: '/game/chars/skin4.png'         },
+    { id: 'skin_5',             name: 'Cyber Punk',    price: 1200, desc: 'Born from the grid',    sprite: '/game/chars/skin5.png'         },
+    { id: 'skin_6',             name: 'Ocean Rider',   price: 1300, desc: 'Rides the blue wave',   sprite: '/game/chars/skin6.png'         },
+    { id: 'skin_7',             name: 'Flame Chaser',  price: 1400, desc: 'Always on fire',        sprite: '/game/chars/skin7.png'         },
+    { id: 'skin_founder',       name: 'Founder',       price: 1500, desc: 'Building the future',   sprite: '/game/chars/founder.png'       },
+    { id: 'skin_8',             name: 'Arctic',        price: 600,  desc: 'Cool under pressure',   sprite: '/game/chars/skin8.png'         },
+    { id: 'skin_9',             name: 'Desert Storm',  price: 700,  desc: 'Forged in the heat',    sprite: '/game/chars/skin9.png'         },
+    { id: 'skin_10',            name: 'Thunder',       price: 800,  desc: 'Speed of lightning',    sprite: '/game/chars/skin10.png'        },
+    { id: 'skin_11',            name: 'Diamond Hands', price: 900,  desc: 'Never gonna sell',      sprite: '/game/chars/skin11.png'        },
+    { id: 'skin_base_king',     name: 'Base King',     price: 1000, desc: 'Rule the chain',        sprite: '/game/chars/base_king.png'     },
   ];
 
   // ── Бустеры (расходуемые, покупаются паками) ──
   const BOOSTERS = [
-    { id: 'boost_magnet', name: 'Coin Magnet',   packPrice: 60,  packSize: 3, icon: '🧲', sprite: '/game/boosters/coin_magnet.png',   desc: 'Pulls coins from distance' },
-    { id: 'boost_double', name: 'Double Coins',  packPrice: 90,  packSize: 3, icon: '💰', sprite: '/game/boosters/double_coins.png',  desc: 'Every coin counts as x2'   },
-    { id: 'boost_shield', name: 'Second Chance', packPrice: 100, packSize: 3, icon: '🛡️', sprite: '/game/boosters/second_chance.png', desc: 'Extra life on death'        },
+    { id: 'boost_magnet', name: 'Coin Magnet',   packPrice: 60,  packSize: 3, sprite: '/game/boosters/coin_magnet.png',   desc: 'Pulls coins from distance' },
+    { id: 'boost_double', name: 'Double Coins',  packPrice: 90,  packSize: 3, sprite: '/game/boosters/double_coins.png',  desc: 'Every coin counts as x2'   },
+    { id: 'boost_shield', name: 'Second Chance', packPrice: 100, packSize: 3, sprite: '/game/boosters/second_chance.png', desc: 'Extra life on death'        },
   ];
 
   // ── Паки анимаций смерти ──
   const DEATH_PACKS = [
-    { id: 'death_comic',    name: 'Comic',    price: 200,  icon: '💥', desc: 'Squish, bubbles and star fly-off' },
-    { id: 'death_pixel',    name: 'Pixel',    price: 400,  icon: '👾', desc: 'Pixel burst, vortex and dissolve' },
-    { id: 'death_dramatic', name: 'Dramatic', price: 600,  icon: '🎬', desc: 'Spin away, slow sink and flash out' },
+    { id: 'death_comic',    name: 'Comic',    price: 200,  iconSrc: '/game/ui-icons/celebration.png', desc: 'Squish, bubbles and star fly-off' },
+    { id: 'death_pixel',    name: 'Pixel',    price: 800,  iconSrc: '/game/ui-icons/gamepad.png',      desc: 'Pixel burst, vortex and dissolve' },
+    { id: 'death_dramatic', name: 'Dramatic', price: 1200, iconSrc: '/game/ui-icons/fire.png',         desc: 'Spin away, slow sink and flash out' },
   ];
 
   // ── Следы персонажа (trail skins) ──
   const TRAIL_PACKS = [
-    { id: 'trail_sparkle', name: 'Sparkle', price: 150, icon: '✨', sprite: '/nft/images/trail_sparkle.png', desc: 'Golden twinkling stars'   },
-    { id: 'trail_hearts',  name: 'Hearts',  price: 200, icon: '💖', sprite: '/nft/images/trail_hearts.png',  desc: 'Floating heart burst'     },
-    { id: 'trail_fire',    name: 'Fire',    price: 300, icon: '🔥', sprite: '/nft/images/trail_fire.png',    desc: 'Blazing flame puffs'      },
-    { id: 'trail_coins',   name: 'Coins',   price: 400, icon: '🪙', sprite: '/nft/images/trail_coins.png',   desc: 'Shiny spinning coins'     },
-    { id: 'trail_rainbow', name: 'Rainbow', price: 600, icon: '🌈', sprite: '/nft/images/trail_rainbow.png', desc: 'Six-color rainbow burst'  },
+    { id: 'trail_sparkle', name: 'Sparkle', price: 150, sprite: '/nft/images/trail_sparkle.png', desc: 'Golden twinkling stars',  color: 'rgba(255,215,0,0.22)',   glow: 'rgba(255,215,0,0.5)'   },
+    { id: 'trail_hearts',  name: 'Hearts',  price: 750, sprite: '/nft/images/trail_hearts.png',  desc: 'Floating heart burst',    color: 'rgba(255,100,170,0.22)', glow: 'rgba(255,100,170,0.5)' },
+    { id: 'trail_fire',    name: 'Fire',    price: 800, sprite: '/nft/images/trail_fire.png',    desc: 'Blazing flame puffs',     color: 'rgba(255,110,0,0.22)',   glow: 'rgba(255,110,0,0.5)'   },
+    { id: 'trail_coins',   name: 'Coins',   price: 1200, sprite: '/nft/images/trail_coins.png',   desc: 'Shiny spinning coins',    color: 'rgba(255,200,0,0.22)',   glow: 'rgba(255,200,0,0.5)'   },
+    { id: 'trail_rainbow', name: 'Rainbow', price: 600, sprite: '/nft/images/trail_rainbow.png', desc: 'Six-color rainbow burst', color: 'rgba(140,100,255,0.22)', glow: 'rgba(140,100,255,0.5)' },
   ];
+  const DEFAULT_TRAIL = { id: 'default', name: 'Default', sprite: '/nft/images/trail_default.png', desc: 'Footprints, dust and ripples', color: 'rgba(255,255,255,0.07)', glow: 'rgba(255,255,255,0.12)' };
+
+  const ECONOMY_TIERS = Object.freeze({
+    common:    { fragments: 10, craftFee: 40,  topUpCost: 20,  topUpCapPct: 0.2 },
+    rare:      { fragments: 20, craftFee: 100, topUpCost: 35,  topUpCapPct: 0.2 },
+    epic:      { fragments: 35, craftFee: 220, topUpCost: 60,  topUpCapPct: 0.2 },
+    legendary: { fragments: 60, craftFee: 500, topUpCost: 160, topUpCapPct: 0 },
+  });
+
+  const CRAFT_CONFIG = Object.freeze({
+    trail_sparkle: { type: 'trail', tier: 'common' },
+    trail_hearts:  { type: 'trail', tier: 'rare' },
+    trail_fire:    { type: 'trail', tier: 'rare' },
+    trail_coins:   { type: 'trail', tier: 'epic' },
+    trail_rainbow: { type: 'trail', tier: 'legendary' },
+
+    death_comic:    { type: 'death', tier: 'common' },
+    death_pixel:    { type: 'death', tier: 'rare' },
+    death_dramatic: { type: 'death', tier: 'epic' },
+
+    skin_street_runner: { type: 'skin', tier: 'common' },
+    skin_1:             { type: 'skin', tier: 'rare' },
+    skin_2:             { type: 'skin', tier: 'rare' },
+    skin_default:       { type: 'skin', tier: 'rare' },
+    skin_3:             { type: 'skin', tier: 'rare' },
+    skin_4:             { type: 'skin', tier: 'rare' },
+    skin_5:             { type: 'skin', tier: 'epic' },
+    skin_6:             { type: 'skin', tier: 'epic' },
+    skin_7:             { type: 'skin', tier: 'epic' },
+    skin_founder:       { type: 'skin', tier: 'epic' },
+    skin_8:             { type: 'skin', tier: 'legendary' },
+    skin_9:             { type: 'skin', tier: 'legendary' },
+    skin_10:            { type: 'skin', tier: 'legendary' },
+    skin_11:            { type: 'skin', tier: 'legendary' },
+    skin_base_king:     { type: 'skin', tier: 'legendary' },
+  });
 
   const SAVE_KEY = 'shop_v1';
+  const NFT_CLAIMED_KEY = 'nft_claimed';
+  const GEAR_TEST_BACKUP_KEY = 'shop_v1_gear_test_backup';
+  const ECONOMY_TEST_BACKUP_KEY = 'shop_v1_economy_test_backup';
   let shopTab = 'skins'; // 'skins' | 'boosters' | 'trails' | 'effects'
   let _shopCache = null; // in-memory cache — avoids localStorage + JSON.parse every frame
 
@@ -5139,6 +5463,154 @@ const Shop = (() => {
     _shopCache = d; // update cache
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(d)); } catch {}
     _syncToServer(d);
+  }
+  function saveShopDataLocal(d) {
+    _shopCache = d;
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(d)); } catch {}
+  }
+
+  function _isLocalGearTestAllowed() {
+    return typeof location !== 'undefined'
+      && (location.hostname === 'localhost' || location.hostname === '127.0.0.1' || location.hostname === '::1');
+  }
+
+  function _clearGearTestParam() {
+    try {
+      const url = new URL(location.href);
+      url.searchParams.delete('gearTest');
+      history.replaceState(null, '', url.pathname + url.search + url.hash);
+    } catch {}
+  }
+
+  function applyLocalGearTestFixture() {
+    if (!_isLocalGearTestAllowed()) return false;
+    const params = new URLSearchParams(location.search);
+    const mode = params.get('gearTest');
+    if (!mode) return false;
+
+    if (mode === 'restore') {
+      try {
+        const rawBackup = localStorage.getItem(GEAR_TEST_BACKUP_KEY);
+        if (rawBackup) {
+          const backup = JSON.parse(rawBackup);
+          if (backup.existed) localStorage.setItem(SAVE_KEY, backup.value);
+          else localStorage.removeItem(SAVE_KEY);
+          if (Object.prototype.hasOwnProperty.call(backup, 'nftClaimedExisted')) {
+            if (backup.nftClaimedExisted) localStorage.setItem(NFT_CLAIMED_KEY, backup.nftClaimedValue);
+            else localStorage.removeItem(NFT_CLAIMED_KEY);
+          }
+          localStorage.removeItem(GEAR_TEST_BACKUP_KEY);
+          _shopCache = null;
+        }
+      } catch {}
+      _clearGearTestParam();
+      if (typeof refreshGearViews === 'function') refreshGearViews();
+      return true;
+    }
+
+    if (mode !== '1') {
+      _clearGearTestParam();
+      return false;
+    }
+
+    try {
+      const currentBackupRaw = localStorage.getItem(GEAR_TEST_BACKUP_KEY);
+      if (!currentBackupRaw) {
+        const currentRaw = localStorage.getItem(SAVE_KEY);
+        localStorage.setItem(GEAR_TEST_BACKUP_KEY, JSON.stringify({
+          existed: currentRaw !== null,
+          value: currentRaw,
+          nftClaimedExisted: localStorage.getItem(NFT_CLAIMED_KEY) !== null,
+          nftClaimedValue: localStorage.getItem(NFT_CLAIMED_KEY),
+        }));
+      } else {
+        const backup = JSON.parse(currentBackupRaw);
+        if (!Object.prototype.hasOwnProperty.call(backup, 'nftClaimedExisted')) {
+          backup.nftClaimedExisted = localStorage.getItem(NFT_CLAIMED_KEY) !== null;
+          backup.nftClaimedValue = localStorage.getItem(NFT_CLAIMED_KEY);
+          localStorage.setItem(GEAR_TEST_BACKUP_KEY, JSON.stringify(backup));
+        }
+      }
+    } catch {}
+
+    const d = _migrateCharges(loadShopData());
+    d.owned = ['skin_cryptokid', 'skin_street_runner', 'skin_1'];
+    d.equipped = 'skin_cryptokid';
+    d.boosterCharges = { boost_magnet: 3, boost_double: 3, boost_shield: 3 };
+    d.trailPacks = ['trail_sparkle', 'trail_hearts'];
+    d.equippedTrail = 'default';
+    saveShopDataLocal(d);
+    try {
+      const claimed = JSON.parse(localStorage.getItem(NFT_CLAIMED_KEY) || '[]');
+      for (const id of ['skin_street_runner', 'skin_1']) {
+        if (!claimed.includes(id)) claimed.push(id);
+      }
+      localStorage.setItem(NFT_CLAIMED_KEY, JSON.stringify(claimed));
+    } catch {}
+    _clearGearTestParam();
+    if (typeof refreshGearViews === 'function') refreshGearViews();
+    return true;
+  }
+
+  function applyLocalEconomyTestFixture() {
+    const allowed = typeof location !== 'undefined'
+      && (location.hostname === 'localhost' || location.hostname === '127.0.0.1' || location.hostname === '::1');
+    if (!allowed) return false;
+
+    const params = new URLSearchParams(location.search);
+    const mode = params.get('economyTest');
+    if (!mode) return false;
+
+    const clearParam = () => {
+      try {
+        const url = new URL(location.href);
+        url.searchParams.delete('economyTest');
+        history.replaceState(null, '', url.pathname + url.search + url.hash);
+      } catch {}
+    };
+
+    if (mode === 'restore') {
+      try {
+        const rawBackup = localStorage.getItem(ECONOMY_TEST_BACKUP_KEY);
+        if (rawBackup) {
+          const backup = JSON.parse(rawBackup);
+          if (backup.existed) localStorage.setItem(SAVE_KEY, backup.value);
+          else localStorage.removeItem(SAVE_KEY);
+          localStorage.removeItem(ECONOMY_TEST_BACKUP_KEY);
+          _shopCache = null;
+        }
+      } catch {}
+      clearParam();
+      if (typeof refreshGearViews === 'function') refreshGearViews();
+      renderFocusStrip();
+      return true;
+    }
+
+    if (mode !== '1') {
+      clearParam();
+      return false;
+    }
+
+    try {
+      if (!localStorage.getItem(ECONOMY_TEST_BACKUP_KEY)) {
+        const currentRaw = localStorage.getItem(SAVE_KEY);
+        localStorage.setItem(ECONOMY_TEST_BACKUP_KEY, JSON.stringify({
+          existed: currentRaw !== null,
+          value: currentRaw,
+        }));
+      }
+    } catch {}
+
+    const d = _migrateEconomy(loadShopData());
+    d.focusItemId = 'trail_fire';
+    d.fragments = { ...(d.fragments || {}), trail_fire: 17, skin_8: 12 };
+    d.topUpFragments = { ...(d.topUpFragments || {}) };
+    d.boosterCharges = { ...(d.boosterCharges || {}), boost_magnet: 2, boost_double: 2, boost_shield: 1 };
+    saveShopDataLocal(d);
+    clearParam();
+    if (typeof refreshGearViews === 'function') refreshGearViews();
+    renderFocusStrip();
+    return true;
   }
 
   function _syncToServer(d) {
@@ -5155,7 +5627,7 @@ const Shop = (() => {
   }
 
   function applyServerData(owned, equipped, boosterCharges, trailPacks, equippedTrail, equippedDeath, deathPacks) {
-    const local = _migrateCharges(loadShopData());
+    const local = _migrateEconomy(loadShopData());
 
     // Merge owned skins (union)
     const mergedOwned = [...new Set([...(local.owned || ['skin_cryptokid']), ...(owned || [])])];
@@ -5180,13 +5652,140 @@ const Shop = (() => {
       equippedTrail:  equippedTrail || local.equippedTrail || 'default',
       equippedDeath:  equippedDeath || local.equippedDeath || 'default',
       deathPacks:     mergedDeaths,
+      fragments:      local.fragments || {},
+      focusItemId:    local.focusItemId || null,
+      topUpFragments: local.topUpFragments || {},
     };
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(d)); } catch {}
+    _shopCache = d;
     if (typeof Renderer !== 'undefined') Renderer.reloadPlayerSprite();
+    if (typeof refreshGearViews === 'function') refreshGearViews();
+  }
+
+  function applyServerEconomyData(serverData) {
+    if (!serverData || typeof serverData !== 'object') return;
+    const local = _migrateEconomy(loadShopData());
+    const d = _migrateEconomy({
+      ...local,
+      owned: Array.isArray(serverData.owned) ? serverData.owned : local.owned,
+      equipped: typeof serverData.equipped === 'string' ? serverData.equipped : local.equipped,
+      boosterCharges: serverData.boosterCharges && typeof serverData.boosterCharges === 'object'
+        ? serverData.boosterCharges
+        : local.boosterCharges,
+      trailPacks: Array.isArray(serverData.trailPacks) ? serverData.trailPacks : local.trailPacks,
+      equippedTrail: typeof serverData.equippedTrail === 'string' ? serverData.equippedTrail : local.equippedTrail,
+      equippedDeath: typeof serverData.equippedDeath === 'string' ? serverData.equippedDeath : local.equippedDeath,
+      deathPacks: Array.isArray(serverData.deathPacks) ? serverData.deathPacks : local.deathPacks,
+      fragments: serverData.fragments && typeof serverData.fragments === 'object' ? serverData.fragments : local.fragments,
+      focusItemId: typeof serverData.focusItemId === 'string' ? serverData.focusItemId : null,
+      topUpFragments: serverData.topUpFragments && typeof serverData.topUpFragments === 'object'
+        ? serverData.topUpFragments
+        : local.topUpFragments,
+    });
+    saveShopDataLocal(d);
+    if (typeof Renderer !== 'undefined') Renderer.reloadPlayerSprite();
+    if (typeof refreshGearViews === 'function') refreshGearViews();
+    if (typeof Shop !== 'undefined' && Shop.refreshVisible) Shop.refreshVisible();
+    if (typeof Shop !== 'undefined' && Shop.renderFocusStrip) Shop.renderFocusStrip();
+  }
+
+  function _setCoinBalanceLocal(balance) {
+    if (typeof balance !== 'number' || !Number.isFinite(balance)) return;
+    const next = Math.max(0, Math.floor(balance));
+    const d = Save.load();
+    d.coins = next;
+    Save.save(d);
+    if (typeof UI !== 'undefined') UI.updateCoins(next);
+  }
+
+  async function _runEconomyAction(action, itemId, localFallback) {
+    const actionFn = window.__BASE_ECONOMY_ACTION;
+    if (typeof actionFn !== 'function') return localFallback();
+    try {
+      const result = await actionFn({ action, itemId });
+      if (!result || !result.ok) {
+        if (result && (result.error === 'no_address' || result.error === 'fetch_failed' || result.error === 'action_failed')) {
+          return localFallback();
+        }
+        return false;
+      }
+      if (result.shop) applyServerEconomyData(result.shop);
+      if (typeof result.coins === 'number') _setCoinBalanceLocal(result.coins);
+      return true;
+    } catch {
+      return localFallback();
+    }
+  }
+
+  function _directBuyAvailable(itemId) {
+    const meta = getCraftMeta(itemId);
+    return !meta || meta.tier !== 'legendary';
+  }
+
+  function buyShopItemLocal(itemId, price) {
+    if (!_directBuyAvailable(itemId)) return false;
+    const item = _catalogItem(itemId);
+    if (!item || _ownsItemOfType(itemId, item.type)) return false;
+    const cost = Math.max(0, Math.floor(Number(price) || 0));
+    if (Save.getCoins() < cost) return false;
+    Save.addCoins(-cost);
+    if (item.type === 'skin') {
+      const d = _migrateEconomy(loadShopData());
+      d.owned = Array.from(new Set([...(d.owned || ['skin_cryptokid']), itemId]));
+      saveShopDataLocal(d);
+    } else {
+      _grantItemLocal(itemId, item.type);
+    }
+    if (typeof UI !== 'undefined') UI.updateCoins(Save.getCoins());
+    return true;
+  }
+
+  async function buyShopItemServerFirst(itemId, price, afterBuy) {
+    let usedLocalFallback = false;
+    const ok = await _runEconomyAction('buyItem', itemId, () => {
+      usedLocalFallback = true;
+      return buyShopItemLocal(itemId, price);
+    });
+    if (ok && typeof afterBuy === 'function') afterBuy(usedLocalFallback);
+    return ok;
+  }
+
+  function buyBoosterPackLocal(boosterId, price, packSize) {
+    const cost = Math.max(0, Math.floor(Number(price) || 0));
+    const size = Math.max(0, Math.floor(Number(packSize) || 0));
+    if (!BOOSTERS.some(item => item.id === boosterId) || size <= 0) return false;
+    if (Save.getCoins() < cost) return false;
+    Save.addCoins(-cost);
+    addBoosterCharges(boosterId, size);
+    if (typeof UI !== 'undefined') UI.updateCoins(Save.getCoins());
+    return true;
+  }
+
+  function buyBoosterPackServerFirst(boosterId, price, packSize) {
+    return _runEconomyAction('buyBoosterPack', boosterId, () => buyBoosterPackLocal(boosterId, price, packSize));
   }
 
   function getOwned() { return loadShopData().owned || ['skin_cryptokid']; }
   function getEquipped() { return loadShopData().equipped || 'skin_cryptokid'; }
+  function getSkinMeta(id) {
+    return ITEMS.find(item => item.id === id) || ITEMS[0];
+  }
+  function getSkinOptions() {
+    const owned = getOwned();
+    const options = ITEMS
+      .filter(item => owned.includes(item.id) && _skinUnlocked(item.id))
+      .map(item => item.id);
+    return options.length ? options : ['skin_cryptokid'];
+  }
+  function equipSkinLocal(id) {
+    if (!getSkinOptions().includes(id)) return false;
+    const d = loadShopData();
+    d.equipped = id;
+    saveShopDataLocal(d);
+    if (typeof Renderer !== 'undefined') Renderer.reloadPlayerSprite();
+    if (typeof refreshGearViews === 'function') refreshGearViews();
+    return true;
+  }
 
   // ── Расходуемые бустеры ──
   function _migrateCharges(d) {
@@ -5199,6 +5798,287 @@ const Shop = (() => {
     }
     return d;
   }
+
+  function _migrateEconomy(d) {
+    _migrateCharges(d);
+    if (!d.fragments || typeof d.fragments !== 'object' || Array.isArray(d.fragments)) d.fragments = {};
+    if (!d.topUpFragments || typeof d.topUpFragments !== 'object' || Array.isArray(d.topUpFragments)) d.topUpFragments = {};
+    if (typeof d.focusItemId !== 'string' || !getCraftMeta(d.focusItemId)) d.focusItemId = null;
+    return d;
+  }
+
+  function _catalogItem(itemId) {
+    const skin = ITEMS.find(item => item.id === itemId);
+    if (skin) return { ...skin, type: 'skin' };
+    const trail = TRAIL_PACKS.find(item => item.id === itemId);
+    if (trail) return { ...trail, type: 'trail' };
+    const death = DEATH_PACKS.find(item => item.id === itemId);
+    if (death) return { ...death, type: 'death' };
+    return null;
+  }
+
+  function getCraftMeta(itemId) {
+    const cfg = CRAFT_CONFIG[itemId];
+    const item = _catalogItem(itemId);
+    if (!cfg || !item) return null;
+    const tier = ECONOMY_TIERS[cfg.tier];
+    if (!tier) return null;
+    return {
+      ...cfg,
+      ...tier,
+      itemId,
+      name: item.name,
+      sprite: item.sprite || item.iconSrc || '',
+      price: item.price || 0,
+    };
+  }
+
+  function _ownsItemOfType(itemId, type) {
+    if (type === 'skin') return getOwned().includes(itemId);
+    if (type === 'trail') return getTrailPacks().includes(itemId);
+    if (type === 'death') return getDeathPacks().includes(itemId);
+    return false;
+  }
+
+  function _grantItemLocal(itemId, type) {
+    const d = _migrateEconomy(loadShopData());
+    if (type === 'skin') {
+      const owned = d.owned || ['skin_cryptokid'];
+      if (!owned.includes(itemId)) owned.push(itemId);
+      d.owned = owned;
+      _markNftClaimed(itemId);
+    } else if (type === 'trail') {
+      const packs = d.trailPacks || [];
+      if (!packs.includes(itemId)) packs.push(itemId);
+      d.trailPacks = packs;
+    } else if (type === 'death') {
+      const packs = d.deathPacks || [];
+      if (!packs.includes(itemId)) packs.push(itemId);
+      d.deathPacks = packs;
+    }
+    if (d.focusItemId === itemId) d.focusItemId = null;
+    saveShopDataLocal(d);
+  }
+
+  function getFocusItem() {
+    const d = _migrateEconomy(loadShopData());
+    const meta = getCraftMeta(d.focusItemId);
+    if (!meta || _ownsItemOfType(d.focusItemId, meta.type)) {
+      if (d.focusItemId) {
+        d.focusItemId = null;
+        saveShopDataLocal(d);
+      }
+      return null;
+    }
+    return d.focusItemId;
+  }
+
+  function setFocusItemLocal(itemId) {
+    const meta = getCraftMeta(itemId);
+    if (!meta || _ownsItemOfType(itemId, meta.type)) return false;
+    const d = _migrateEconomy(loadShopData());
+    d.focusItemId = itemId;
+    saveShopDataLocal(d);
+    if (typeof Shop !== 'undefined' && Shop.refreshVisible) Shop.refreshVisible();
+    if (typeof Shop !== 'undefined' && Shop.renderFocusStrip) Shop.renderFocusStrip();
+    return true;
+  }
+
+  function setFocusItemServerFirst(itemId) {
+    return _runEconomyAction('setFocus', itemId, () => setFocusItemLocal(itemId));
+  }
+
+  function addFragmentsLocal(itemId, amount) {
+    const meta = getCraftMeta(itemId);
+    if (!meta) return 0;
+    const add = Math.max(0, Math.floor(Number(amount) || 0));
+    if (add <= 0) return getCraftStatus(itemId).fragments || 0;
+    const d = _migrateEconomy(loadShopData());
+    const current = Math.max(0, Math.floor(Number(d.fragments[itemId]) || 0));
+    const next = Math.min(meta.fragments, current + add);
+    d.fragments[itemId] = next;
+    saveShopDataLocal(d);
+    if (typeof Shop !== 'undefined' && Shop.refreshVisible) Shop.refreshVisible();
+    if (typeof Shop !== 'undefined' && Shop.renderFocusStrip) Shop.renderFocusStrip();
+    return next;
+  }
+
+  function getCraftStatus(itemId) {
+    const meta = getCraftMeta(itemId);
+    if (!meta) return { valid: false, itemId, fragments: 0, target: 0, pct: 0, owned: false, canCraft: false, canTopUp: false };
+    const d = _migrateEconomy(loadShopData());
+    const fragments = Math.max(0, Math.floor(Number(d.fragments[itemId]) || 0));
+    const target = meta.fragments;
+    const owned = _ownsItemOfType(itemId, meta.type);
+    const missing = Math.max(0, target - fragments);
+    const topUpUsed = Math.max(0, Math.floor(Number(d.topUpFragments[itemId]) || 0));
+    const topUpCap = Math.max(0, Math.floor(target * meta.topUpCapPct));
+    const topUpAmount = meta.tier === 'legendary' ? 0 : Math.min(missing, Math.max(0, topUpCap - topUpUsed));
+    const topUpCostTotal = topUpAmount * meta.topUpCost;
+
+    return {
+      valid: true,
+      ...meta,
+      owned,
+      fragments,
+      target,
+      missing,
+      pct: Math.min(100, Math.round((fragments / target) * 100)),
+      focus: d.focusItemId === itemId,
+      canCraft: !owned && fragments >= target && Save.getCoins() >= meta.craftFee,
+      hasFragments: fragments >= target,
+      canTopUp: !owned && topUpAmount > 0 && Save.getCoins() >= topUpCostTotal,
+      topUpAmount,
+      topUpCostTotal,
+    };
+  }
+
+  function craftItemLocal(itemId) {
+    const status = getCraftStatus(itemId);
+    if (!status.valid) return { ok: false, reason: 'invalid_item' };
+    if (status.owned) return { ok: false, reason: 'already_owned' };
+    if (!status.hasFragments) return { ok: false, reason: 'not_enough_fragments' };
+    if (Save.getCoins() < status.craftFee) return { ok: false, reason: 'not_enough_coins' };
+
+    const d = _migrateEconomy(loadShopData());
+    d.fragments[itemId] = 0;
+    d.topUpFragments[itemId] = 0;
+    if (d.focusItemId === itemId) d.focusItemId = null;
+    saveShopDataLocal(d);
+    Save.addCoins(-status.craftFee);
+    _grantItemLocal(itemId, status.type);
+    if (typeof UI !== 'undefined') UI.updateCoins(Save.getCoins());
+    if (typeof refreshGearViews === 'function') refreshGearViews();
+    if (typeof Shop !== 'undefined' && Shop.refreshVisible) Shop.refreshVisible();
+    if (typeof Shop !== 'undefined' && Shop.renderFocusStrip) Shop.renderFocusStrip();
+    return { ok: true };
+  }
+
+  function craftItemServerFirst(itemId) {
+    return _runEconomyAction('craft', itemId, () => craftItemLocal(itemId).ok);
+  }
+
+  function topUpFragmentsLocal(itemId, amount) {
+    const meta = getCraftMeta(itemId);
+    if (!meta) return { ok: false, reason: 'invalid_item' };
+    if (meta.tier === 'legendary') return { ok: false, reason: 'legendary_topup_disabled' };
+    if (_ownsItemOfType(itemId, meta.type)) return { ok: false, reason: 'already_owned' };
+
+    const d = _migrateEconomy(loadShopData());
+    const current = Math.max(0, Math.floor(Number(d.fragments[itemId]) || 0));
+    const target = meta.fragments;
+    const missing = Math.max(0, target - current);
+    if (missing <= 0) return { ok: false, reason: 'already_ready' };
+
+    const topUpUsed = Math.max(0, Math.floor(Number(d.topUpFragments[itemId]) || 0));
+    const topUpCap = Math.max(0, Math.floor(target * meta.topUpCapPct));
+    const requested = amount === undefined ? missing : Math.max(0, Math.floor(Number(amount) || 0));
+    const add = Math.min(requested, missing, Math.max(0, topUpCap - topUpUsed));
+    if (add <= 0) return { ok: false, reason: 'topup_cap_reached' };
+
+    const cost = add * meta.topUpCost;
+    if (Save.getCoins() < cost) return { ok: false, reason: 'not_enough_coins', cost };
+
+    d.fragments[itemId] = current + add;
+    d.topUpFragments[itemId] = topUpUsed + add;
+    saveShopDataLocal(d);
+    Save.addCoins(-cost);
+    if (typeof UI !== 'undefined') UI.updateCoins(Save.getCoins());
+    if (typeof Shop !== 'undefined' && Shop.refreshVisible) Shop.refreshVisible();
+    if (typeof Shop !== 'undefined' && Shop.renderFocusStrip) Shop.renderFocusStrip();
+    return { ok: true, amount: add, cost };
+  }
+
+  function topUpFragmentsServerFirst(itemId) {
+    return _runEconomyAction('topUp', itemId, () => topUpFragmentsLocal(itemId).ok);
+  }
+
+  function _currentUtcDateKey() {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  function _loadDailyFragmentChestLocal() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(DAILY_FRAGMENT_CHEST_LOCAL_KEY) || '{}');
+      return {
+        lastDate: typeof parsed.lastDate === 'string' ? parsed.lastDate : null,
+        buysToday: Math.max(0, Math.floor(Number(parsed.buysToday) || 0)),
+        total: Math.max(0, Math.floor(Number(parsed.total) || 0)),
+      };
+    } catch {
+      return { lastDate: null, buysToday: 0, total: 0 };
+    }
+  }
+
+  function _markDailyFragmentChestBoughtLocal() {
+    const today = _currentUtcDateKey();
+    const state = _loadDailyFragmentChestLocal();
+    const alreadyBoughtToday = state.lastDate === today && state.buysToday > 0;
+    const next = {
+      lastDate: today,
+      buysToday: Math.max(1, state.lastDate === today ? state.buysToday : 0),
+      total: state.total + (alreadyBoughtToday ? 0 : 1),
+    };
+    try { localStorage.setItem(DAILY_FRAGMENT_CHEST_LOCAL_KEY, JSON.stringify(next)); } catch {}
+    return next;
+  }
+
+  function getDailyFragmentChestStatus() {
+    const focusId = getFocusItem();
+    const status = focusId ? getCraftStatus(focusId) : null;
+    const today = _currentUtcDateKey();
+    const localState = _loadDailyFragmentChestLocal();
+    const buysToday = localState.lastDate === today ? localState.buysToday : 0;
+    const boughtToday = buysToday >= DAILY_FRAGMENT_CHEST_LIMIT;
+    const balance = Save.getCoins();
+    const award = status && status.valid
+      ? Math.min(DAILY_FRAGMENT_CHEST_FRAGMENTS, Math.max(0, status.missing || 0))
+      : 0;
+
+    let reason = 'Choose Focus';
+    if (status && status.valid) {
+      if (status.owned) reason = 'Already owned';
+      else if ((status.missing || 0) <= 0 || status.hasFragments) reason = 'Ready to craft';
+      else if (boughtToday) reason = 'Available tomorrow';
+      else if (balance < DAILY_FRAGMENT_CHEST_COST) reason = `Need ${DAILY_FRAGMENT_CHEST_COST - balance} coins`;
+      else reason = `+${award} Focus fragments`;
+    }
+
+    return {
+      itemId: focusId,
+      award,
+      cost: DAILY_FRAGMENT_CHEST_COST,
+      boughtToday,
+      buysToday,
+      reason,
+      canBuy: Boolean(status && status.valid && !status.owned && award > 0 && !boughtToday && balance >= DAILY_FRAGMENT_CHEST_COST),
+    };
+  }
+
+  function buyDailyFragmentChestLocal() {
+    const chest = getDailyFragmentChestStatus();
+    if (!chest.canBuy || !chest.itemId) return false;
+
+    const meta = getCraftMeta(chest.itemId);
+    if (!meta) return false;
+    const d = _migrateEconomy(loadShopData());
+    const current = Math.max(0, Math.floor(Number(d.fragments[chest.itemId]) || 0));
+    d.fragments[chest.itemId] = Math.min(meta.fragments, current + DAILY_FRAGMENT_CHEST_FRAGMENTS);
+    saveShopDataLocal(d);
+    Save.addCoins(-DAILY_FRAGMENT_CHEST_COST);
+    _markDailyFragmentChestBoughtLocal();
+    if (typeof UI !== 'undefined') UI.updateCoins(Save.getCoins());
+    if (typeof Shop !== 'undefined' && Shop.refreshVisible) Shop.refreshVisible();
+    if (typeof Shop !== 'undefined' && Shop.renderFocusStrip) Shop.renderFocusStrip();
+    return true;
+  }
+
+  async function buyDailyFragmentChestServerFirst() {
+    const ok = await _runEconomyAction('dailyFragmentChest', undefined, () => buyDailyFragmentChestLocal());
+    if (ok) _markDailyFragmentChestBoughtLocal();
+    return ok;
+  }
+
   function getBoosterCharges() {
     const d = _migrateCharges(loadShopData());
     return d.boosterCharges || {};
@@ -5224,6 +6104,17 @@ const Shop = (() => {
     }
     return false;
   }
+  function spendBoosterLocal(id) {
+    const d = _migrateCharges(loadShopData());
+    const charges = d.boosterCharges || {};
+    if ((charges[id] || 0) > 0) {
+      charges[id]--;
+      d.boosterCharges = charges;
+      saveShopDataLocal(d);
+      return true;
+    }
+    return false;
+  }
 
   function own(id) {
     const d = loadShopData();
@@ -5236,6 +6127,8 @@ const Shop = (() => {
     const d = loadShopData();
     d.equipped = id;
     saveShopData(d);
+    if (typeof Renderer !== 'undefined') Renderer.reloadPlayerSprite();
+    if (typeof refreshGearViews === 'function') refreshGearViews();
   }
   function getDeathPacks() { return loadShopData().deathPacks || []; }
   function getEquippedDeath() { return loadShopData().equippedDeath || 'default'; }
@@ -5255,6 +6148,22 @@ const Shop = (() => {
   // ── Trails (следы персонажа) ──
   function getTrailPacks() { return loadShopData().trailPacks || []; }
   function getEquippedTrail() { return loadShopData().equippedTrail || 'default'; }
+  function getTrailMeta(id) {
+    if (id === 'default') return DEFAULT_TRAIL;
+    return TRAIL_PACKS.find(item => item.id === id) || DEFAULT_TRAIL;
+  }
+  function getTrailOptions() {
+    const validTrails = new Set(TRAIL_PACKS.map(item => item.id));
+    return [...new Set(['default', ...getTrailPacks().filter(id => validTrails.has(id))])];
+  }
+  function equipTrailLocal(id) {
+    if (!getTrailOptions().includes(id)) return false;
+    const d = loadShopData();
+    d.equippedTrail = id;
+    saveShopDataLocal(d);
+    if (typeof refreshGearViews === 'function') refreshGearViews();
+    return true;
+  }
   function ownTrailPack(id) {
     const d = loadShopData();
     const packs = d.trailPacks || [];
@@ -5266,6 +6175,7 @@ const Shop = (() => {
     const d = loadShopData();
     d.equippedTrail = id;
     saveShopData(d);
+    if (typeof refreshGearViews === 'function') refreshGearViews();
   }
 
   // ── Вкладки ──
@@ -5299,6 +6209,131 @@ const Shop = (() => {
     return _isNftClaimed(id);
   }
 
+  function _shopEconomyHtml(itemId, isOwned) {
+    const status = getCraftStatus(itemId);
+    if (!status.valid || isOwned || status.owned) return '';
+
+    const activeClass = status.focus ? ' shop-focus-active' : '';
+    const readyClass = status.hasFragments ? ' shop-focus-ready' : '';
+    const focusAction = status.focus
+      ? '<span class="shop-focus-pill">FOCUS</span>'
+      : `<button class="shop-btn shop-btn-focus" data-id="${itemId}">Focus</button>`;
+
+    const craftAction = status.hasFragments
+      ? `<button class="shop-btn shop-btn-craft${status.canCraft ? '' : ' disabled'}" data-id="${itemId}"${status.canCraft ? '' : ' disabled'}>Craft · ${status.craftFee}</button>`
+      : '';
+
+    const topUpAction = status.focus && status.topUpAmount > 0
+      ? `<button class="shop-btn shop-btn-topup${status.canTopUp ? '' : ' disabled'}" data-id="${itemId}" data-amount="${status.topUpAmount}"${status.canTopUp ? '' : ' disabled'}>+${status.topUpAmount} · ${status.topUpCostTotal}</button>`
+      : '';
+
+    const hint = status.hasFragments
+      ? (status.canCraft ? 'Ready' : `Need ${status.craftFee} coins`)
+      : `${status.missing} left`;
+    const chestHtml = status.focus ? _dailyFragmentChestHtml(status) : '';
+
+    return `
+          <div class="shop-focus-row${activeClass}${readyClass}">
+            <div class="shop-focus-head">
+              <span>${status.tier} fragments</span>
+              <span class="shop-focus-count">${status.fragments}/${status.target}</span>
+            </div>
+            <div class="shop-fragment-track"><span class="shop-fragment-fill" style="width:${status.pct}%"></span></div>
+            <div class="shop-focus-actions">
+              <span class="shop-focus-hint">${hint}</span>
+              ${focusAction}
+              ${topUpAction}
+              ${craftAction}
+            </div>
+          </div>
+          ${chestHtml}`;
+  }
+
+  function _dailyFragmentChestHtml(status) {
+    const chest = getDailyFragmentChestStatus();
+    if (!status.focus || chest.itemId !== status.itemId) return '';
+
+    const disabledClass = chest.canBuy ? '' : ' disabled';
+    const disabledAttr = chest.canBuy ? '' : ' disabled';
+    const rewardLabel = chest.award > 0 ? `+${chest.award}` : `+${DAILY_FRAGMENT_CHEST_FRAGMENTS}`;
+
+    return `
+          <div class="daily-fragment-chest${chest.canBuy ? '' : ' daily-fragment-chest-locked'}">
+            <div class="daily-fragment-chest-copy">
+              <span class="daily-fragment-chest-kicker">Daily chest</span>
+              <span class="daily-fragment-chest-text">${chest.reason}</span>
+            </div>
+            <button class="shop-btn shop-btn-daily-chest${disabledClass}"${disabledAttr}>
+              <span>${rewardLabel}</span>
+              ${_uiIconHtml('gem', 'daily-fragment-chest-gem', 'fragments')}
+              <span class="daily-fragment-chest-price"><img src="/game/coin.png" alt="coins"> ${chest.cost}</span>
+            </button>
+          </div>`;
+  }
+
+  function _bindEconomyBtns(container) {
+    container.querySelectorAll('.shop-btn-focus').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        const ok = await setFocusItemServerFirst(btn.dataset.id);
+        if (ok) render();
+        else btn.disabled = false;
+      });
+    });
+    container.querySelectorAll('.shop-btn-topup').forEach(btn => {
+      if (btn.disabled || btn.classList.contains('disabled')) return;
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        const ok = await topUpFragmentsServerFirst(btn.dataset.id);
+        if (ok) render();
+        else btn.disabled = false;
+      });
+    });
+    container.querySelectorAll('.shop-btn-craft').forEach(btn => {
+      if (btn.disabled || btn.classList.contains('disabled')) return;
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        const ok = await craftItemServerFirst(btn.dataset.id);
+        if (ok) render();
+        else btn.disabled = false;
+      });
+    });
+    container.querySelectorAll('.shop-btn-daily-chest').forEach(btn => {
+      if (btn.disabled || btn.classList.contains('disabled')) return;
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        const ok = await buyDailyFragmentChestServerFirst();
+        if (ok) render();
+        else btn.disabled = false;
+      });
+    });
+  }
+
+  function renderFocusStrip() {
+    const strip = document.getElementById('menu-focus-strip');
+    const title = document.getElementById('menu-focus-title');
+    const progress = document.getElementById('menu-focus-progress');
+    const fill = document.getElementById('menu-focus-fill');
+    if (!strip || !title || !progress || !fill) return;
+
+    const focusId = getFocusItem();
+    if (!focusId) {
+      strip.classList.add('hidden');
+      return;
+    }
+
+    const status = getCraftStatus(focusId);
+    if (!status.valid || status.owned) {
+      strip.classList.add('hidden');
+      return;
+    }
+
+    strip.classList.remove('hidden');
+    title.textContent = status.name;
+    progress.textContent = `${status.fragments}/${status.target}`;
+    fill.style.width = `${status.pct}%`;
+  }
+
   function renderSkins() {
     const container = document.getElementById('shop-items');
     if (!container) return;
@@ -5310,7 +6345,8 @@ const Shop = (() => {
     for (const item of ITEMS) {
       const isOwned    = owned.includes(item.id);
       const isEquipped = equipped === item.id;
-      const canAfford  = balance >= item.price;
+      const canDirectBuy = _directBuyAvailable(item.id);
+      const canAfford  = canDirectBuy && balance >= item.price;
       const isUnlocked = _skinUnlocked(item.id); // claimed or free
       const needsClaim = isOwned && !isUnlocked;
 
@@ -5331,18 +6367,22 @@ const Shop = (() => {
         actionHtml = `<button class="shop-btn shop-btn-equip" data-id="${item.id}">Equip</button>`;
       } else if (needsClaim) {
         actionHtml = `<button class="shop-btn shop-btn-claim-equip" data-id="${item.id}">Claim</button>`;
+      } else if (!canDirectBuy) {
+        actionHtml = '<span class="shop-badge-owned">Craft only</span>';
       } else {
         actionHtml = `<button class="shop-btn shop-btn-buy${canAfford ? '' : ' disabled'}" data-id="${item.id}" data-price="${item.price}" style="display:inline-flex;flex-direction:row;align-items:center;justify-content:center;gap:4px;"><img src="/game/coin.png" style="width:14px;height:14px;object-fit:contain;display:block;flex-shrink:0;"> ${item.price}</button>`;
       }
 
       const el = document.createElement('div');
       el.className = 'shop-item' + (isEquipped ? ' shop-item-equipped' : '');
+      el.dataset.shopItem = item.id;
       el.innerHTML = `
         ${iconHtml}
         <div class="shop-info">
           <span class="shop-name">${item.name}</span>
           <span class="shop-desc">${item.desc}${needsClaim ? '<br><span style="color:rgba(180,140,255,0.7);font-size:0.7rem;">Claim NFT to unlock</span>' : ''}</span>
           ${nftInfoHtml}
+          ${_shopEconomyHtml(item.id, isOwned)}
         </div>
         <div class="shop-action">${actionHtml}</div>`;
       container.appendChild(el);
@@ -5364,7 +6404,7 @@ const Shop = (() => {
       btn.addEventListener('click', () => {
         const mintFn = window.__NFT_MINT;
         if (!mintFn || window.__NFT_PENDING) return;
-        btn.textContent = '⏳ Claiming…';
+        btn.textContent = 'Claiming...';
         btn.disabled    = true;
         mintFn(btn.dataset.id);
       });
@@ -5373,20 +6413,15 @@ const Shop = (() => {
     // Buy with coins (skin still needs claiming after purchase)
     container.querySelectorAll('.shop-btn-buy').forEach(btn => {
       if (btn.classList.contains('disabled')) return;
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', async () => {
         const price = parseInt(btn.dataset.price);
-        const cur   = Save.getCoins();
-        if (cur < price) return;
-        const d = Save.load();
-        d.coins -= price;
-        Save.save(d);
-        own(btn.dataset.id);
-        // Don't auto-equip — user must claim first
-        if (typeof UI !== 'undefined') UI.updateCoins(Save.getCoins());
-        if (typeof window.__BASE_SYNC_COINS === 'function') window.__BASE_SYNC_COINS(Save.getCoins());
-        render();
+        btn.disabled = true;
+        const ok = await buyShopItemServerFirst(btn.dataset.id, price);
+        if (ok) render();
+        else btn.disabled = false;
       });
     });
+    _bindEconomyBtns(container);
   }
 
   // ── Рендер бустеров (расходуемые) ──
@@ -5421,18 +6456,13 @@ const Shop = (() => {
 
     container.querySelectorAll('.shop-btn-buy').forEach(btn => {
       if (btn.classList.contains('disabled')) return;
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', async () => {
         const price = parseInt(btn.dataset.price);
         const pack  = parseInt(btn.dataset.pack);
-        const cur   = Save.getCoins();
-        if (cur < price) return;
-        const d = Save.load();
-        d.coins -= price;
-        Save.save(d);
-        addBoosterCharges(btn.dataset.id, pack);
-        if (typeof UI !== 'undefined') UI.updateCoins(Save.getCoins());
-        if (typeof window.__BASE_SYNC_COINS === 'function') window.__BASE_SYNC_COINS(Save.getCoins());
-        render();
+        btn.disabled = true;
+        const ok = await buyBoosterPackServerFirst(btn.dataset.id, price, pack);
+        if (ok) render();
+        else btn.disabled = false;
       });
     });
   }
@@ -5451,7 +6481,7 @@ const Shop = (() => {
     const defEl = document.createElement('div');
     defEl.className = 'shop-item' + (equipped === 'default' ? ' shop-item-equipped' : '');
     defEl.innerHTML = `
-      <span class="shop-icon">✨</span>
+      <span class="shop-icon">${_uiIconHtml('celebration', 'shop-effect-icon', 'default effect')}</span>
       <div class="shop-info">
         <span class="shop-name">Default</span>
         <span class="shop-desc">Basic flash and particles</span>
@@ -5466,22 +6496,27 @@ const Shop = (() => {
     for (const item of DEATH_PACKS) {
       const isOwned    = packs.includes(item.id);
       const isEquipped = equipped === item.id;
-      const canAfford  = balance >= item.price;
+      const canDirectBuy = _directBuyAvailable(item.id);
+      const canAfford  = canDirectBuy && balance >= item.price;
 
       const el = document.createElement('div');
       el.className = 'shop-item' + (isEquipped ? ' shop-item-equipped' : '');
+      el.dataset.shopItem = item.id;
       el.innerHTML = `
-        <span class="shop-icon">${item.icon}</span>
+        <span class="shop-icon">${_imgHtml(item.iconSrc || '/game/ui-icons/celebration.png', 'shop-effect-icon ui-icon', item.name, ' aria-hidden="true"')}</span>
         <div class="shop-info">
           <span class="shop-name">${item.name}</span>
           <span class="shop-desc">${item.desc}</span>
+          ${_shopEconomyHtml(item.id, isOwned)}
         </div>
         <div class="shop-action">
           ${isEquipped
             ? '<span class="shop-badge-on">✓ ON</span>'
             : isOwned
               ? `<button class="shop-btn shop-btn-equip-death" data-id="${item.id}">Equip</button>`
-              : `<button class="shop-btn shop-btn-buy${canAfford ? '' : ' disabled'}" data-id="${item.id}" data-price="${item.price}" style="display:inline-flex;flex-direction:row;align-items:center;justify-content:center;gap:4px;"><img src="/game/coin.png" style="width:14px;height:14px;object-fit:contain;display:block;flex-shrink:0;"> ${item.price}</button>`
+              : canDirectBuy
+                ? `<button class="shop-btn shop-btn-buy${canAfford ? '' : ' disabled'}" data-id="${item.id}" data-price="${item.price}" style="display:inline-flex;flex-direction:row;align-items:center;justify-content:center;gap:4px;"><img src="/game/coin.png" style="width:14px;height:14px;object-fit:contain;display:block;flex-shrink:0;"> ${item.price}</button>`
+                : '<span class="shop-badge-owned">Craft only</span>'
           }
         </div>`;
       container.appendChild(el);
@@ -5495,20 +6530,15 @@ const Shop = (() => {
     });
     container.querySelectorAll('.shop-btn-buy').forEach(btn => {
       if (btn.classList.contains('disabled')) return;
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', async () => {
         const price = parseInt(btn.dataset.price);
-        const cur   = Save.getCoins();
-        if (cur < price) return;
-        const d = Save.load();
-        d.coins -= price;
-        Save.save(d);
-        ownDeathPack(btn.dataset.id);
-        equipDeath(btn.dataset.id);
-        if (typeof UI !== 'undefined') UI.updateCoins(Save.getCoins());
-        if (typeof window.__BASE_SYNC_COINS === 'function') window.__BASE_SYNC_COINS(Save.getCoins());
-        render();
+        btn.disabled = true;
+        const ok = await buyShopItemServerFirst(btn.dataset.id, price, () => equipDeath(btn.dataset.id));
+        if (ok) render();
+        else btn.disabled = false;
       });
     });
+    _bindEconomyBtns(container);
   }
 
   // ── Рендер следов ──
@@ -5540,7 +6570,8 @@ const Shop = (() => {
     for (const item of TRAIL_PACKS) {
       const isOwned    = packs.includes(item.id);
       const isEquipped = equipped === item.id;
-      const canAfford  = balance >= item.price;
+      const canDirectBuy = _directBuyAvailable(item.id);
+      const canAfford  = canDirectBuy && balance >= item.price;
 
       const trailIconHtml = item.sprite
         ? `<span class="shop-icon shop-icon-img"><img src="${item.sprite}" alt="${item.name}" style="width:48px;height:48px;object-fit:contain;display:block;image-rendering:pixelated;"></span>`
@@ -5548,19 +6579,23 @@ const Shop = (() => {
 
       const el = document.createElement('div');
       el.className = 'shop-item' + (isEquipped ? ' shop-item-equipped' : '');
+      el.dataset.shopItem = item.id;
       el.innerHTML = `
         ${trailIconHtml}
         <div class="shop-info">
           <span class="shop-name">${item.name}</span>
           <span class="shop-desc">${item.desc}</span>
           ${isOwned ? `<div class="shop-nft-row">${_nftBtnHtml(item.id)}</div>` : ''}
+          ${_shopEconomyHtml(item.id, isOwned)}
         </div>
         <div class="shop-action">
           ${isEquipped
             ? '<span class="shop-badge-on">✓ ON</span>'
             : isOwned
               ? `<button class="shop-btn shop-btn-equip-trail" data-id="${item.id}">Equip</button>`
-              : `<button class="shop-btn shop-btn-buy${canAfford ? '' : ' disabled'}" data-id="${item.id}" data-price="${item.price}" style="display:inline-flex;flex-direction:row;align-items:center;justify-content:center;gap:4px;"><img src="/game/coin.png" style="width:14px;height:14px;object-fit:contain;display:block;flex-shrink:0;"> ${item.price}</button>`
+              : canDirectBuy
+                ? `<button class="shop-btn shop-btn-buy${canAfford ? '' : ' disabled'}" data-id="${item.id}" data-price="${item.price}" style="display:inline-flex;flex-direction:row;align-items:center;justify-content:center;gap:4px;"><img src="/game/coin.png" style="width:14px;height:14px;object-fit:contain;display:block;flex-shrink:0;"> ${item.price}</button>`
+                : '<span class="shop-badge-owned">Craft only</span>'
           }
         </div>`;
       container.appendChild(el);
@@ -5576,26 +6611,29 @@ const Shop = (() => {
     });
     container.querySelectorAll('.shop-btn-buy').forEach(btn => {
       if (btn.classList.contains('disabled')) return;
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', async () => {
         const price = parseInt(btn.dataset.price);
-        const cur   = Save.getCoins();
-        if (cur < price) return;
-        const d = Save.load();
-        d.coins -= price;
-        Save.save(d);
-        ownTrailPack(btn.dataset.id);
-        equipTrail(btn.dataset.id);
-        if (typeof UI !== 'undefined') UI.updateCoins(Save.getCoins());
-        if (typeof window.__BASE_SYNC_COINS === 'function') window.__BASE_SYNC_COINS(Save.getCoins());
-        render();
+        btn.disabled = true;
+        const ok = await buyShopItemServerFirst(btn.dataset.id, price, (usedLocalFallback) => {
+          if (usedLocalFallback) equipTrailLocal(btn.dataset.id);
+          else equipTrail(btn.dataset.id);
+        });
+        if (ok) render();
+        else btn.disabled = false;
       });
     });
+    _bindEconomyBtns(container);
   }
 
   function render() {
     const coinEl = document.getElementById('shop-coin-count');
     if (coinEl) coinEl.textContent = Save.getCoins();
     setTab(shopTab);
+  }
+
+  function refreshVisible() {
+    const screen = document.getElementById('screen-shop');
+    if (screen && !screen.classList.contains('hidden')) render();
   }
 
   function getSprite(id) {
@@ -5609,8 +6647,396 @@ const Shop = (() => {
     if (typeof UI !== 'undefined') UI.show('shop');
   }
 
-  return { show, setTab, getEquipped, getOwned, getSprite, applyServerData, hasBoosted, useBooster, getBoosterCount, getEquippedDeath, getEquippedTrail, getTrailPacks, own, ownTrailPack, addBoosterCharges, _markNftClaimedPublic: _markNftClaimed, _refreshNft: () => render(), _equipPublic: equip };
+  function showFocusItem() {
+    const focusId = getFocusItem();
+    const meta = getCraftMeta(focusId);
+    if (!meta) {
+      show();
+      return;
+    }
+    shopTab = meta.type === 'trail' ? 'trails' : meta.type === 'death' ? 'effects' : 'skins';
+    render();
+    if (typeof UI !== 'undefined') UI.show('shop');
+    setTimeout(() => {
+      const el = document.querySelector(`[data-shop-item="${focusId}"]`);
+      if (el && typeof el.scrollIntoView === 'function') el.scrollIntoView({ block: 'center' });
+    }, 50);
+  }
+
+  return {
+    show,
+    setTab,
+    getEquipped,
+    getOwned,
+    getSprite,
+    getSkinMeta,
+    getSkinOptions,
+    equipSkinLocal,
+    applyServerData,
+    applyServerEconomyData,
+    hasBoosted,
+    useBooster,
+    spendBoosterLocal,
+    getBoosterCount,
+    getEquippedDeath,
+    getEquippedTrail,
+    getTrailMeta,
+    getTrailOptions,
+    equipTrailLocal,
+    getTrailPacks,
+    own,
+    ownTrailPack,
+    addBoosterCharges,
+    refreshVisible,
+    renderFocusStrip,
+    showFocusItem,
+    getCraftMeta,
+    getFocusItem,
+    getCraftStatus,
+    setFocusItemLocal,
+    addFragmentsLocal,
+    craftItemLocal,
+    topUpFragmentsLocal,
+    buyDailyFragmentChestLocal,
+    applyLocalGearTestFixture,
+    applyLocalEconomyTestFixture,
+    _markNftClaimedPublic: _markNftClaimed,
+    _refreshNft: () => render(),
+    _equipPublic: equip,
+  };
 })();
+
+
+const RewardEconomy = (() => {
+  const CONTAINER_NAMES = {
+    gear_crate: 'Gear Crate',
+    focus_chest: 'Focus Chest',
+    rare_crate: 'Rare Crate',
+    epic_crate: 'Epic Crate',
+    legendary_crate: 'Legendary Crate',
+    legendary_focus_bundle: 'Legendary Focus Bundle',
+  };
+
+  const BOOSTER_NAMES = {
+    boost_magnet: 'Coin Magnet',
+    boost_double: 'Double Coins',
+    boost_shield: 'Second Chance',
+  };
+
+  function getCheckInReward(daySlot) {
+    const idx = Math.max(0, Math.floor(Number(daySlot) || 0)) % CHECKIN_REWARD_CYCLE.length;
+    return CHECKIN_REWARD_CYCLE[idx];
+  }
+
+  function _emptyTotals() {
+    return { coins: 0, fragments: 0, boosters: 0, xp: 0 };
+  }
+
+  function collect(bundle, totals = _emptyTotals(), depth = 0) {
+    if (!bundle || depth > 4) return totals;
+    if (bundle.container) collect(REWARD_CONTAINERS_LOCAL[bundle.container], totals, depth + 1);
+    totals.coins += Math.max(0, Math.floor(Number(bundle.coins) || 0));
+    totals.fragments += Math.max(0, Math.floor(Number(bundle.fragments) || 0));
+    totals.boosters += Math.max(0, Math.floor(Number(bundle.boosters) || 0));
+    totals.xp += Math.max(0, Math.floor(Number(bundle.xp) || 0));
+    return totals;
+  }
+
+  function label(bundle) {
+    if (!bundle) return '';
+    if (bundle.container) return CONTAINER_NAMES[bundle.container] || 'Reward Crate';
+    const parts = [];
+    if (bundle.coins) parts.push(`+${bundle.coins} coins`);
+    if (bundle.fragments) parts.push(`+${bundle.fragments} Focus fragments`);
+    if (bundle.boosters) parts.push(`+${bundle.boosters} booster${bundle.boosters === 1 ? '' : 's'}`);
+    if (bundle.xp) parts.push(`+${bundle.xp} XP`);
+    return parts.join(' + ') || 'Reward';
+  }
+
+  function shortLabel(bundle) {
+    const totals = collect(bundle);
+    const parts = [];
+    if (totals.coins) parts.push(`+${totals.coins}`);
+    if (totals.fragments) parts.push(`+${totals.fragments} fragments`);
+    if (totals.boosters) parts.push(`+${totals.boosters} boost`);
+    if (totals.xp) parts.push(`+${totals.xp} XP`);
+    return parts.join(' + ') || label(bundle);
+  }
+
+  function setCoinsLocal(balance) {
+    const d = Save.load();
+    d.coins = Math.max(0, Math.floor(Number(balance) || 0));
+    Save.save(d);
+    if (typeof UI !== 'undefined') UI.updateCoins(d.coins);
+    return d.coins;
+  }
+
+  function _syncCoins() {
+    const syncFn = window.__BASE_SYNC_COINS;
+    if (typeof syncFn === 'function') syncFn(Save.getCoins());
+  }
+
+  function _awardCoins(amount) {
+    const coins = Math.max(0, Math.floor(Number(amount) || 0));
+    if (!coins) return Save.getCoins();
+    const next = Save.addCoins(coins);
+    if (typeof UI !== 'undefined') UI.updateCoins(next);
+    return next;
+  }
+
+  function _awardFragments(amount) {
+    const fragments = Math.max(0, Math.floor(Number(amount) || 0));
+    if (!fragments) return { awarded: 0, fragmentsOverflowed: 0, fallbackCoins: 0 };
+    const overflowCoins = count => Math.max(0, Math.floor(Number(count) || 0)) * FRAGMENT_FALLBACK_COINS;
+    if (typeof Shop === 'undefined' || !Shop.getFocusItem || !Shop.addFragmentsLocal) {
+      const fallbackCoins = overflowCoins(fragments);
+      _awardCoins(fallbackCoins);
+      return { awarded: 0, fragmentsOverflowed: fragments, fallbackCoins };
+    }
+    const focusId = Shop.getFocusItem();
+    if (!focusId) {
+      const fallbackCoins = overflowCoins(fragments);
+      _awardCoins(fallbackCoins);
+      return { awarded: 0, fragmentsOverflowed: fragments, fallbackCoins };
+    }
+    const before = Shop.getCraftStatus ? Shop.getCraftStatus(focusId) : null;
+    if (!before || before.owned || before.missing <= 0) {
+      const fallbackCoins = overflowCoins(fragments);
+      _awardCoins(fallbackCoins);
+      return { awarded: 0, fragmentsOverflowed: fragments, fallbackCoins };
+    }
+    const beforeCount = before.fragments || 0;
+    const afterCount = Shop.addFragmentsLocal(focusId, fragments);
+    const awarded = Math.max(0, afterCount - beforeCount);
+    const leftover = Math.max(0, fragments - awarded);
+    const fallbackCoins = overflowCoins(leftover);
+    if (fallbackCoins > 0) _awardCoins(fallbackCoins);
+    return { awarded, fragmentsOverflowed: leftover, fallbackCoins };
+  }
+
+  function _awardBoosters(amount) {
+    if (typeof Shop === 'undefined' || !Shop.addBoosterCharges) return;
+    const count = Math.max(0, Math.floor(Number(amount) || 0));
+    for (let i = 0; i < count; i++) {
+      const id = BOOSTER_IDS[Math.floor(Math.random() * BOOSTER_IDS.length)];
+      Shop.addBoosterCharges(id, 1);
+    }
+  }
+
+  function applyBundleLocal(bundle, source = 'reward') {
+    const totals = collect(bundle);
+    let fragmentResult = { awarded: 0, fragmentsOverflowed: 0, fallbackCoins: 0 };
+    if (totals.coins) _awardCoins(totals.coins);
+    if (totals.fragments) fragmentResult = _awardFragments(totals.fragments);
+    if (totals.boosters) _awardBoosters(totals.boosters);
+    if (totals.xp && typeof Xp !== 'undefined' && Xp.add) Xp.add(totals.xp);
+    if (typeof Sound !== 'undefined' && (totals.coins || totals.fragments || totals.boosters || totals.xp)) Sound.coin();
+    if (typeof UI !== 'undefined') UI.updateCoins(Save.getCoins());
+    if (source !== 'server-spin') _syncCoins();
+    return {
+      ...totals,
+      coins: totals.coins + fragmentResult.fallbackCoins,
+      fragmentsAwarded: fragmentResult.awarded,
+      fragmentsOverflowed: fragmentResult.fragmentsOverflowed,
+      fallbackCoins: fragmentResult.fallbackCoins,
+      label: label(bundle),
+      shortLabel: shortLabel(bundle),
+    };
+  }
+
+  function resolveBoosterName(id) {
+    return BOOSTER_NAMES[id] || id;
+  }
+
+  return {
+    getCheckInReward,
+    collect,
+    label,
+    shortLabel,
+    applyBundleLocal,
+    setCoinsLocal,
+    resolveBoosterName,
+  };
+})();
+
+
+/* ===== loadout.js ===== */
+const Loadout = (() => {
+  const BOOSTERS = [
+    { id: 'boost_magnet', key: 'magnet', name: 'Coin Magnet', btn: 'loadout-boost-magnet', count: 'loadout-count-magnet' },
+    { id: 'boost_double', key: 'double', name: 'Double Coins', btn: 'loadout-boost-double', count: 'loadout-count-double' },
+    { id: 'boost_shield', key: 'shield', name: 'Second Chance', btn: 'loadout-boost-shield', count: 'loadout-count-shield' },
+  ];
+
+  let selected = new Set();
+  let active = {};
+  let openedFromMenu = true;
+
+  function isActive(id) { return !!active[id]; }
+
+  function setText(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
+  }
+
+  function setImage(id, src, alt) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.src = src;
+    el.alt = alt;
+  }
+
+  function setArrowState(prevId, nextId, enabled) {
+    const prev = document.getElementById(prevId);
+    const next = document.getElementById(nextId);
+    if (prev) prev.disabled = !enabled;
+    if (next) next.disabled = !enabled;
+  }
+
+  function renderGear() {
+    if (typeof Shop === 'undefined') return;
+
+    const skinOptions = Shop.getSkinOptions();
+    const currentSkin = Shop.getEquipped();
+    const skinId = skinOptions.includes(currentSkin) ? currentSkin : skinOptions[0];
+    const skinMeta = Shop.getSkinMeta(skinId);
+    const skinIndex = Math.max(0, skinOptions.indexOf(skinId));
+    setImage('loadout-skin-preview', skinMeta.sprite, skinMeta.name);
+    setText('loadout-skin-name', skinMeta.name);
+    setText('loadout-skin-count', `${skinIndex + 1}/${skinOptions.length}`);
+    setArrowState('btn-loadout-skin-prev', 'btn-loadout-skin-next', skinOptions.length > 1);
+
+    const trailOptions = Shop.getTrailOptions();
+    const currentTrail = Shop.getEquippedTrail();
+    const trailId = trailOptions.includes(currentTrail) ? currentTrail : trailOptions[0];
+    const trailMeta = Shop.getTrailMeta(trailId);
+    const trailIndex = Math.max(0, trailOptions.indexOf(trailId));
+    setImage('loadout-trail-preview', trailMeta.sprite, trailMeta.name);
+    setText('loadout-trail-name', trailMeta.name);
+    setText('loadout-trail-count', `${trailIndex + 1}/${trailOptions.length}`);
+    setArrowState('btn-loadout-trail-prev', 'btn-loadout-trail-next', trailOptions.length > 1);
+  }
+
+  function renderBuildSummary() {
+    const summary = document.getElementById('loadout-build-summary');
+    const title = document.getElementById('loadout-build-title');
+    const hint = document.getElementById('loadout-build-hint');
+    if (!summary || !title || !hint) return;
+
+    const chosen = BOOSTERS.filter(b => selected.has(b.id));
+    summary.classList.toggle('loadout-build-empty', chosen.length === 0);
+
+    if (chosen.length === 0) {
+      title.textContent = 'No boosters selected';
+      hint.textContent = 'Pick boosters to shape this run';
+      return;
+    }
+
+    const hasMagnet = selected.has('boost_magnet');
+    const hasDouble = selected.has('boost_double');
+    const hasShield = selected.has('boost_shield');
+    if (hasMagnet && hasDouble && hasShield) {
+      title.textContent = 'Full kit run';
+      hint.textContent = 'Pull coins, double value, and survive one hit';
+    } else if (hasMagnet && hasDouble) {
+      title.textContent = 'Coin rush build';
+      hint.textContent = 'Magnet pickups land as doubled coins';
+    } else if (hasShield && chosen.length === 1) {
+      title.textContent = 'Safety run';
+      hint.textContent = 'One crash turns into a second chance';
+    } else {
+      title.textContent = chosen.map(b => b.name).join(' + ');
+      hint.textContent = chosen.length === 1 ? 'One focused boost for this run' : 'Selected boosts stay visible in the HUD';
+    }
+  }
+
+  function render() {
+    const coinEl = document.getElementById('loadout-coin-count');
+    if (coinEl) coinEl.textContent = Save.getCoins();
+    renderGear();
+
+    for (const b of BOOSTERS) {
+      const btn = document.getElementById(b.btn);
+      const countEl = document.getElementById(b.count);
+      const count = (typeof Shop !== 'undefined') ? Shop.getBoosterCount(b.id) : 0;
+      if (countEl) countEl.textContent = `x${count}`;
+      if (!btn) continue;
+      btn.classList.toggle('loadout-card-selected', selected.has(b.id));
+      btn.classList.toggle('loadout-card-empty', count <= 0);
+      btn.disabled = count <= 0;
+    }
+    renderBuildSummary();
+  }
+
+  function show() {
+    openedFromMenu = currentState === GameState.MENU;
+    selected = new Set();
+    render();
+    if (typeof UI !== 'undefined') UI.show('loadout');
+  }
+
+  function toggle(id) {
+    if (typeof Shop === 'undefined' || Shop.getBoosterCount(id) <= 0) return;
+    if (selected.has(id)) selected.delete(id);
+    else selected.add(id);
+    render();
+  }
+
+  function cycleGear(type, dir) {
+    if (typeof Shop === 'undefined') return;
+    const options = type === 'skin' ? Shop.getSkinOptions() : Shop.getTrailOptions();
+    if (options.length <= 1) return;
+    const current = type === 'skin' ? Shop.getEquipped() : Shop.getEquippedTrail();
+    const currentIndex = Math.max(0, options.indexOf(current));
+    const nextId = options[(currentIndex + dir + options.length) % options.length];
+    if (type === 'skin') Shop.equipSkinLocal(nextId);
+    else Shop.equipTrailLocal(nextId);
+    render();
+  }
+
+  function startRun() {
+    active = {};
+    if (typeof Shop !== 'undefined') {
+      for (const id of selected) {
+        if (Shop.spendBoosterLocal(id)) active[id] = true;
+      }
+    }
+    if (typeof UI !== 'undefined' && UI.setRunBoosters) UI.setRunBoosters(active);
+    selected = new Set();
+    render();
+    _requestSessionToken();
+    initGame();
+  }
+
+  function back() {
+    selected = new Set();
+    render();
+    if (typeof UI !== 'undefined') UI.show('menu');
+    if (!openedFromMenu) {
+      currentState = GameState.MENU;
+      initMenuBackground();
+    }
+  }
+
+  function bind() {
+    for (const b of BOOSTERS) _bind(b.btn, 'click', () => toggle(b.id));
+    _bind('btn-loadout-skin-prev', 'click', () => cycleGear('skin', -1));
+    _bind('btn-loadout-skin-next', 'click', () => cycleGear('skin', 1));
+    _bind('btn-loadout-trail-prev', 'click', () => cycleGear('trail', -1));
+    _bind('btn-loadout-trail-next', 'click', () => cycleGear('trail', 1));
+    _bind('btn-loadout-start', 'click', startRun);
+    _bind('btn-loadout-back', 'click', back);
+  }
+
+  return { show, render, renderGear, bind, isActive };
+})();
+
+
+function refreshGearViews() {
+  if (typeof Loadout !== 'undefined' && Loadout.renderGear) Loadout.renderGear();
+  if (typeof renderProfileGear === 'function') renderProfileGear();
+  if (typeof Shop !== 'undefined' && Shop.refreshVisible) Shop.refreshVisible();
+}
 
 
 /* ===== quests.js ===== */
@@ -5622,35 +7048,52 @@ const Shop = (() => {
 const Quests = (() => {
 
   const SAVE_KEY = 'quests_v1';
+  const _pendingClaims = new Set();
 
   const DEFS = [
-    { id: 'rows', name: 'Marathon Runner', icon: '🏃', desc: 'Run rows across all games', type: 'cumulative',
+    { id: 'rows', name: 'Marathon Runner', iconSrc: '/game/ui-icons/fire.png', desc: 'Run rows across all games', type: 'cumulative',
       levels: [
-        { target: 100,   reward: 20 },  { target: 300,   reward: 40 },
-        { target: 700,   reward: 80 },  { target: 1400,  reward: 120 },
-        { target: 2400,  reward: 180 }, { target: 4000,  reward: 260 },
-        { target: 7000,  reward: 400 }, { target: 12000, reward: 600 },
+        { target: 100,   reward: { coins: 35 } },
+        { target: 300,   reward: { boosters: 1 } },
+        { target: 700,   reward: { fragments: 3 } },
+        { target: 1400,  reward: { coins: 55, boosters: 1 } },
+        { target: 2400,  reward: { coins: 70, fragments: 5 } },
+        { target: 4000,  reward: { container: 'rare_crate' } },
+        { target: 7000,  reward: { fragments: 8, boosters: 1 } },
+        { target: 12000, reward: { container: 'epic_crate' } },
       ]},
-    { id: 'coins', name: 'Coin Collector', icon: '🪙', desc: 'Collect coins across all games', type: 'cumulative',
+    { id: 'coins', name: 'Coin Collector', iconSrc: '/game/ui-icons/coin-pouch.png', desc: 'Collect coins across all games', type: 'cumulative',
       levels: [
-        { target: 40,   reward: 20 },  { target: 120,  reward: 40 },
-        { target: 300,  reward: 80 },  { target: 600,  reward: 120 },
-        { target: 1000, reward: 180 }, { target: 1800, reward: 260 },
-        { target: 3000, reward: 400 }, { target: 5000, reward: 600 },
+        { target: 40,   reward: { coins: 30 } },
+        { target: 120,  reward: { coins: 45 } },
+        { target: 300,  reward: { fragments: 3 } },
+        { target: 600,  reward: { coins: 65, boosters: 1 } },
+        { target: 1000, reward: { coins: 80, fragments: 5 } },
+        { target: 1800, reward: { container: 'rare_crate' } },
+        { target: 3000, reward: { coins: 120, fragments: 8 } },
+        { target: 5000, reward: { container: 'epic_crate' } },
       ]},
-    { id: 'games', name: 'Dedicated Player', icon: '🎮', desc: 'Play games', type: 'cumulative',
+    { id: 'games', name: 'Dedicated Player', iconSrc: '/game/ui-icons/gamepad.png', desc: 'Play games', type: 'cumulative',
       levels: [
-        { target: 5,   reward: 20 },  { target: 15,  reward: 40 },
-        { target: 35,  reward: 80 },  { target: 70,  reward: 120 },
-        { target: 120, reward: 180 }, { target: 200, reward: 260 },
-        { target: 350, reward: 400 }, { target: 600, reward: 600 },
+        { target: 5,   reward: { boosters: 1 } },
+        { target: 15,  reward: { coins: 35 } },
+        { target: 35,  reward: { fragments: 3 } },
+        { target: 70,  reward: { boosters: 2 } },
+        { target: 120, reward: { coins: 70, fragments: 5 } },
+        { target: 200, reward: { container: 'rare_crate' } },
+        { target: 350, reward: { fragments: 8, boosters: 2 } },
+        { target: 600, reward: { container: 'epic_crate' } },
       ]},
-    { id: 'record', name: 'High Scorer', icon: '⭐', desc: 'Reach a high score record', type: 'best',
+    { id: 'record', name: 'High Scorer', iconSrc: '/game/ui-icons/leaderboard.png', desc: 'Reach a high score record', type: 'best',
       levels: [
-        { target: 20,  reward: 30 },  { target: 40,  reward: 60 },
-        { target: 80,  reward: 120 }, { target: 150, reward: 200 },
-        { target: 250, reward: 300 }, { target: 400, reward: 450 },
-        { target: 600, reward: 600 }, { target: 900, reward: 800 },
+        { target: 20,  reward: { coins: 45 } },
+        { target: 40,  reward: { fragments: 3 } },
+        { target: 80,  reward: { coins: 65, boosters: 1 } },
+        { target: 150, reward: { fragments: 6 } },
+        { target: 250, reward: { container: 'rare_crate' } },
+        { target: 400, reward: { coins: 130, fragments: 8 } },
+        { target: 600, reward: { container: 'epic_crate' } },
+        { target: 900, reward: { container: 'legendary_crate' } },
       ]},
   ];
 
@@ -5713,8 +7156,36 @@ const Quests = (() => {
     return false;
   }
 
+  async function applyQuestRewardServerClaim(questId, level) {
+    const claimFn = window.__BASE_ECONOMY_CLAIM;
+    if (typeof claimFn !== 'function') return null;
+    try {
+      const claimed = await claimFn({ source: 'quest', questId, level });
+      if (!claimed || claimed.error === 'no_address') return null;
+      if (!claimed.ok) return { serverRejected: true, error: claimed.error || 'claim_failed' };
+      if (claimed.shop && typeof Shop !== 'undefined' && Shop.applyServerEconomyData) {
+        Shop.applyServerEconomyData(claimed.shop);
+      }
+      if (typeof claimed.coins === 'number') {
+        RewardEconomy.setCoinsLocal(claimed.coins);
+      }
+      if (claimed.quests) {
+        applyServerData(claimed.quests);
+      }
+      return claimed;
+    } catch {
+      return { serverRejected: true, error: 'claim_failed' };
+    }
+  }
+
+  function applyQuestRewardLocalFallback(data, questId, level, reward) {
+    data[questId].claimed[level] = true;
+    RewardEconomy.applyBundleLocal(reward, 'quest');
+    _saveData(data);
+  }
+
   // Claim reward for a quest
-  function claim(questId) {
+  async function claim(questId) {
     const data = _loadData();
     const def = DEFS.find(d => d.id === questId);
     if (!def) return;
@@ -5723,21 +7194,25 @@ const Quests = (() => {
     if (lvl >= 8) return;
     if (q.progress < def.levels[lvl].target) return;
     if (q.claimed[lvl]) return;
+    const claimKey = `${questId}:${lvl}`;
+    if (_pendingClaims.has(claimKey)) return;
 
-    q.claimed[lvl] = true;
     const reward = def.levels[lvl].reward;
-    const newTotal = Save.addCoins(reward);
-    _saveData(data);
-
-    // Update UI
-    if (typeof UI !== 'undefined') UI.updateCoins(newTotal);
-    // Sync coins to Redis
-    const syncFn = window.__BASE_SYNC_COINS;
-    if (syncFn) syncFn(Save.getCoins());
-    // Sound
-    if (typeof Sound !== 'undefined') Sound.coin();
-    // Re-render
+    _pendingClaims.add(claimKey);
     render();
+
+    try {
+      const claimed = await applyQuestRewardServerClaim(questId, lvl);
+      if (!claimed) {
+        applyQuestRewardLocalFallback(data, questId, lvl, reward);
+      } else if (claimed.serverRejected) {
+        console.warn('quest reward claim rejected:', claimed.error || 'unknown');
+      }
+      if (typeof UI !== 'undefined') UI.updateCoins(Save.getCoins());
+    } finally {
+      _pendingClaims.delete(claimKey);
+      render();
+    }
   }
 
   // Apply server data (merge with local)
@@ -5776,27 +7251,29 @@ const Quests = (() => {
       const progress = q.progress;
       const pct = isMaxed ? 100 : Math.min(100, Math.floor((progress / target) * 100));
       const canClaim = !isMaxed && progress >= target && !q.claimed[lvl];
+      const isPending = canClaim && _pendingClaims.has(`${def.id}:${lvl}`);
+      const rewardLabel = levelInfo ? RewardEconomy.label(levelInfo.reward) : '';
+      const rewardShort = levelInfo ? RewardEconomy.shortLabel(levelInfo.reward) : '';
 
       const card = document.createElement('div');
-      card.className = 'quest-card' + (canClaim ? ' quest-claimable' : '');
-
-      const COIN_IMG = '<img src="/game/coin.png" style="width:14px;height:14px;object-fit:contain;vertical-align:middle;">';
+      card.className = 'quest-card' + (canClaim ? ' quest-claimable' : '') + (isPending ? ' quest-pending' : '');
 
       card.innerHTML = `
         <div class="quest-header">
-          <span class="quest-name">${def.icon} ${def.name}</span>
-          <span class="quest-level">${isMaxed ? '✅ MAX' : 'Lv ' + (lvl + 1)}</span>
+          <span class="quest-name">${_imgHtml(def.iconSrc, 'quest-icon-img ui-icon', def.name, ' aria-hidden="true"')} ${def.name}</span>
+          <span class="quest-level">${isMaxed ? 'MAX' : 'Lv ' + (lvl + 1)}</span>
         </div>
         <div class="quest-desc">${def.desc}</div>
+        ${isMaxed ? '' : `<div class="quest-reward-label">${rewardLabel}</div>`}
         <div class="quest-bar-bg">
           <div class="quest-bar-fill${canClaim ? ' complete' : ''}" style="width:${pct}%"></div>
         </div>
         <div class="quest-progress">
           <span class="quest-progress-text">${isMaxed ? target + ' / ' + target : Math.min(progress, target) + ' / ' + target}</span>
           ${isMaxed
-            ? '<span class="quest-done">✅ COMPLETED</span>'
+            ? '<span class="quest-done">COMPLETED</span>'
             : canClaim
-              ? '<button class="quest-claim-btn" data-id="' + def.id + '">' + COIN_IMG + ' Claim ' + levelInfo.reward + '</button>'
+              ? '<button class="quest-claim-btn" data-id="' + def.id + '"' + (isPending ? ' disabled' : '') + '>' + (isPending ? 'Claiming...' : 'Claim <span class="quest-reward-label">' + rewardShort + '</span>') + '</button>'
               : '<span class="quest-progress-text">' + pct + '%</span>'
           }
         </div>
@@ -5826,14 +7303,14 @@ const DailySpin = (() => {
 
   // ── Display segments (wheel visuals; actual prize decided server-side) ──
   const DISPLAY_POOL = [
-    { coin: true,        label: '10'   },
-    { shirtImg: true,    label: 'Skin' },
-    { boosterImg: true,  label: 'Trail'},
-    { coin: true,        label: '50'   },
+    { coin: true,        label: '15'   },
+    { shirtImg: true,    label: 'Gear' },
+    { boosterBagImg: true, label: 'Frag' },
+    { coin: true,        label: '35'   },
     { boosterBagImg: true, label: 'Boost' },
-    { coin: true,        label: '25'   },
-    { coin: true,        label: '100'  },
-    { icon: '🔥',        label: 'Fire' },
+    { xpImg: true,       label: 'XP'   },
+    { coin: true,        label: '75'   },
+    { fireImg: true,     label: 'Miss' },
   ];
   const SEG_COUNT  = 8;
   const SEG_ANGLE  = (Math.PI * 2) / SEG_COUNT;
@@ -5846,6 +7323,8 @@ const DailySpin = (() => {
   let _shirtImg   = null;   // preloaded /game/shirt.png (random skin segment)
   let _boosterImg    = null;   // preloaded /game/trails.png (random trail segment)
   let _boosterBagImg = null;   // preloaded /game/boosters.png (random booster segment)
+  let _xpImg         = null;   // preloaded XP reward icon
+  let _fireImg       = null;   // preloaded fire utility icon
   let _segments  = [...DISPLAY_POOL];
   let _winIndex  = 0;
   let _prize     = null;
@@ -5896,6 +7375,16 @@ const DailySpin = (() => {
       _boosterBagImg = new Image();
       _boosterBagImg.src = '/game/boosters.png';
       _boosterBagImg.onload = () => { if (_animPhase === 'idle') _drawWheel(); };
+    }
+    if (!_xpImg) {
+      _xpImg = new Image();
+      _xpImg.src = '/game/ui-icons/xp.png';
+      _xpImg.onload = () => { if (_animPhase === 'idle') _drawWheel(); };
+    }
+    if (!_fireImg) {
+      _fireImg = new Image();
+      _fireImg.src = '/game/ui-icons/fire.png';
+      _fireImg.onload = () => { if (_animPhase === 'idle') _drawWheel(); };
     }
     _canvas = document.getElementById('spin-wheel-canvas');
     if (!_canvas) return;
@@ -5998,14 +7487,20 @@ const DailySpin = (() => {
       if (seg.coin && _coinImg && _coinImg.complete && _coinImg.naturalWidth) {
         _ctx.drawImage(_coinImg, -iconSz / 2, iconY - iconSz / 2, iconSz, iconSz);
       } else if (seg.shirtImg && _shirtImg && _shirtImg.complete && _shirtImg.naturalWidth) {
-        const ss = iconSz * 1.25; // shirt.png has slight transparent padding
+        const ss = iconSz * 1.08;
         _ctx.drawImage(_shirtImg, -ss / 2, iconY - ss / 2, ss, ss);
       } else if (seg.boosterImg && _boosterImg && _boosterImg.complete && _boosterImg.naturalWidth) {
-        const ts = iconSz * 1.7; // trails.png has large internal padding
+        const ts = iconSz * 1.14;
         _ctx.drawImage(_boosterImg, -ts / 2, iconY - ts / 2, ts, ts);
       } else if (seg.boosterBagImg && _boosterBagImg && _boosterBagImg.complete && _boosterBagImg.naturalWidth) {
-        const bs = iconSz * 1.2; // boosters.png has slight transparent padding
+        const bs = iconSz * 1.12;
         _ctx.drawImage(_boosterBagImg, -bs / 2, iconY - bs / 2, bs, bs);
+      } else if (seg.xpImg && _xpImg && _xpImg.complete && _xpImg.naturalWidth) {
+        const xs = iconSz * 1.16;
+        _ctx.drawImage(_xpImg, -xs / 2, iconY - xs / 2, xs, xs);
+      } else if (seg.fireImg && _fireImg && _fireImg.complete && _fireImg.naturalWidth) {
+        const fs = iconSz * 1.18;
+        _ctx.drawImage(_fireImg, -fs / 2, iconY - fs / 2, fs, fs);
       } else if (seg.icon) {
         _ctx.shadowColor = 'rgba(0,0,0,0.75)';
         _ctx.shadowBlur  = 6;
@@ -6064,16 +7559,25 @@ const DailySpin = (() => {
     if (prize.type === 'booster') {
       return { boosterBagImg: true, label: 'Boost' };
     }
+    if (prize.type === 'fragments' || prize.type === 'fragment_burst') {
+      return { boosterBagImg: true, label: 'Frag' };
+    }
+    if (prize.type === 'xp') {
+      return { xpImg: true, label: 'XP' };
+    }
+    if (prize.type === 'crate') {
+      return { shirtImg: true, label: 'Crate' };
+    }
     if (prize.type === 'trail') {
-      return { boosterImg: true, label: 'Trail' };
+      return { shirtImg: true, label: 'Gear' };
     }
     if (prize.type === 'skin') {
-      return { shirtImg: true, label: 'Skin' };
+      return { shirtImg: true, label: 'Gear' };
     }
     if (prize.type === 'nothing') {
-      return { icon: '🔥', label: 'Fire' };
+      return { fireImg: true, label: 'Miss' };
     }
-    return { icon: '🎁', label: prize.label || '?' };
+    return { boosterBagImg: true, label: prize.label || '?' };
   }
 
   function _buildSegments(prize) {
@@ -6085,13 +7589,17 @@ const DailySpin = (() => {
       // Map value → DISPLAY_POOL index by label
       const valueStr = String(Number(prize.value));
       const matchIdx = _segments.findIndex(s => s.coin && s.label === valueStr);
-      const coinSlots = [0, 3, 5, 6];
+      const coinSlots = [0, 3, 6];
       _winIndex = matchIdx >= 0 ? matchIdx : coinSlots[Math.floor(Math.random() * coinSlots.length)];
     } else {
       const slotsByType = {
         skin:    [1],
-        trail:   [2],
+        trail:   [1],
         booster: [4],
+        fragments: [2],
+        fragment_burst: [2],
+        xp: [5],
+        crate: [1],
         nothing: [7],
       };
       const slots = (prize && slotsByType[prize.type]) || [0];
@@ -6153,6 +7661,34 @@ const DailySpin = (() => {
   // ── Apply prize locally ───────────────────────────────────────────────────
   function _applyPrize(prize) {
     if (!prize) return;
+    if (prize.serverApplied) {
+      if (prize.serverShop && typeof Shop !== 'undefined' && Shop.applyServerEconomyData) {
+        Shop.applyServerEconomyData(prize.serverShop);
+      }
+      if (typeof prize.serverCoins === 'number') {
+        RewardEconomy.setCoinsLocal(prize.serverCoins);
+      }
+      if (prize.type === 'xp' && typeof Xp !== 'undefined' && Xp.add) {
+        Xp.add(Number(prize.value) || 0);
+      }
+      if (_prize && prize.type === 'booster') {
+        _prize._resolvedItemId = String(prize.value);
+        _prize._resolvedBoosterName = RewardEconomy.resolveBoosterName(String(prize.value));
+      }
+      if (_prize && prize.type === 'skin') {
+        const skinId = String(prize.value);
+        _prize._resolvedSkinName = prize.label ? prize.label.replace(/\s+Skin$/i, '') : skinId;
+        _prize._resolvedItemId = skinId;
+        _prize._resolvedSkinSprite = (typeof Shop !== 'undefined' && Shop.getSprite) ? Shop.getSprite(skinId) : null;
+      }
+      if (_prize && prize.type === 'trail') {
+        const trailId = String(prize.value);
+        const TRAIL_NAMES = { trail_sparkle: 'Sparkle', trail_hearts: 'Hearts', trail_fire: 'Fire', trail_coins: 'Coins', trail_rainbow: 'Rainbow' };
+        _prize._resolvedTrailName = TRAIL_NAMES[trailId] || (prize.label ? prize.label.replace(/\s+Trail$/i, '') : trailId);
+        _prize._resolvedItemId = trailId;
+      }
+      return;
+    }
     if (prize.type === 'nothing') return; // Fire — empty slot, no reward
     if (prize.type === 'coins') {
       // Server already credited Redis; mirror to localStorage
@@ -6238,6 +7774,18 @@ const DailySpin = (() => {
           _prize._resolvedSkinSprite = SKIN_SPRITES[skinId] || null;
         }
       }
+    } else if (prize.type === 'fragments' || prize.type === 'fragment_burst') {
+      const result = RewardEconomy.applyBundleLocal({ fragments: Number(prize.value) || 0 }, 'spin');
+      prize.fragmentsAwarded = result.fragmentsAwarded || 0;
+      prize.fragmentsOverflowed = result.fragmentsOverflowed || 0;
+      prize.fallbackCoins = result.fallbackCoins || 0;
+    } else if (prize.type === 'crate') {
+      const result = RewardEconomy.applyBundleLocal({ container: String(prize.value) }, 'spin');
+      prize.fragmentsAwarded = result.fragmentsAwarded || 0;
+      prize.fragmentsOverflowed = result.fragmentsOverflowed || 0;
+      prize.fallbackCoins = result.fallbackCoins || 0;
+    } else if (prize.type === 'xp') {
+      if (typeof Xp !== 'undefined' && Xp.add) Xp.add(Number(prize.value) || 0);
     }
   }
 
@@ -6269,14 +7817,28 @@ const DailySpin = (() => {
         const src = _prize._resolvedItemId && BOOST_SP[_prize._resolvedItemId] ? BOOST_SP[_prize._resolvedItemId] : '/game/boosters.png';
         iconEl.innerHTML = IMG(src, '56px');
         labelEl.textContent = _prize._resolvedBoosterName ? `${_prize._resolvedBoosterName}!` : 'New booster!';
+      } else if (_prize.type === 'fragments' || _prize.type === 'fragment_burst') {
+        iconEl.innerHTML = IMG('/game/ui-icons/gem.png', '56px');
+        const awarded = Number(_prize.fragmentsAwarded || _prize.value || 0);
+        const fallback = Number(_prize.fallbackCoins || 0);
+        labelEl.textContent = fallback > 0 && awarded <= 0
+          ? `Overflow +${fallback} coins`
+          : `+${awarded} Focus fragments${fallback > 0 ? ` + Overflow ${fallback} coins` : ''}`;
+      } else if (_prize.type === 'crate') {
+        iconEl.innerHTML = IMG('/game/ui-icons/starter-pack.png', '56px');
+        const fallback = Number(_prize.fallbackCoins || 0);
+        labelEl.textContent = fallback > 0 ? `${_prize.label || 'Crate'} + Overflow ${fallback} coins` : (_prize.label || 'Reward crate!');
+      } else if (_prize.type === 'xp') {
+        iconEl.innerHTML = IMG('/game/ui-icons/xp.png', '56px');
+        labelEl.textContent = _prize.label || `+${_prize.value} XP`;
       } else if (_prize.type === 'coins') {
         iconEl.innerHTML = IMG('/game/coin.png', '56px');
         labelEl.textContent = _prize.label || `${_prize.value} Coins`;
       } else if (_prize.type === 'nothing') {
-        iconEl.textContent = '🔥';
+        iconEl.innerHTML = IMG('/game/ui-icons/fire.png', '56px');
         labelEl.textContent = 'Better luck next time!';
       } else {
-        iconEl.textContent = _prize.icon || '🎁';
+        iconEl.innerHTML = IMG('/game/ui-icons/starter-pack.png', '56px');
         labelEl.textContent = _prize.label || 'Prize!';
       }
 
@@ -6332,17 +7894,12 @@ const DailySpin = (() => {
     const spinFn = window.__SPIN_DO;
     if (!spinFn) return;
 
-    // ── Deduct spin cost from local balance (server deducts from Redis) ──
+    // ── Guard paid spins locally; authoritative deduction happens server-side. ──
     const info    = window.__SPIN || {};
     const cost    = info.nextCost || 0;
     if (cost > 0) {
       const balance = typeof Save !== 'undefined' ? Save.getCoins() : 0;
       if (balance < cost) return; // guard: can't afford
-      const d = Save.load();
-      d.coins = Math.max(0, d.coins - cost);
-      Save.save(d);
-      if (typeof UI !== 'undefined') UI.updateCoins(d.coins);
-      if (typeof window.__BASE_SYNC_COINS === 'function') window.__BASE_SYNC_COINS(d.coins);
     }
 
     _prize     = null;
@@ -6354,7 +7911,7 @@ const DailySpin = (() => {
     _animRaf   = requestAnimationFrame(_animFrame);
 
     const doBtn = document.getElementById('btn-do-spin');
-    if (doBtn) { doBtn.disabled = true; doBtn.textContent = '⏳ Spinning…'; }
+    if (doBtn) { doBtn.disabled = true; doBtn.textContent = 'Spinning...'; }
     const cardEl = document.getElementById('spin-prize-card');
     if (cardEl) {
       cardEl.classList.add('hidden');
@@ -6403,16 +7960,16 @@ const DailySpin = (() => {
 
     if (busy || pending) {
       doBtn.disabled    = true;
-      doBtn.textContent = '⏳ Spinning…';
+      doBtn.textContent = 'Spinning...';
     } else if (!canAfford) {
       doBtn.disabled    = true;
       doBtn.innerHTML   = `Need ${nextCost - balance} more coins`;
     } else if (nextCost === 0) {
       doBtn.disabled    = false;
-      doBtn.innerHTML   = '🎰 FREE SPIN';
+      doBtn.innerHTML   = '<img src="/game/ui-icons/daily-spin.png" class="btn-inline-icon ui-icon" alt="" aria-hidden="true"> FREE SPIN';
     } else {
       doBtn.disabled    = false;
-      doBtn.innerHTML   = `🎰 SPIN &nbsp;·&nbsp; <img src="/game/coin.png" style="width:14px;height:14px;object-fit:contain;vertical-align:middle;display:inline-block;"> ${nextCost}`;
+      doBtn.innerHTML   = `<img src="/game/ui-icons/daily-spin.png" class="btn-inline-icon ui-icon" alt="" aria-hidden="true"> SPIN &nbsp;·&nbsp; <img src="/game/coin.png" style="width:14px;height:14px;object-fit:contain;vertical-align:middle;display:inline-block;"> ${nextCost}`;
     }
   }
 
@@ -6495,7 +8052,7 @@ const DailySpin = (() => {
     const iconEl  = document.getElementById('spin-prize-icon');
     const labelEl = document.getElementById('spin-prize-label');
     if (cardEl && iconEl && labelEl) {
-      iconEl.textContent  = '😔';
+      iconEl.innerHTML = '<img src="/game/ui-icons/coin-pouch.png" class="spin-prize-icon-img ui-icon" alt="" aria-hidden="true">';
       labelEl.textContent = 'Not enough coins';
       // Strip rarity styling from previous spin
       cardEl.className = cardEl.className.replace(/\brarity-\w+/g, '').trim();
@@ -6537,18 +8094,18 @@ const Xp = (() => {
   function xpNeeded(level) { return 100 * level; }
 
   const LEVEL_REWARDS = {
-    2:  { type: 'coins', value: 100,  icon: '🪙', label: '+100 Coins' },
+    2:  { type: 'bundle', value: { coins: 75, boosters: 1 }, iconSrc: '/game/ui-icons/starter-pack.png', label: '+75 coins + booster' },
     3:  { type: 'skin',  value: 'skin_street_runner', sprite: '/game/chars/street_runner.png', label: 'Street Runner unlocked!' },
-    5:  { type: 'coins', value: 200,  icon: '🪙', label: '+200 Coins' },
-    7:  { type: 'trail', value: 'trail_sparkle', sprite: '/nft/images/trail_sparkle.png', icon: '✨', label: 'Sparkle Trail unlocked!' },
-    10: { type: 'coins', value: 500,  icon: '🪙', label: '+500 Coins' },
-    12: { type: 'trail', value: 'trail_hearts',  sprite: '/nft/images/trail_hearts.png',  icon: '💖', label: 'Hearts Trail unlocked!' },
-    15: { type: 'coins', value: 750,  icon: '🪙', label: '+750 Coins' },
-    18: { type: 'trail', value: 'trail_fire',    sprite: '/nft/images/trail_fire.png',    icon: '🔥', label: 'Fire Trail unlocked!' },
+    5:  { type: 'bundle', value: { container: 'focus_chest' }, iconSrc: '/game/ui-icons/gem.png', label: 'Focus Chest' },
+    7:  { type: 'trail', value: 'trail_sparkle', sprite: '/nft/images/trail_sparkle.png', label: 'Sparkle Trail unlocked!' },
+    10: { type: 'bundle', value: { container: 'rare_crate' }, iconSrc: '/game/ui-icons/starter-pack.png', label: 'Rare Crate' },
+    12: { type: 'trail', value: 'trail_hearts',  sprite: '/nft/images/trail_hearts.png',  label: 'Hearts Trail unlocked!' },
+    15: { type: 'bundle', value: { coins: 120, fragments: 8 }, iconSrc: '/game/ui-icons/gem.png', label: '+120 coins + 8 fragments' },
+    18: { type: 'trail', value: 'trail_fire',    sprite: '/nft/images/trail_fire.png',    label: 'Fire Trail unlocked!' },
     20: { type: 'skin',  value: 'skin_founder',  sprite: '/game/chars/founder.png',       label: 'Founder unlocked!' },
-    25: { type: 'trail', value: 'trail_coins',   sprite: '/nft/images/trail_coins.png',   icon: '🪙', label: 'Coins Trail unlocked!' },
-    30: { type: 'skin',  value: 'skin_base_king', sprite: '/game/chars/base_king.png',    label: 'Base King unlocked!' },
-    35: { type: 'trail', value: 'trail_rainbow', sprite: '/nft/images/trail_rainbow.png', icon: '🌈', label: 'Rainbow Trail unlocked!' },
+    25: { type: 'bundle', value: { container: 'epic_crate' }, iconSrc: '/game/ui-icons/starter-pack.png', label: 'Epic Crate' },
+    30: { type: 'bundle', value: { container: 'legendary_crate' }, iconSrc: '/game/ui-icons/crown.png', label: 'Legendary Crate' },
+    35: { type: 'bundle', value: { container: 'legendary_focus_bundle' }, iconSrc: '/game/ui-icons/crown.png', label: 'Legendary Focus Bundle' },
   };
 
   function _load() {
@@ -6570,8 +8127,9 @@ const Xp = (() => {
   }
 
   // Add XP → handle level-ups → return [{level, reward}, …]
-  function add(xp) {
+  function add(xp, options = {}) {
     if (!xp || xp <= 0) return [];
+    const applyRewards = options.applyRewards !== false;
     const d = _load();
     const levelUps  = [];
     let level     = d.level     || 1;
@@ -6583,7 +8141,7 @@ const Xp = (() => {
       level++;
       const reward = LEVEL_REWARDS[level] || null;
       levelUps.push({ level, reward });
-      if (reward) _applyReward(reward);
+      if (reward && applyRewards) _applyReward(reward);
     }
 
     _save({ level, xpInLevel, totalXp });
@@ -6591,10 +8149,67 @@ const Xp = (() => {
     return levelUps;
   }
 
+  function getReward(level) {
+    return LEVEL_REWARDS[Number(level)] || null;
+  }
+
+  function applyServerState(serverState) {
+    if (!serverState || typeof serverState !== 'object') return;
+    const level = Math.max(1, Math.floor(Number(serverState.level) || 1));
+    const needed = xpNeeded(level);
+    const xpInLevel = Math.min(
+      Math.max(0, Math.floor(Number(serverState.xpInLevel) || 0)),
+      Math.max(0, needed - 1),
+    );
+    const totalXp = Math.max(0, Math.floor(Number(serverState.totalXp) || 0));
+    const claimed = Array.isArray(serverState.claimed)
+      ? serverState.claimed.map(Number).filter(n => Number.isFinite(n) && n >= 2)
+      : (_load().claimed || []);
+    _save({ level, xpInLevel, totalXp, claimed });
+    _updateBadge(level);
+    renderProfile();
+  }
+
+  async function claimReward(level, reward) {
+    if (!reward) return { ok: true, noReward: true };
+
+    const claimFn = window.__BASE_ECONOMY_CLAIM;
+    if (typeof claimFn !== 'function') {
+      _applyReward(reward);
+      return { ok: true, localFallback: true };
+    }
+
+    try {
+      const claimed = await claimFn({ source: 'level', level });
+      if (!claimed || claimed.error === 'no_address') {
+        _applyReward(reward);
+        return { ok: true, localFallback: true };
+      }
+      if (!claimed.ok) {
+        console.warn('level reward claim rejected:', claimed.error || 'unknown');
+        return { ok: false, error: claimed.error || 'claim_failed' };
+      }
+      if (claimed.shop && typeof Shop !== 'undefined' && Shop.applyServerEconomyData) {
+        Shop.applyServerEconomyData(claimed.shop);
+      }
+      if (typeof claimed.coins === 'number') {
+        RewardEconomy.setCoinsLocal(claimed.coins);
+      }
+      if (claimed.levels) applyServerState(claimed.levels);
+      if (typeof UI !== 'undefined') UI.updateCoins(Save.getCoins());
+      return claimed;
+    } catch {
+      console.warn('level reward claim failed');
+      return { ok: false, error: 'claim_failed' };
+    }
+  }
+
   function _applyReward(reward) {
     if (reward.type === 'coins') {
       Save.addCoins(reward.value);
       if (typeof window.__BASE_SYNC_COINS === 'function') window.__BASE_SYNC_COINS(Save.getCoins());
+    } else if (reward.type === 'bundle') {
+      RewardEconomy.applyBundleLocal(reward.value, 'level');
     } else if (reward.type === 'skin'  && typeof Shop !== 'undefined') {
       Shop.own(reward.value);
     } else if (reward.type === 'trail' && typeof Shop !== 'undefined') {
@@ -6646,12 +8261,12 @@ const Xp = (() => {
         ? '<span class="xpr-check">✓</span>'
         : current
           ? '<span class="xpr-lock next-lock">▶</span>'
-          : '<span class="xpr-lock">🔒</span>';
+          : _uiIconHtml('lock', 'xpr-lock-img', 'locked');
       const iconHtml = (r.type === 'skin' || r.type === 'trail') && r.sprite
         ? `<img src="${r.sprite}" class="xpr-skin-img" alt="${r.label}">`
         : r.type === 'coins'
           ? `<img src="/game/coin.png" class="xpr-coin-img" alt="coins">`
-          : `<div class="xpr-icon">${r.icon}</div>`;
+          : `<div class="xpr-icon">${r.iconSrc ? _imgHtml(r.iconSrc, 'xpr-icon-img ui-icon', r.label, ' aria-hidden="true"') : _uiIconHtml('celebration', 'xpr-icon-img', r.label)}</div>`;
       html += `
         <div class="${cls}">
           <div class="xpr-level-num">Lv.${lvl}</div>
@@ -6671,7 +8286,7 @@ const Xp = (() => {
     if (modal) modal.classList.add('hidden');
   }
 
-  return { add, getLevel, getTotalXp, getProgress, renderProfile, showRewards, hideRewards };
+  return { add, getLevel, getTotalXp, getProgress, getReward, applyServerState, claimReward, renderProfile, showRewards, hideRewards };
 })();
 
 
@@ -6880,13 +8495,16 @@ function _showNextLevelUp() {
 
   const r = item.reward;
 
-  // Icon: for skins and trails show sprite image, otherwise emoji
+  // Icon: for skins and trails show sprite image, otherwise project icons.
   if (iconEl) {
     if (r && r.sprite) {
       iconEl.innerHTML = `<img src="${r.sprite}" style="width:56px;height:56px;object-fit:contain;image-rendering:pixelated;">`;
+    } else if (r && r.type === 'coins') {
+      iconEl.innerHTML = '<img src="/game/coin.png" class="levelup-icon-img" alt="coins">';
+    } else if (r && r.iconSrc) {
+      iconEl.innerHTML = _imgHtml(r.iconSrc, 'levelup-icon-img ui-icon', r.label || '', ' aria-hidden="true"');
     } else {
-      iconEl.innerHTML = '';
-      iconEl.textContent = r ? (r.icon || '⭐') : '⭐';
+      iconEl.innerHTML = _uiIconHtml('celebration', 'levelup-icon-img', 'level up');
     }
   }
   if (lvlEl)  lvlEl.textContent   = `Lv.${item.level}`;
@@ -6926,7 +8544,50 @@ function _closeLevelUp() {
   if (_levelUpQueue.length > 0) setTimeout(_showNextLevelUp, 300);
 }
 
-function onGameOver() {
+function _calculateLocalRunXp(score, isNewRecord) {
+  const baseXp        = score * 1 + _sessionCoins * 2;
+  const multi         = score >= 150 ? 1.2 : score >= 75 ? 1.0 : score >= 30 ? 0.7 : 0.5;
+  const multiplied    = Math.round(baseXp * multi);
+  const checkinStreak = (Save.getCheckin().streak || 0);
+  const streakBonus   = Math.min(checkinStreak * 2, 20);
+  const recordBonus   = (isNewRecord && !_recordBonusUsed)
+    ? (_recordBonusUsed = true, Math.round(multiplied * 0.5))
+    : 0;
+  return {
+    xpEarned: multiplied + streakBonus + recordBonus,
+    xpBreakdown: { base: multiplied, multi, streakBonus, recordBonus },
+  };
+}
+
+function _submitScoreToServer(score, sessionCoins) {
+  const submitFn = window.__BASE_SUBMIT_SCORE;
+  if (typeof submitFn === 'function') {
+    return Promise.resolve(submitFn(score, sessionCoins)).catch((err) => {
+      console.warn('score submit failed:', err);
+      return { ok: false, error: 'submit_failed' };
+    });
+  }
+  window.dispatchEvent(new CustomEvent('base-auto-submit-score', { detail: { score, sessionCoins } }));
+  return Promise.resolve(null);
+}
+
+function _queueFromServerLevelUps(levelUps) {
+  if (!Array.isArray(levelUps) || typeof Xp === 'undefined') return [];
+  return levelUps.map(item => {
+    const level = Math.floor(Number(item && item.level) || 0);
+    return { level, reward: Xp.getReward ? Xp.getReward(level) : null };
+  }).filter(item => item.level >= 2);
+}
+
+function _claimLevelRewards(queue) {
+  if (!Array.isArray(queue) || typeof Xp === 'undefined' || !Xp.claimReward) return;
+  for (const item of queue) {
+    if (!item.reward) continue;
+    Xp.claimReward(item.level, item.reward);
+  }
+}
+
+async function onGameOver() {
   currentState = GameState.GAMEOVER;
   const score   = Player.getScore();
   const prevBest = Save.getBest();
@@ -6938,22 +8599,28 @@ function onGameOver() {
   // Sync coins
   const syncFn = window.__BASE_SYNC_COINS;
   if (syncFn) syncFn(Save.getCoins());
-  // Auto-submit score
-  window.dispatchEvent(new CustomEvent('base-auto-submit-score', { detail: { score } }));
+  const scoreSubmitPromise = _submitScoreToServer(score, _sessionCoins);
+  const localXp = _calculateLocalRunXp(score, isNewRecord);
+  let xpEarned = localXp.xpEarned;
+  let xpBreakdown = localXp.xpBreakdown;
+  const submitResult = await scoreSubmitPromise;
 
-  // XP — new formula
-  const baseXp        = score * 1 + _sessionCoins * 2;
-  const multi         = score >= 150 ? 1.2 : score >= 75 ? 1.0 : score >= 30 ? 0.7 : 0.5;
-  const multiplied    = Math.round(baseXp * multi);
-  const checkinStreak = (Save.getCheckin().streak || 0);
-  const streakBonus   = Math.min(checkinStreak * 2, 20); // max +20 XP, не доминирует
-  const recordBonus   = (isNewRecord && !_recordBonusUsed)
-    ? (_recordBonusUsed = true, Math.round(multiplied * 0.5)) // 50% от базы, масштабируется
-    : 0;
-  const xpEarned      = multiplied + streakBonus + recordBonus;
-
-  const xpBreakdown = { base: Math.round(baseXp * multi), multi, streakBonus, recordBonus };
-  _levelUpQueue  = typeof Xp !== 'undefined' ? Xp.add(xpEarned) : [];
+  if (submitResult && submitResult.ok && submitResult.levels && typeof Xp !== 'undefined') {
+    Xp.applyServerState && Xp.applyServerState(submitResult.levels);
+    if (submitResult.xp && typeof submitResult.xp.earned === 'number') {
+      xpEarned = submitResult.xp.earned;
+    }
+    if (submitResult.xp && submitResult.xp.breakdown) {
+      xpBreakdown = submitResult.xp.breakdown;
+    }
+    _levelUpQueue = _queueFromServerLevelUps(submitResult.levelUps);
+    _claimLevelRewards(_levelUpQueue);
+  } else if (!submitResult || submitResult.error === 'no_address') {
+    _levelUpQueue = typeof Xp !== 'undefined' ? Xp.add(xpEarned) : [];
+  } else {
+    _levelUpQueue = [];
+    console.warn('server XP update rejected:', submitResult.error || 'unknown');
+  }
 
   setTimeout(() => {
     UI.showGameOver(score, best, xpEarned, xpBreakdown);
@@ -7091,13 +8758,12 @@ function _updateCiBanner() {
 
   if (state.available) {
     banner.classList.add('ci-banner-available');
-    const DAY_COINS = [5, 5, 5, 10, 10, 20, 30];
     const daySlot   = state.streak % 7;
-    const coins     = DAY_COINS[daySlot] || 5;
+    const reward    = RewardEconomy.getCheckInReward(daySlot);
     const isDay7    = daySlot === 6;
     sub.textContent = isDay7
-      ? `Day 7 · +${coins} coins + Booster!`
-      : `Day ${state.streak + 1} · +${coins} coins`;
+      ? `Day 7 · ${RewardEconomy.label(reward)}`
+      : `Day ${state.streak + 1} · ${RewardEconomy.shortLabel(reward)}`;
   } else {
     banner.classList.remove('ci-banner-available');
     const ms = _msUntilNextMidnightUTC();
@@ -7107,6 +8773,78 @@ function _updateCiBanner() {
     const sc = s % 60;
     sub.textContent = `Next in ${h}h ${String(m).padStart(2, '0')}m ${String(sc).padStart(2, '0')}s`;
   }
+}
+
+function _setProfileGearImage(id, src, alt) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.src = src;
+  el.alt = alt;
+}
+
+function _setProfileGearText(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = value;
+}
+
+function _setProfileGearArrows(prevId, nextId, enabled) {
+  const prev = document.getElementById(prevId);
+  const next = document.getElementById(nextId);
+  if (prev) prev.disabled = !enabled;
+  if (next) next.disabled = !enabled;
+}
+
+function renderProfileGear() {
+  if (typeof Shop === 'undefined') return;
+
+  const skinOptions = Shop.getSkinOptions();
+  const currentSkin = Shop.getEquipped();
+  const skinId = skinOptions.includes(currentSkin) ? currentSkin : skinOptions[0];
+  const skinMeta = Shop.getSkinMeta(skinId);
+  const skinIndex = Math.max(0, skinOptions.indexOf(skinId));
+
+  _setProfileGearImage('equipped-skin-sprite', skinMeta.sprite, skinMeta.name);
+  _setProfileGearText('equipped-skin-name', skinMeta.name);
+  _setProfileGearText('equipped-skin-count', `${skinIndex + 1}/${skinOptions.length}`);
+  _setProfileGearArrows('btn-profile-skin-prev', 'btn-profile-skin-next', skinOptions.length > 1);
+
+  const trailOptions = Shop.getTrailOptions();
+  const currentTrail = Shop.getEquippedTrail();
+  const trailId = trailOptions.includes(currentTrail) ? currentTrail : trailOptions[0];
+  const trailMeta = Shop.getTrailMeta(trailId);
+  const trailIndex = Math.max(0, trailOptions.indexOf(trailId));
+  const bubbleEl = document.getElementById('equipped-trail-bubble');
+  const iconEl = document.getElementById('equipped-trail-icon');
+
+  if (iconEl) {
+    if (trailMeta.sprite) {
+      iconEl.innerHTML = `<img src="${trailMeta.sprite}" alt="${trailMeta.name}" style="width:52px;height:52px;object-fit:contain;image-rendering:pixelated;display:block;">`;
+    } else {
+      iconEl.innerHTML = '<img src="/nft/images/trail_default.png" alt="Default trail" style="width:52px;height:52px;object-fit:contain;image-rendering:pixelated;display:block;">';
+    }
+  }
+  _setProfileGearText('equipped-trail-name', trailMeta.name);
+  _setProfileGearText('equipped-trail-count', `${trailIndex + 1}/${trailOptions.length}`);
+  _setProfileGearArrows('btn-profile-trail-prev', 'btn-profile-trail-next', trailOptions.length > 1);
+
+  if (bubbleEl) {
+    const color = trailMeta.color || 'rgba(255,255,255,0.07)';
+    const glow = trailMeta.glow || 'rgba(255,255,255,0.12)';
+    bubbleEl.style.background = color;
+    bubbleEl.style.borderColor = glow.replace('0.5)', '0.35)');
+    bubbleEl.style.boxShadow = trailId === 'default' ? 'none' : `0 0 14px ${glow}`;
+  }
+}
+
+function cycleProfileGear(type, dir) {
+  if (typeof Shop === 'undefined') return;
+  const options = type === 'skin' ? Shop.getSkinOptions() : Shop.getTrailOptions();
+  if (options.length <= 1) return;
+  const current = type === 'skin' ? Shop.getEquipped() : Shop.getEquippedTrail();
+  const currentIndex = Math.max(0, options.indexOf(current));
+  const nextId = options[(currentIndex + dir + options.length) % options.length];
+  if (type === 'skin') Shop.equipSkinLocal(nextId);
+  else Shop.equipTrailLocal(nextId);
 }
 
 function _renderProfile() {
@@ -7171,68 +8909,7 @@ function _renderProfile() {
     }
   }
 
-  // Equipped skin + trail preview
-  if (typeof Shop !== 'undefined') {
-    const SKIN_META = [
-      { id: 'skin_cryptokid',     name: 'Crypto Kid',    sprite: '/game/chars/cryptokid.png'     },
-      { id: 'skin_street_runner', name: 'Street Runner', sprite: '/game/chars/street_runner.png' },
-      { id: 'skin_1',              name: 'Neon Runner',   sprite: '/game/chars/skin1.png'         },
-      { id: 'skin_2',              name: 'Pixel Dude',    sprite: '/game/chars/skin2.png'         },
-      { id: 'skin_default',       name: 'Builder',       sprite: '/game/player.png'              },
-      { id: 'skin_3',              name: 'Shadow',        sprite: '/game/chars/skin3.png'         },
-      { id: 'skin_4',              name: 'Gold Rush',     sprite: '/game/chars/skin4.png'         },
-      { id: 'skin_5',              name: 'Cyber Punk',    sprite: '/game/chars/skin5.png'         },
-      { id: 'skin_6',              name: 'Ocean Rider',   sprite: '/game/chars/skin6.png'         },
-      { id: 'skin_7',              name: 'Flame Chaser',  sprite: '/game/chars/skin7.png'         },
-      { id: 'skin_founder',       name: 'Founder',       sprite: '/game/chars/founder.png'       },
-      { id: 'skin_8',              name: 'Arctic',        sprite: '/game/chars/skin8.png'         },
-      { id: 'skin_9',              name: 'Desert Storm',  sprite: '/game/chars/skin9.png'         },
-      { id: 'skin_10',             name: 'Thunder',       sprite: '/game/chars/skin10.png'        },
-      { id: 'skin_11',             name: 'Diamond Hands', sprite: '/game/chars/skin11.png'        },
-      { id: 'skin_base_king',     name: 'Base King',     sprite: '/game/chars/base_king.png'     },
-    ];
-    const TRAIL_META = [
-      { id: 'trail_sparkle', name: 'Sparkle', icon: '✨', sprite: '/nft/images/trail_sparkle.png', color: 'rgba(255,215,0,0.22)',    glow: 'rgba(255,215,0,0.5)'   },
-      { id: 'trail_hearts',  name: 'Hearts',  icon: '💖', sprite: '/nft/images/trail_hearts.png',  color: 'rgba(255,100,170,0.22)',  glow: 'rgba(255,100,170,0.5)' },
-      { id: 'trail_fire',    name: 'Fire',    icon: '🔥', sprite: '/nft/images/trail_fire.png',    color: 'rgba(255,110,0,0.22)',    glow: 'rgba(255,110,0,0.5)'   },
-      { id: 'trail_coins',   name: 'Coins',   icon: '🪙', sprite: '/nft/images/trail_coins.png',   color: 'rgba(255,200,0,0.22)',    glow: 'rgba(255,200,0,0.5)'   },
-      { id: 'trail_rainbow', name: 'Rainbow', icon: '🌈', sprite: '/nft/images/trail_rainbow.png', color: 'rgba(140,100,255,0.22)',  glow: 'rgba(140,100,255,0.5)' },
-    ];
-
-    const skinId  = Shop.getEquipped();
-    const trailId = Shop.getEquippedTrail();
-    const skin    = SKIN_META.find(s => s.id === skinId)   || SKIN_META[0];
-    const trail   = TRAIL_META.find(t => t.id === trailId) || null;
-
-    // Skin sprite
-    const spriteEl = el('equipped-skin-sprite');
-    if (spriteEl) spriteEl.src = skin.sprite;
-    if (el('equipped-skin-name')) el('equipped-skin-name').textContent = skin.name;
-
-    // Trail bubble
-    const bubbleEl = el('equipped-trail-bubble');
-    const iconEl   = el('equipped-trail-icon');
-    if (iconEl) {
-      const trailSprite = trail ? trail.sprite : '/nft/images/trail_default.png';
-      if (trailSprite) {
-        iconEl.innerHTML = `<img src="${trailSprite}" style="width:52px;height:52px;object-fit:contain;image-rendering:pixelated;display:block;">`;
-      } else {
-        iconEl.textContent = trail ? trail.icon : '👣';
-      }
-    }
-    if (el('equipped-trail-name')) el('equipped-trail-name').textContent = trail ? trail.name : 'None';
-    if (bubbleEl) {
-      if (trail) {
-        bubbleEl.style.background   = trail.color;
-        bubbleEl.style.borderColor  = trail.glow.replace('0.5)', '0.35)');
-        bubbleEl.style.boxShadow    = `0 0 14px ${trail.glow}`;
-      } else {
-        bubbleEl.style.background  = 'rgba(255,255,255,0.07)';
-        bubbleEl.style.borderColor = 'rgba(255,255,255,0.12)';
-        bubbleEl.style.boxShadow   = 'none';
-      }
-    }
-  }
+  renderProfileGear();
 }
 
 // Load basename + avatar from server
@@ -7297,9 +8974,20 @@ function _requestSessionToken() {
   }
 }
 
+function _exposeGameBridges() {
+  window.Save = Save;
+  window.Shop = Shop;
+  window.Quests = Quests;
+  window.Xp = Xp;
+  window.RewardEconomy = RewardEconomy;
+}
+
 function _initUI() {
+  _exposeGameBridges();
+
   // Кнопки меню
-  _bind('btn-start',   'click', () => { _requestSessionToken(); initGame(); });
+  _bind('btn-start',   'click', () => Loadout.show());
+  _bind('menu-focus-strip', 'click', () => { Shop.showFocusItem ? Shop.showFocusItem() : Shop.show(); });
   _bind('btn-lb',    'click', () => UI.showLeaderboard());
   // btn-ci removed from profile — check-in is now on the main menu
   _bind('btn-shop',  'click', () => Shop.show());
@@ -7309,9 +8997,11 @@ function _initUI() {
   _bind('shop-tab-trails',   'click', () => Shop.setTab('trails'));
   _bind('shop-tab-effects',  'click', () => Shop.setTab('effects'));
 
-  // Profile — equipped item Change buttons
-  _bind('btn-change-skin',  'click', () => { Shop.show(); Shop.setTab('skins'); });
-  _bind('btn-change-trail', 'click', () => { Shop.show(); Shop.setTab('trails'); });
+  // Profile — direct equipped item cycling
+  _bind('btn-profile-skin-prev', 'click', () => cycleProfileGear('skin', -1));
+  _bind('btn-profile-skin-next', 'click', () => cycleProfileGear('skin', 1));
+  _bind('btn-profile-trail-prev', 'click', () => cycleProfileGear('trail', -1));
+  _bind('btn-profile-trail-next', 'click', () => cycleProfileGear('trail', 1));
 
   // Level-up modal
   _bind('btn-levelup-ok', 'click', _closeLevelUp);
@@ -7390,7 +9080,7 @@ function _initUI() {
   }
 
   // Кнопки game over
-  _bind('btn-restart', 'click', () => { _requestSessionToken(); initGame(); });
+  _bind('btn-restart', 'click', () => Loadout.show());
   _bind('btn-go-menu', 'click', () => {
     currentState = GameState.MENU;
     UI.show('menu');
@@ -7417,6 +9107,8 @@ function _initUI() {
     hideContinueOverlay();
     onGameOver();
   });
+
+  if (typeof Loadout !== 'undefined') Loadout.bind();
 
   // Refresh leaderboard when new data loads
   window.addEventListener('base-leaderboard-loaded', () => {
@@ -7453,33 +9145,65 @@ function _initUI() {
         UI.showCheckIn();
       } else {
         // localStorage fallback — sync coins to Redis
-        alert(`🎉 Check-in! ${result.message}\nStreak: ${result.streak} days 🔥`);
+        alert(`Check-in! ${result.message}\nStreak: ${result.streak} days`);
         UI.showCheckIn();
         const syncFn = window.__BASE_SYNC_COINS;
         if (syncFn) syncFn(Save.getCoins());
       }
     } else {
-      alert(`⏳ ${result.message}`);
+      alert(result.message);
     }
   });
 
-  // Listen for on-chain check-in confirmation from React
-  window.addEventListener('base-checkin-confirmed', () => {
-    const DAY_COINS = [5, 5, 5, 10, 10, 20, 30];
+  function applyCheckinRewardLocalFallback() {
     const ci        = Save.getCheckin();
     const newStreak = ci.streak + 1;
     const daySlot   = (newStreak - 1) % 7;
-    const reward    = DAY_COINS[daySlot];
+    const reward    = RewardEconomy.getCheckInReward(daySlot);
     const today     = new Date().toISOString().slice(0, 10);
     Save.saveCheckin({ lastDate: today, streak: newStreak, total: (ci.total || 0) + 1 });
-    const newTotal = Save.addCoins(reward);
-    UI.updateCoins(newTotal);
+    RewardEconomy.applyBundleLocal(reward, 'checkin');
+    return { reward, checkin: Save.getCheckin() };
+  }
 
-    // Day 7 bonus: award a random booster
-    if (daySlot === 6 && typeof Shop !== 'undefined') {
-      const ALL_BOOSTERS = ['boost_magnet', 'boost_double', 'boost_shield'];
-      const randomBooster = ALL_BOOSTERS[Math.floor(Math.random() * ALL_BOOSTERS.length)];
-      Shop.addBoosterCharges(randomBooster, 1);
+  async function applyCheckinRewardServerClaim() {
+    const claimFn = window.__BASE_ECONOMY_CLAIM;
+    if (typeof claimFn !== 'function') return null;
+    try {
+      const claimed = await claimFn({ source: 'checkin' });
+      if (!claimed) return { serverRejected: true };
+      if (!claimed.ok) return { serverRejected: true, error: claimed.error || 'claim_failed' };
+      if (claimed.shop && typeof Shop !== 'undefined' && Shop.applyServerEconomyData) {
+        Shop.applyServerEconomyData(claimed.shop);
+      }
+      if (typeof claimed.coins === 'number') {
+        RewardEconomy.setCoinsLocal(claimed.coins);
+      }
+      if (claimed.result && claimed.result.xpDelta && typeof Xp !== 'undefined' && Xp.add) {
+        Xp.add(claimed.result.xpDelta);
+      }
+      if (claimed.checkin && typeof claimed.checkin === 'object') {
+        Save.saveCheckin({
+          lastDate: claimed.checkin.lastDate || new Date().toISOString().slice(0, 10),
+          streak: Math.max(0, Math.floor(Number(claimed.checkin.streak) || 0)),
+          total: Math.max(0, Math.floor(Number(claimed.checkin.total) || 0)),
+        });
+      }
+      return claimed;
+    } catch {
+      return { serverRejected: true, error: 'claim_failed' };
+    }
+  }
+
+  // Listen for on-chain check-in confirmation from React
+  window.addEventListener('base-checkin-confirmed', async () => {
+    const claimed = await applyCheckinRewardServerClaim();
+    if (!claimed) applyCheckinRewardLocalFallback();
+    else if (claimed.serverRejected) {
+      console.warn('check-in reward claim rejected:', claimed.error || 'unknown');
+      UI.showCheckIn();
+      _updateCiBanner();
+      return;
     }
 
     // Immediately update button — React state may not be updated yet
@@ -7494,8 +9218,6 @@ function _initUI() {
     setTimeout(() => UI.showCheckIn(), 600);
 
     _updateCiBanner();
-    const syncFn = window.__BASE_SYNC_COINS;
-    if (syncFn) syncFn(Save.getCoins());
   });
   _bind('btn-ci-back', 'click', () => UI.show('menu'));
 
@@ -7643,6 +9365,8 @@ function _initUI() {
   }
 
   // Старт
+  if (typeof Shop !== 'undefined' && Shop.applyLocalGearTestFixture) Shop.applyLocalGearTestFixture();
+  if (typeof Shop !== 'undefined' && Shop.applyLocalEconomyTestFixture) Shop.applyLocalEconomyTestFixture();
   UI.show('menu');
   initMenuBackground();
   setTimeout(_maybeShowStarterPack, 1500);
@@ -7655,4 +9379,3 @@ if (document.readyState === 'loading') {
   _initUI();
   UI.updateCoins(Save.getCoins());
 }
-

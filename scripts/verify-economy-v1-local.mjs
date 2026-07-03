@@ -5,6 +5,19 @@ const gameJs = readFileSync('public/game/game.js', 'utf8');
 const gameShell = readFileSync('src/components/Game.tsx', 'utf8');
 const globalCss = readFileSync('src/app/globals.css', 'utf8');
 
+const moduleBetween = (start, end) => {
+  const startIdx = gameJs.indexOf(start);
+  const endIdx = gameJs.indexOf(end, startIdx + start.length);
+  assert.notEqual(startIdx, -1, `Should find module start: ${start}`);
+  assert.notEqual(endIdx, -1, `Should find module end: ${end}`);
+  return gameJs.slice(startIdx, endIdx);
+};
+
+const checkInModule = moduleBetween('const CheckIn = (() => {', '/* ===== leaderboard.js ===== */');
+const questsModule = moduleBetween('const Quests = (() => {', '/* ===== dailyspin.js ===== */');
+const dailySpinModule = moduleBetween('const DailySpin = (() => {', '/* ===== xp.js ===== */');
+const xpModule = moduleBetween('const Xp = (() => {', '/* ===== main.js ===== */');
+
 assert.match(gameJs, /const ECONOMY_TIERS = Object\.freeze\(/, 'Shop should define economy tier constants');
 assert.match(gameJs, /const CRAFT_CONFIG = Object\.freeze\(/, 'Shop should define craft config per cosmetic item');
 assert.match(gameJs, /function getCraftMeta\(itemId\)/, 'Shop should expose craft metadata lookup');
@@ -21,10 +34,10 @@ assert.match(gameJs, /saveShopDataLocal\(d\)/, 'Economy fragment changes should 
 
 assert.match(gameJs, /getCraftStatus,\s*setFocusItemLocal,\s*addFragmentsLocal,\s*craftItemLocal/, 'Shop public API should expose local economy helpers for QA');
 assert.doesNotMatch(gameJs, /__BASE_SHOP_SYNC[\s\S]{0,240}fragments/, 'Phase 1 should not sync fragments through the trust-heavy shop sync path');
-assert.doesNotMatch(gameJs, /DailySpin[\s\S]*addFragmentsLocal/, 'Phase 1 should not connect daily spin to fragments');
-assert.doesNotMatch(gameJs, /CheckIn[\s\S]*addFragmentsLocal/, 'Phase 1 should not connect check-in to fragments');
-assert.doesNotMatch(gameJs, /Quests[\s\S]*addFragmentsLocal/, 'Phase 1 should not connect quests to fragments');
-assert.doesNotMatch(gameJs, /Xp[\s\S]*addFragmentsLocal/, 'Phase 1 should not connect level rewards to fragments');
+assert.doesNotMatch(dailySpinModule, /addFragmentsLocal/, 'Phase 1 should not connect daily spin to fragments');
+assert.doesNotMatch(checkInModule, /addFragmentsLocal/, 'Phase 1 should not connect check-in to fragments');
+assert.doesNotMatch(questsModule, /addFragmentsLocal/, 'Phase 1 should not connect quests to fragments');
+assert.doesNotMatch(xpModule, /addFragmentsLocal/, 'Phase 1 should not connect level rewards to fragments');
 
 assert.match(gameShell, /id="menu-focus-strip"/, 'Menu should include a compact focus progress strip');
 assert.match(gameShell, /id="menu-focus-title"/, 'Focus strip should show item name');

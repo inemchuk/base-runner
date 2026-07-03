@@ -15,9 +15,15 @@ export default function Home() {
   // Auto-connect to injected wallet (Base app) in background
   useEffect(() => {
     if (isConnected) return;
+    const hasInjectedProvider = typeof window !== 'undefined' && 'ethereum' in window;
     const injected = connectors.find(c => c.type === 'injected');
-    if (injected) {
+    if (hasInjectedProvider && injected) {
       connect({ connector: injected });
+      return;
+    }
+    if (process.env.NODE_ENV !== 'production') {
+      const mockConnector = connectors.find(c => c.type === 'mock');
+      if (mockConnector) connect({ connector: mockConnector });
     }
   }, [isConnected, connect, connectors]);
 

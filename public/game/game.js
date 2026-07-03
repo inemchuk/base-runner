@@ -32,25 +32,45 @@ const Save = (() => {
     }
   });
 
+  // In-memory cache — avoids localStorage + JSON.parse on every call
+  // (addCoins runs per coin pickup, several times per frame with magnet+double)
+  let _cache = null;
+  let _flushTimer = null;
+
   // Загрузить данные из localStorage
   function load() {
+    if (_cache) return _cache;
     try {
       const raw = localStorage.getItem(KEY);
-      if (!raw) return defaults();
-      return Object.assign(defaults(), JSON.parse(raw));
+      _cache = raw ? Object.assign(defaults(), JSON.parse(raw)) : defaults();
     } catch (e) {
-      return defaults();
+      _cache = defaults();
     }
+    return _cache;
   }
 
-  // Сохранить данные в localStorage
+  // Сохранить данные (запись в localStorage батчится, ~1 раз в секунду)
   function save(data) {
+    _cache = data;
+    if (_flushTimer) return;
+    _flushTimer = setTimeout(_flush, 800);
+  }
+
+  function _flush() {
+    _flushTimer = null;
+    if (!_cache) return;
     try {
-      localStorage.setItem(KEY, JSON.stringify(data));
+      localStorage.setItem(KEY, JSON.stringify(_cache));
     } catch (e) {
       console.warn('Не удалось сохранить данные:', e);
     }
   }
+
+  // Не терять несохранённый батч при уходе со страницы/сворачивании
+  window.addEventListener('pagehide', _flush);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') _flush();
+  });
 
   // Добавить новый результат и обновить рекорд
   function addScore(score) {

@@ -8977,6 +8977,8 @@ function _requestSessionToken() {
 function _exposeGameBridges() {
   window.Save = Save;
   window.Shop = Shop;
+  // Debug/verification handles (client is trust-light anyway; used by preview checks)
+  window.__GAME_DBG = { Renderer, World, Player, Loadout };
   window.Quests = Quests;
   window.Xp = Xp;
   window.RewardEconomy = RewardEconomy;

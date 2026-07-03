@@ -8660,7 +8660,7 @@ function _closeLevelUp() {
 
 function _calculateLocalRunXp(score, isNewRecord) {
   const baseXp        = score * 1 + _sessionCoins * 2;
-  const multi         = score >= 150 ? 1.2 : score >= 75 ? 1.0 : score >= 30 ? 0.7 : 0.5;
+  const multi         = score >= 150 ? 1.2 : score >= 75 ? 1.1 : 1.0;
   const multiplied    = Math.round(baseXp * multi);
   const checkinStreak = (Save.getCheckin().streak || 0);
   const streakBonus   = Math.min(checkinStreak * 2, 20);

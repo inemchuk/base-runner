@@ -2656,14 +2656,14 @@ const Renderer = (() => {
     cameraY += (targetCamY - cameraY) * Math.min(dt * SPEED, 1);
   }
 
-  function draw() {
+  function draw(dt) {
     if (!canvas) return;
     const W = canvas.width;
     const H = canvas.height;
     _now = Date.now(); // single timestamp for all animations this frame
 
-    // Advance water animation
-    const dt_approx = 0.016;
+    // Real frame delta from the game loop; clamped, with a fallback for stray calls
+    const dt_approx = (typeof dt === 'number' && dt > 0) ? Math.min(dt, 0.05) : 0.016;
     waterTime  += dt_approx;
     sirenPhase += dt_approx;
 
@@ -2671,9 +2671,9 @@ const Renderer = (() => {
     const _ps = Player.getState();
     if (_ps.jumping || _ps.onLog) walkTime += dt_approx;
 
-    // Advance weather blend (slower for smoother transitions)
+    // Advance weather blend (slower for smoother transitions; 0.012/frame @60fps ≈ 0.72/s)
     const targetRatio = weatherState > 0 ? 1 : 0;
-    weatherRatio += (targetRatio - weatherRatio) * 0.012;
+    weatherRatio += (targetRatio - weatherRatio) * Math.min(1, dt_approx * 0.72);
     if (weatherRatio < 0.005) weatherRatio = 0; // snap to zero — stop residual work
 
     // Advance rain particles (rain + storm)
@@ -2752,10 +2752,10 @@ const Renderer = (() => {
       shakeY = (Math.random() * 2 - 1) * mag;
     }
 
-    // Smoothly advance nightRatio toward target (slower for cinematic feel)
-    const NIGHT_SPEED = 0.005;
-    if (nightRatio < nightTarget) nightRatio = Math.min(nightRatio + NIGHT_SPEED, nightTarget);
-    if (nightRatio > nightTarget) nightRatio = Math.max(nightRatio - NIGHT_SPEED, nightTarget);
+    // Smoothly advance nightRatio toward target (0.005/frame @60fps = 0.3/s)
+    const NIGHT_STEP = 0.3 * dt_approx;
+    if (nightRatio < nightTarget) nightRatio = Math.min(nightRatio + NIGHT_STEP, nightTarget);
+    if (nightRatio > nightTarget) nightRatio = Math.max(nightRatio - NIGHT_STEP, nightTarget);
 
     ctx.clearRect(0, 0, W, H);
 
@@ -8362,7 +8362,7 @@ function menuLoop(timestamp) {
   World.update(dt);
 
   Renderer.updateCamera(dt);
-  Renderer.draw();
+  Renderer.draw(dt);
 
   requestAnimationFrame(menuLoop);
 }
@@ -8477,7 +8477,7 @@ function gameLoop(timestamp) {
   }
 
   Renderer.updateCamera(dt);
-  Renderer.draw();
+  Renderer.draw(dt);
   requestAnimationFrame(gameLoop);
 }
 

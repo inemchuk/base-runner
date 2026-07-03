@@ -569,6 +569,12 @@ const Sound = (() => {
     playTone({ freq: 277, type: 'sawtooth', duration: 0.5, vol: 0.25, attack: 0.01, detune: 5 });
   }
 
+  // Distant thunder — low rumble after the flash
+  function thunder() {
+    playNoise({ duration: 1.2, vol: 0.4, attack: 0.15, lowFreq: 30, highFreq: 120 });
+    playTone({ freq: 55, freqEnd: 35, type: 'sine', duration: 1.0, vol: 0.22, attack: 0.1 });
+  }
+
   // New record
   function newRecord() {
     [523, 659, 784, 1047].forEach((freq, i) => {
@@ -584,7 +590,7 @@ const Sound = (() => {
   }
 
   return { init, toggleMute, isMuted, getVolume, setVolume,
-           jump, step, log, death, splash, trainHorn, newRecord, coin };
+           jump, step, log, death, splash, trainHorn, thunder, newRecord, coin };
 })();
 
 
@@ -2101,6 +2107,7 @@ const Renderer = (() => {
   // Lightning state
   let lightningFlash = 0;       // 0→1 flash intensity
   let lightningTimer = 0;       // seconds until next flash
+  let _boltSeed      = 0;       // random seed for the bolt polyline shape
   let lightningCooldown = 4;    // randomized 3-8s
 
   const RAIN_COUNT       = 80;
@@ -2809,11 +2816,16 @@ const Renderer = (() => {
       lightningTimer -= dt_approx;
       if (lightningTimer <= 0) {
         lightningFlash = 1;
+        _boltSeed = Math.random() * 1000;
         lightningTimer = 3 + Math.random() * 5; // 3-8 sec
+        // Гром с задержкой после вспышки
+        if (typeof Sound !== 'undefined' && Sound.thunder) {
+          setTimeout(() => Sound.thunder(), 400 + Math.random() * 800);
+        }
       }
     }
     if (lightningFlash > 0) {
-      lightningFlash -= dt_approx * 4; // flash fades in 0.25s
+      lightningFlash -= dt_approx * 2; // double-flash envelope over ~0.5s
       if (lightningFlash < 0) lightningFlash = 0;
     }
 
@@ -3758,8 +3770,33 @@ const Renderer = (() => {
   function drawLightning(W, H) {
     if (lightningFlash <= 0) return;
     ctx.save();
-    ctx.fillStyle = `rgba(220,230,255,${lightningFlash * 0.3})`;
-    ctx.fillRect(0, 0, W, H);
+    const t = 1 - lightningFlash; // 0→1 за время вспышки
+    // Двойная вспышка: яркий пик → провал → тусклое эхо
+    const env = t < 0.22 ? (1 - t / 0.22 * 0.85)
+              : t < 0.34 ? 0.15
+              : t < 0.75 ? 0.55 * (1 - (t - 0.34) / 0.41)
+              : 0;
+    if (env > 0.01) {
+      ctx.fillStyle = `rgba(220,230,255,${env * 0.3})`;
+      ctx.fillRect(0, 0, W, H);
+    }
+    // Зигзаг молнии — только в первый пик
+    if (t < 0.22) {
+      const rnd = (i) => Math.abs(Math.sin(_boltSeed + i * 127.1)) % 1;
+      let bx = W * (0.2 + rnd(0) * 0.6);
+      let by = 0;
+      ctx.strokeStyle = `rgba(255,255,255,${(1 - t / 0.22) * 0.9})`;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(bx, by);
+      const segs = 6;
+      for (let i = 1; i <= segs; i++) {
+        bx += (rnd(i) - 0.5) * W * 0.16;
+        by = (H * 0.6) * (i / segs);
+        ctx.lineTo(bx, by);
+      }
+      ctx.stroke();
+    }
     ctx.restore();
   }
 

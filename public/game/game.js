@@ -3005,9 +3005,15 @@ const Renderer = (() => {
   }
 
   function drawRows() {
+    // Viewport culling — рисуем только видимые ряды (+1 ряд запаса)
+    const worldW = COLS * CELL;
+    const scale  = Math.min(1, ((_viewW || canvas.width) / worldW) * 1.25);
+    const visTop = cameraY - CELL;
+    const visBot = cameraY + (_viewH || canvas.height) / scale + CELL;
     const rows = [...World.getRows()].sort((a, b) => b.idx - a.idx);
     for (const row of rows) {
       const y = World.rowToY(row.idx);
+      if (y + CELL < visTop || y > visBot) continue;
       const bi = { biome: row.biome || 'default', nextBiome: row.nextBiome || null, blendT: row.blendT || 0 };
       if (row.type === 'grass') {
         drawGrassRow(row, y, bi);

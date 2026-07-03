@@ -872,8 +872,7 @@ const World = (() => {
       carDistMax *= 0.8;
     } else if (personality === 'rush') {
       carCount   = Math.min(7, carCount + 1);
-      carDistMin *= 0.75;
-      carDistMax *= 0.75;
+      // rush = скорость ×1.6; дистанции обычные (раньше ×0.75 — двойной штраф)
       return {
         carCount,
         carDistMin,

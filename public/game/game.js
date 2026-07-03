@@ -1771,6 +1771,14 @@ const Player = (() => {
   // ===== Обновление каждый кадр =====
   function update(dt) {
     if (!state.alive) return;
+    // Буфер ввода применяется на тик ПОСЛЕ приземления, а не в момент него:
+    // кадр приземления должен пройти через Collision.check() (он пропускается,
+    // пока jumping=true) — иначе цепочка прыжков проходит сквозь машины и воду
+    if (!state.jumping && _bufferedMove) {
+      const m = _bufferedMove;
+      _bufferedMove = null;
+      move(m.dRow, m.dCol);
+    }
     // Уменьшаем таймер инвиза
     if (_invincibleTimer > 0) _invincibleTimer = Math.max(0, _invincibleTimer - dt);
 
@@ -1794,12 +1802,6 @@ const Player = (() => {
         if (typeof Renderer !== 'undefined' && Renderer.addTrail) {
           const row = World.getRow(state.row);
           Renderer.addTrail(state.visualX, state.visualY, row ? row.type : 'grass');
-        }
-        // Apply buffered input from the jump window
-        if (_bufferedMove) {
-          const m = _bufferedMove;
-          _bufferedMove = null;
-          move(m.dRow, m.dCol);
         }
       }
     }

@@ -1791,6 +1791,37 @@ const Player = (() => {
 
   // Оживить игрока после Continue — даём краткий инвиз чтобы не умер сразу
   function revive() {
+    // Water/train rows are lethal even with invincibility (water ignores it,
+    // trains cross too fast) — relocate to the nearest grass row behind the player.
+    const cur = World.getRow(state.row);
+    if (!cur || cur.type === 'water' || cur.type === 'train') {
+      let grassRow = null, roadRow = null;
+      for (let r = state.row; r >= state.row - 15 && r >= 0; r--) {
+        const cand = World.getRow(r);
+        if (!cand) continue;
+        if (cand.type === 'grass') { grassRow = r; break; }
+        if (roadRow === null && cand.type === 'road') roadRow = r;
+      }
+      const safeIdx = grassRow !== null ? grassRow : (roadRow !== null ? roadRow : state.row);
+      const safe    = World.getRow(safeIdx);
+      state.row = safeIdx;
+
+      // Clamp col back onto the field, then step sideways off blocked cells
+      let col = Math.min(COLS - 1, Math.max(0, state.col));
+      for (let off = 0; off < COLS; off++) {
+        const free = [col + off, col - off].find(
+          c => c >= 0 && c < COLS && !Collision.isCellBlocked(safe, c)
+        );
+        if (free !== undefined) { col = free; break; }
+      }
+      state.col = col;
+
+      state.visualX  = state.col * CELL + CELL / 2;
+      state.visualY  = World.rowToY(state.row) + CELL / 2;
+      state.jumpFrom = { x: state.visualX, y: state.visualY };
+      state.jumpTo   = { x: state.visualX, y: state.visualY };
+    }
+
     state.alive      = true;
     state.jumping    = false;
     state.onLog      = null;

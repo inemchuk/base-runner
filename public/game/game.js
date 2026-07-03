@@ -1613,6 +1613,7 @@ const Player = (() => {
   }
 
   let state = {};
+  let _bufferedMove = null; // tap during jump animation — applied on landing
 
   // ===== Инициализация =====
   function init() {
@@ -1642,6 +1643,7 @@ const Player = (() => {
     state.visualX  = state.col * CELL + CELL / 2;
     state.visualY  = World.rowToY(state.row) + CELL / 2;
     state.jumpFrom = { x: state.visualX, y: state.visualY };
+    _bufferedMove  = null;
     resetShield();
   }
 
@@ -1650,7 +1652,10 @@ const Player = (() => {
   // dCol: +1 = вправо, -1 = влево
   function move(dRow, dCol) {
     if (!state.alive)  return false;
-    if (state.jumping) return false;   // нельзя начать новый шаг во время анимации
+    if (state.jumping) {
+      _bufferedMove = { dRow, dCol }; // запомним тап — применим в момент приземления
+      return false;
+    }
 
     const newRow = state.row + dRow;
     const newCol = state.col + dCol;
@@ -1775,6 +1780,12 @@ const Player = (() => {
           const row = World.getRow(state.row);
           Renderer.addTrail(state.visualX, state.visualY, row ? row.type : 'grass');
         }
+        // Apply buffered input from the jump window
+        if (_bufferedMove) {
+          const m = _bufferedMove;
+          _bufferedMove = null;
+          move(m.dRow, m.dCol);
+        }
       }
     }
 
@@ -1890,6 +1901,7 @@ const Player = (() => {
     state.alive   = false;
     state.onLog   = null;
     state.jumping = false;
+    _bufferedMove = null;
   }
 
   // ===== Вспомогательные =====
@@ -8779,10 +8791,13 @@ const Input = (() => {
     const dx = e.touches[0].clientX - touchStartX;
     const dy = e.touches[0].clientY - touchStartY;
 
-    // Если двинулись достаточно — считаем свайпом
-    if (!touchMoved && (Math.abs(dx) > SWIPE_MIN || Math.abs(dy) > SWIPE_MIN)) {
+    // Каждый раз при превышении порога — свайп + новая точка отсчёта,
+    // чтобы можно было "рулить" не отрывая палец
+    if (Math.abs(dx) > SWIPE_MIN || Math.abs(dy) > SWIPE_MIN) {
       touchMoved = true;
       handleSwipe(dx, dy);
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
     }
   }, { passive: false });
 

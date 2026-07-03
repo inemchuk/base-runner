@@ -2810,7 +2810,7 @@ const Renderer = (() => {
 
     // Moon (appears at night, dimmed by overcast)
     if (nightRatio > 0.1 && overcast < 0.9) {
-      drawMoon(W, H);
+      drawMoon(W, H, skyColor);
     }
 
     const worldW = COLS * CELL;
@@ -2879,7 +2879,7 @@ const Renderer = (() => {
   }
 
   // ── Moon ──────────────────────────────────────────────────
-  function drawMoon(W, H) {
+  function drawMoon(W, H, skyColor) {
     const alpha = Math.min(nightRatio * 2, 1);
     const mx = W * 0.82, my = H * 0.08, mr = 22;
     // Glow
@@ -2895,8 +2895,8 @@ const Renderer = (() => {
     ctx.beginPath();
     ctx.arc(mx, my, mr, 0, Math.PI * 2);
     ctx.fill();
-    // Crescent shadow
-    ctx.fillStyle = dc('sky');
+    // Crescent shadow — must match the weather-blended sky, not the clear-sky color
+    ctx.fillStyle = skyColor || dc('sky');
     ctx.beginPath();
     ctx.arc(mx + mr * 0.45, my - mr * 0.1, mr * 0.82, 0, Math.PI * 2);
     ctx.fill();

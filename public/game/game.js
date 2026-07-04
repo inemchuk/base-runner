@@ -2954,9 +2954,8 @@ const Renderer = (() => {
     }
 
     const worldW = COLS * CELL;
-    // Zoom: on narrow screens, scale up 25% for closer camera (crops sides slightly)
-    const baseScale = W / worldW;
-    const scale = Math.min(1, baseScale * 1.25);
+    // Dynamic zoom: close-up early game, pulls back to full field by score 300
+    const scale = getViewScale();
     const scaledW = worldW * scale;
     const offsetX = (W - scaledW) / 2;
     ctx.save();
@@ -3044,8 +3043,7 @@ const Renderer = (() => {
 
   function drawRows() {
     // Viewport culling — рисуем только видимые ряды (+1 ряд запаса)
-    const worldW = COLS * CELL;
-    const scale  = Math.min(1, ((_viewW || canvas.width) / worldW) * 1.25);
+    const scale  = getViewScale();
     const visTop = cameraY - CELL;
     const visBot = cameraY + (_viewH || canvas.height) / scale + CELL;
     const rows = [...World.getRows()].sort((a, b) => b.idx - a.idx);

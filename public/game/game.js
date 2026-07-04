@@ -3013,6 +3013,14 @@ const Renderer = (() => {
     const visTop = cameraY - CELL;
     const visBot = cameraY + (_viewH || canvas.height) / scale + CELL;
     const rows = [...World.getRows()].sort((a, b) => b.idx - a.idx);
+    // Aerial-perspective fog: rows wash out toward the fog colour with
+    // distance from the player, in world space (wisps live in drawFog)
+    const fogT = weatherState === 2 ? Math.min(weatherRatio * 1.2, 1) : 0;
+    let fogColor = null, playerRow = 0;
+    if (fogT > 0.02) {
+      fogColor = lerpColor(FOG_DAY, FOG_NIGHT, nightRatio);
+      playerRow = Player.getState().row;
+    }
     for (const row of rows) {
       const y = World.rowToY(row.idx);
       if (y + CELL < visTop || y > visBot) continue;
@@ -3037,6 +3045,15 @@ const Renderer = (() => {
         drawLogs(row, y, bi);
       } else if (row.type === 'train') {
         drawTrainRow(row, y);
+      }
+      if (fogColor) {
+        // Depth cue: quadratic ramp over ~14 rows ahead; rows behind haze at half rate
+        const dist  = row.idx - playerRow;
+        const depth = Math.min(Math.max(dist > 0 ? dist : -dist * 0.5, 0) / 14, 1);
+        ctx.globalAlpha = fogT * (0.06 + 0.58 * depth * depth);
+        ctx.fillStyle = fogColor;
+        ctx.fillRect(0, y, COLS * CELL, CELL);
+        ctx.globalAlpha = 1;
       }
     }
   }
@@ -3738,40 +3755,69 @@ const Renderer = (() => {
     ctx.restore();
   }
 
+  // Fog colours match the fog weatherSky values so distant rows wash into the sky
+  const FOG_DAY   = '#c8cfd8';
+  const FOG_NIGHT = '#0a0e1a';
+  let _fogSprites = null; // [day, night] pre-rendered blobs — no per-frame gradient allocs
+
+  function _makeFogSprite(color) {
+    const c = document.createElement('canvas');
+    c.width = c.height = 128;
+    const g = c.getContext('2d');
+    const grd = g.createRadialGradient(64, 64, 8, 64, 64, 64);
+    grd.addColorStop(0,    color + 'cc');
+    grd.addColorStop(0.55, color + '66');
+    grd.addColorStop(1,    color + '00');
+    g.fillStyle = grd;
+    g.fillRect(0, 0, 128, 128);
+    return c;
+  }
+
+  // Deterministic blob field: fractions of screen size
+  const FOG_BLOBS = Array.from({ length: 9 }, (_, i) => {
+    const rnd = (k) => Math.abs(Math.sin(i * 37.7 + k * 91.3)) % 1;
+    return {
+      x0:    rnd(1),
+      y0:    rnd(2),
+      r:     0.22 + rnd(3) * 0.28,
+      speed: 0.05 + rnd(4) * 0.12,
+      phase: rnd(5) * Math.PI * 2,
+      alpha: 0.10 + rnd(6) * 0.10,
+    };
+  });
+
   function drawFog(W, H) {
-    const fogAlpha = Math.min(weatherRatio * 1.2, 1);
+    const fogT = Math.min(weatherRatio * 1.2, 1);
+    if (fogT < 0.01) return;
+    if (!_fogSprites) _fogSprites = [_makeFogSprite(FOG_DAY), _makeFogSprite(FOG_NIGHT)];
     ctx.save();
 
-    // Fog gradient — thicker at bottom
-    const isNight = nightRatio > 0.3;
-    const fogR = isNight ? 20 : 180;
-    const fogG = isNight ? 30 : 190;
-    const fogB = isNight ? 60 : 210;
-
-    const fogGrd = ctx.createLinearGradient(0, 0, 0, H);
-    fogGrd.addColorStop(0,   `rgba(${fogR},${fogG},${fogB},${fogAlpha * 0.06})`);
-    fogGrd.addColorStop(0.4, `rgba(${fogR},${fogG},${fogB},${fogAlpha * 0.15})`);
-    fogGrd.addColorStop(0.7, `rgba(${fogR},${fogG},${fogB},${fogAlpha * 0.25})`);
-    fogGrd.addColorStop(1,   `rgba(${fogR},${fogG},${fogB},${fogAlpha * 0.35})`);
-    ctx.fillStyle = fogGrd;
+    // Thin uniform veil; the depth gradient lives in drawRows' per-row tint
+    ctx.fillStyle = lerpColor(FOG_DAY, FOG_NIGHT, nightRatio);
+    ctx.globalAlpha = fogT * 0.06;
     ctx.fillRect(0, 0, W, H);
 
-    // Drifting fog wisps — subtle horizontal bands
-    const wispCount = 5;
-    const time = _now * 0.0003;
-    for (let i = 0; i < wispCount; i++) {
-      const baseY = H * (0.2 + i * 0.15);
-      const drift = Math.sin(time + i * 1.7) * W * 0.08;
-      const wispAlpha = fogAlpha * (0.04 + 0.03 * Math.sin(time * 0.7 + i));
-      const wispGrd = ctx.createLinearGradient(drift, 0, W * 0.6 + drift, 0);
-      wispGrd.addColorStop(0,   `rgba(${fogR},${fogG},${fogB},0)`);
-      wispGrd.addColorStop(0.3, `rgba(${fogR},${fogG},${fogB},${wispAlpha})`);
-      wispGrd.addColorStop(0.7, `rgba(${fogR},${fogG},${fogB},${wispAlpha})`);
-      wispGrd.addColorStop(1,   `rgba(${fogR},${fogG},${fogB},0)`);
-      ctx.fillStyle = wispGrd;
-      ctx.fillRect(0, baseY - 20, W, 40);
+    // Soft blobs parallaxed against the camera (0.4) so fog drifts past
+    // as the player advances instead of sticking to the screen
+    const time = _now * 0.0001;
+    for (const b of FOG_BLOBS) {
+      const r    = b.r * W;
+      const span = H + r * 2;
+      const sy = (((b.y0 * span - cameraY * 0.4) % span) + span) % span - r;
+      const sx = (b.x0 + Math.sin(time * (1 + b.speed * 8) + b.phase) * 0.08) * W;
+      const breath = 0.75 + 0.25 * Math.sin(time * 2.3 + b.phase * 3);
+      const a = fogT * b.alpha * breath;
+      if (a < 0.01) continue;
+      if (nightRatio < 0.999) {
+        ctx.globalAlpha = a * (1 - nightRatio);
+        ctx.drawImage(_fogSprites[0], sx - r, sy - r, r * 2, r * 2);
+      }
+      if (nightRatio > 0.001) {
+        ctx.globalAlpha = a * nightRatio;
+        ctx.drawImage(_fogSprites[1], sx - r, sy - r, r * 2, r * 2);
+      }
     }
-
+    ctx.globalAlpha = 1;
     ctx.restore();
   }
 

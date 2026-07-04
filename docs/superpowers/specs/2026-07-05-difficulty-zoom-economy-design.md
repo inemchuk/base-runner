@@ -8,6 +8,31 @@ Scope:
 - `src/lib/economy/quests.ts` future quest expansion.
 - `src/app/api/score/submit/route.ts` accepted run summary and server progression.
 
+## Prerequisites
+
+This design depends on Economy V1 from branch
+`codex/economy-v1-local-focus` landing before implementation on `main`.
+
+Do not start implementing this system from current `main` until these Economy
+V1 pieces are present:
+
+- `src/lib/economy/levels.ts` with server-side XP and level state.
+- `src/lib/economy/quests.ts` with server-side quest definitions and progress.
+- `/api/score/submit` accepting `sessionCoins` and updating quests/levels from
+  accepted runs.
+- `/api/quests POST` no longer trusting arbitrary client-authored quest data.
+  On the Economy V1 branch it is kept only for compatibility and returns the
+  server state with `ignored: true`.
+- Server reward claim paths for check-in, quests, and levels.
+
+If this work is attempted on a branch where `/api/quests POST` can overwrite
+quest state, the `elite_runs` quest and any rating-driven rewards are not
+server-authoritative.
+
+`public/game/game.js` is a large single-file runtime, currently about 7.6k
+lines on the Economy V1 branch. Implementation plans must match on symbols and
+local code context, not stale line numbers.
+
 ## Goal
 
 Create one coherent progression system where harder gameplay, camera zoom,
@@ -70,7 +95,8 @@ This zoom is a gameplay contract. Difficulty tuning must respect it:
 ### Economy
 
 Economy V1 is already designed around Focus fragments and controlled reward
-sources.
+sources on `codex/economy-v1-local-focus`. This is not true on current `main`
+before Economy V1 lands.
 
 - Check-in weekly value: `190 coins`, `10 Focus fragments`, `5 boosters`,
   `75 XP`.
@@ -293,9 +319,17 @@ the player may reach a water row when useful logs are off-center or off-screen.
 
 Add water fairness guarantees:
 
-- At row creation, active logs should cover at least one of the central columns
-  within the first readable moment.
-- Visible lane coverage should not fall below a minimum target.
+- Measure fairness when a row enters the readable band, not only when the row is
+  created. Rows are generated ahead of time, while camera zoom and viewport
+  context depend on score and device at the moment the player can actually read
+  the row.
+- The readable band is the visible ahead-of-player region where a mobile player
+  can reasonably plan the next move. The simulator should evaluate this band at
+  representative zoom scores: `0`, `100`, `150`, `300`.
+- At readable-band entry, active logs should cover at least one of the central
+  columns within the first readable moment.
+- Visible lane coverage at readable-band entry should not fall below a minimum
+  target.
   - Early: 55-65%.
   - Mid: 45-55%.
   - Late: 38-50%, but with readable timing.
@@ -346,14 +380,20 @@ Booster interaction:
 
 ## Run Rating
 
-Add a server-compatible run rating. The first version should use values the
-server already accepts or can verify cheaply:
+Add a server-compatible run rating.
 
-- score;
-- sanitized session coins;
-- new record;
-- check-in streak;
-- eventually daily best run state.
+V1 rating must be score-only:
+
+- score is already accepted and bounded by `/api/score/submit`;
+- score-only rating is easy to mirror locally for UI;
+- score-only rating does not let manipulated session coin values raise XP
+  multipliers, daily bonuses, or `elite_runs` quest progress.
+
+Other accepted run facts can still affect non-rating systems:
+
+- sanitized session coins contribute to XP and the existing `coins` quest;
+- new record contributes to record bonus XP and record quest progress;
+- check-in streak contributes to streak bonus XP.
 
 Do not depend on client-authored "I passed hard lanes" for rewards in V1.
 
@@ -367,10 +407,14 @@ Suggested ratings:
 | Elite | score 150+ |
 | Master | score 300+ |
 
-Optional coin-aware upgrades:
+Deferred coin-aware upgrades:
 
-- A score `60+` run with unusually strong session coins can count as `Great`.
-- A score `120+` run with a new record can count as `Elite`.
+- Deferred from V1. `sessionCoins` are currently sanitized but not fully
+  verified. Allowing coin-aware rating upgrades would let manipulated coin
+  values raise rating, XP multiplier, daily quality bonus, and `elite_runs`
+  progress up to the score-based plausibility cap.
+- V1 run rating must be score-only, with new record used for XP record bonus
+  only, not for rating upgrades.
 
 The rating should appear on game over as a concise result badge, not as a
 tutorial explanation.
@@ -475,6 +519,22 @@ Allowed economy links:
 - daily quality bonus grants XP only;
 - future paid run modifiers may grant special opportunities.
 
+There is still an intentional indirect path:
+
+```text
+risk route difficulty → more session coins → coins quest progress
+→ controlled quest rewards → Focus fragments / crates
+```
+
+This is acceptable because the quest table is the reward gate. The score-based
+session coin cap is a safety check, not the main economic limiter. For example,
+at score `300`, a cap like `score * 4 + 20` is far above realistic coin income,
+so balance must come from coin placement, risk-route density, quest targets, and
+quest reward values.
+
+Because of this indirect path, risk-route coin density must be tuned against
+the existing `coins` quest rewards before shipping.
+
 Future run modifiers:
 
 `Coin Rush`
@@ -542,7 +602,8 @@ Quests should show:
 V1 server-trusted inputs:
 
 - score, after score submit validation;
-- session coins, sanitized by score-based cap;
+- session coins, sanitized by score-based cap, but not trusted for rating
+  upgrades in V1;
 - previous best / new record;
 - check-in streak from server reward state.
 
@@ -560,9 +621,20 @@ Implementation implications:
 Current score submit already has a speed plausibility check. Keep this path as
 the main entry for XP and quest progress.
 
+Before implementing rating-driven quest rewards on any branch, verify:
+
+- `/api/quests POST` cannot overwrite quest progress from client data.
+- `/api/score/submit` is the source of quest and level progress.
+- rating is computed server-side from accepted score only in V1.
+
 ## Telemetry
 
 Add telemetry before heavy tuning.
+
+Telemetry here requires new gameplay instrumentation first. The current runtime
+does not provide a full structured death-cause payload with row context,
+readable-band water coverage, or train warning timing. Add a small death/run
+summary classifier before relying on the events below.
 
 Recommended events:
 
@@ -613,10 +685,15 @@ High-skill player:
 ### Phase 1: Fairness And Difficulty Foundation
 
 - Add a read-only balance simulator for row generation at score bands.
-- Report car speeds, row archetypes, water visible coverage, and section danger.
+- Report car speeds, row archetypes, section danger, and water coverage at
+  readable-band entry for representative zoom scores.
+- Use the existing `_dbgZoom` hook or equivalent fixed zoom inputs for manual
+  verification at score `0`, `100`, `150`, and `300`.
 - Add water fairness guarantees.
 - Cap `rush` and siren speed spikes.
 - Keep camera zoom curve unchanged.
+- Add a lightweight death/run summary classifier before telemetry claims depend
+  on `deathCause`, water coverage, or train warning timing.
 
 ### Phase 2: Section Budget And Archetypes
 
@@ -628,6 +705,7 @@ High-skill player:
 ### Phase 3: Run Rating And XP
 
 - Add shared server/client run rating calculation.
+- In V1, compute rating strictly from accepted score bands.
 - Update XP multiplier to rating bands.
 - Add game over rating presentation.
 - Keep local fallback aligned with server formula.

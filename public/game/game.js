@@ -3102,6 +3102,47 @@ const Renderer = (() => {
     }
   }
 
+  // ── Pre-rendered gradient sprites ─────────────────────────
+  // Hot-path gradients (grass depth strips, coin glow, car lights) have
+  // constant colours — only position/size/overall alpha vary per draw.
+  // Rendering them once and blitting via drawImage avoids hundreds of
+  // CanvasGradient allocations per frame (GC jank on low-end mobile).
+  // Variable brightness is applied through ctx.globalAlpha, which scales
+  // all stops linearly — visually identical to baking alpha into stops.
+  let _fxSprites = null;
+  function _fxS() {
+    if (_fxSprites) return _fxSprites;
+    const mk = (w, h, draw) => {
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      draw(c.getContext('2d'), w, h);
+      return c;
+    };
+    // 64px radial sprite; innerFrac = inner radius as a fraction of the outer
+    const radial = (innerFrac, stops) => mk(64, 64, (g) => {
+      const grd = g.createRadialGradient(32, 32, 32 * innerFrac, 32, 32, 32);
+      for (const [p, col] of stops) grd.addColorStop(p, col);
+      g.fillStyle = grd;
+      g.fillRect(0, 0, 64, 64);
+    });
+    const vStrip = (h, stops) => mk(COLS * CELL, h, (g, w) => {
+      const grd = g.createLinearGradient(0, 0, 0, h);
+      for (const [p, col] of stops) grd.addColorStop(p, col);
+      g.fillStyle = grd;
+      g.fillRect(0, 0, w, h);
+    });
+    _fxSprites = {
+      grassTop: vStrip(Math.ceil(CELL * 0.18), [[0, 'rgba(0,0,0,0.28)'], [1, 'rgba(0,0,0,0)']]),
+      grassBot: vStrip(Math.ceil(CELL * 0.15), [[0, 'rgba(255,255,255,0)'], [1, 'rgba(255,255,255,0.07)']]),
+      coinGlow: radial(0.08 / 0.70, [[0, 'rgba(80,150,255,1)'], [0.45, 'rgba(0,82,255,0.5)'], [1, 'rgba(0,40,220,0)']]),
+      hlGlow:   radial(0, [[0, 'rgba(255,238,180,0.55)'], [0.15, 'rgba(255,238,180,0.3)'], [0.4, 'rgba(255,235,170,0.1)'], [1, 'rgba(255,235,170,0)']]),
+      hlDot:    radial(0, [[0, 'rgba(255,252,235,1)'], [0.5, 'rgba(255,245,200,0.5)'], [1, 'rgba(255,240,180,0)']]),
+      tlGlow:   radial(0, [[0, 'rgba(255,25,15,0.55)'], [0.3, 'rgba(255,15,10,0.2)'], [1, 'rgba(255,0,0,0)']]),
+      tlDot:    radial(0, [[0, 'rgba(255,60,40,0.95)'], [0.6, 'rgba(255,30,20,0.4)'], [1, 'rgba(255,0,0,0)']]),
+    };
+    return _fxSprites;
+  }
+
   function drawGrassRow(row, y, bi) {
     // Ground — day/night + biome blended colour
     let grassColor = row.idx % 2 === 0 ? dcBiome('grass0', bi) : dcBiome('grass1', bi);
@@ -3115,20 +3156,10 @@ const Renderer = (() => {
     ctx.fillStyle = grassColor;
     ctx.fillRect(0, y, COLS * CELL, CELL);
 
-    // ── Crossy Road 3D depth: top shadow + bottom highlight ──
-    // Top shadow — darker band simulating voxel depth
-    const topGrad = ctx.createLinearGradient(0, y, 0, y + CELL * 0.18);
-    topGrad.addColorStop(0, 'rgba(0,0,0,0.28)');
-    topGrad.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = topGrad;
-    ctx.fillRect(0, y, COLS * CELL, CELL * 0.18);
-
-    // Bottom highlight — subtle light edge (as if light hits the front face)
-    const botGrad = ctx.createLinearGradient(0, y + CELL * 0.85, 0, y + CELL);
-    botGrad.addColorStop(0, 'rgba(255,255,255,0)');
-    botGrad.addColorStop(1, 'rgba(255,255,255,0.07)');
-    ctx.fillStyle = botGrad;
-    ctx.fillRect(0, y + CELL * 0.85, COLS * CELL, CELL * 0.15);
+    // ── Crossy Road 3D depth: top shadow + bottom highlight (cached sprites) ──
+    const fxs = _fxS();
+    ctx.drawImage(fxs.grassTop, 0, y, COLS * CELL, CELL * 0.18);
+    ctx.drawImage(fxs.grassBot, 0, y + CELL * 0.85, COLS * CELL, CELL * 0.15);
 
     // Coins
     if (row.coins) {
@@ -3156,15 +3187,10 @@ const Renderer = (() => {
         const glowAlpha = glowPulse * scaleX;   // scaleX: 1=face-on, 0=edge-on
         if (glowAlpha > 0.015) {
           const gR = size * 0.70;
-          const grd = ctx.createRadialGradient(0, 0, size * 0.08, 0, 0, gR);
-          grd.addColorStop(0,   `rgba(80,150,255,${glowAlpha})`);      // bright blue-white core
-          grd.addColorStop(0.45,`rgba(0, 82,255,${glowAlpha * 0.5})`); // pure Base blue mid
-          grd.addColorStop(1,   'rgba(0,40,220,0)');                    // transparent edge
-          ctx.fillStyle = grd;
-          ctx.beginPath();
-          // Slightly squished ellipse — matches isometric perspective of the shadow below
-          ctx.ellipse(0, 0, gR, gR * 0.72, 0, 0, Math.PI * 2);
-          ctx.fill();
+          // Cached sprite, squished vertically — matches isometric shadow below
+          ctx.globalAlpha = glowAlpha;
+          ctx.drawImage(_fxS().coinGlow, -gR, -gR * 0.72, gR * 2, gR * 1.44);
+          ctx.globalAlpha = 1;
         }
 
         if (coinImg) {
@@ -3536,33 +3562,22 @@ const Renderer = (() => {
           ctx.restore();
         }
 
-        // === Layer 2: Circular glow halo around each headlight ===
+        // === Layer 2: Circular glow halo around each headlight (cached sprite) ===
+        const fxs = _fxS();
+        ctx.globalAlpha = hlAlpha;
         for (const fl of lights.front) {
           const { cx: fx, cy: fy } = toCanvas(fl.x, fl.y);
           const glowR = CELL * 0.5;
-          const grd = ctx.createRadialGradient(fx, fy, 0, fx, fy, glowR);
-          grd.addColorStop(0, `rgba(255,238,180,${hlAlpha * 0.55})`);
-          grd.addColorStop(0.15, `rgba(255,238,180,${hlAlpha * 0.3})`);
-          grd.addColorStop(0.4, `rgba(255,235,170,${hlAlpha * 0.1})`);
-          grd.addColorStop(1, 'rgba(255,235,170,0)');
-          ctx.fillStyle = grd;
-          ctx.beginPath();
-          ctx.arc(fx, fy, glowR, 0, Math.PI * 2);
-          ctx.fill();
+          ctx.drawImage(fxs.hlGlow, fx - glowR, fy - glowR, glowR * 2, glowR * 2);
         }
 
-        // === Layer 1: Bright hot-spot at each headlight ===
+        // === Layer 1: Bright hot-spot at each headlight (cached sprite) ===
         for (const fl of lights.front) {
           const { cx: fx, cy: fy } = toCanvas(fl.x, fl.y);
-          const dotGrd = ctx.createRadialGradient(fx, fy, 0, fx, fy, lightR * 1.8);
-          dotGrd.addColorStop(0, `rgba(255,252,235,${hlAlpha})`);
-          dotGrd.addColorStop(0.5, `rgba(255,245,200,${hlAlpha * 0.5})`);
-          dotGrd.addColorStop(1, 'rgba(255,240,180,0)');
-          ctx.fillStyle = dotGrd;
-          ctx.beginPath();
-          ctx.arc(fx, fy, lightR * 1.8, 0, Math.PI * 2);
-          ctx.fill();
+          const dotR = lightR * 1.8;
+          ctx.drawImage(fxs.hlDot, fx - dotR, fy - dotR, dotR * 2, dotR * 2);
         }
+        ctx.globalAlpha = 1;
 
         // === Wet-road reflection — vertical light smear under each headlight ===
         if ((weatherState === 1 || weatherState === 3) && weatherRatio > 0.2 && _precipBiome() !== 'desert') {
@@ -3582,28 +3597,16 @@ const Renderer = (() => {
           ctx.globalAlpha = 1;
         }
 
-        // === Rear taillights — two layers ===
+        // === Rear taillights — two layers (cached sprites) ===
+        ctx.globalAlpha = hlAlpha;
         for (const rl of lights.rear) {
           const { cx: rx, cy: ry } = toCanvas(rl.x, rl.y);
-          // Outer red glow
-          const rGrd = ctx.createRadialGradient(rx, ry, 0, rx, ry, CELL * 0.22);
-          rGrd.addColorStop(0, `rgba(255,25,15,${hlAlpha * 0.55})`);
-          rGrd.addColorStop(0.3, `rgba(255,15,10,${hlAlpha * 0.2})`);
-          rGrd.addColorStop(1, 'rgba(255,0,0,0)');
-          ctx.fillStyle = rGrd;
-          ctx.beginPath();
-          ctx.arc(rx, ry, CELL * 0.22, 0, Math.PI * 2);
-          ctx.fill();
-          // Inner bright red dot
-          const rDot = ctx.createRadialGradient(rx, ry, 0, rx, ry, lightR * 0.8);
-          rDot.addColorStop(0, `rgba(255,60,40,${hlAlpha * 0.95})`);
-          rDot.addColorStop(0.6, `rgba(255,30,20,${hlAlpha * 0.4})`);
-          rDot.addColorStop(1, 'rgba(255,0,0,0)');
-          ctx.fillStyle = rDot;
-          ctx.beginPath();
-          ctx.arc(rx, ry, lightR * 0.8, 0, Math.PI * 2);
-          ctx.fill();
+          const rgR = CELL * 0.22;
+          ctx.drawImage(fxs.tlGlow, rx - rgR, ry - rgR, rgR * 2, rgR * 2);
+          const rdR = lightR * 0.8;
+          ctx.drawImage(fxs.tlDot, rx - rdR, ry - rdR, rdR * 2, rdR * 2);
         }
+        ctx.globalAlpha = 1;
       }
 
       // Siren lights — pixel-perfect over the lightbar on the sprite.

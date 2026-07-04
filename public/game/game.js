@@ -8297,14 +8297,16 @@ const DailySpin = (() => {
 
     spinFn();
 
-    // Safety net: if no prize within 4 s, try Redis fallback; abort after 6 s regardless
+    // Safety net: if no prize within 4 s, try Redis fallback; abort after 6 s regardless.
+    // Guard on _prize: once the prize has arrived the spin succeeded — a second
+    // POST would consume/get-rejected as a paid spin and must never fire.
     _safetyTimeout = setTimeout(() => {
-      if (_animPhase !== 'spinning' && _animPhase !== 'landing') return;
+      if (_prize || _animPhase !== 'spinning') return;
       const fetchFn = window.__SPIN_FETCH;
       if (fetchFn) fetchFn();
       // Hard abort 2 s later in case fetch also fails
       setTimeout(() => {
-        if (_animPhase !== 'spinning' && _animPhase !== 'landing') return;
+        if (_prize || (_animPhase !== 'spinning' && _animPhase !== 'landing')) return;
         cancelAnimationFrame(_animRaf);
         _animPhase = 'idle';
         _drawWheel();
@@ -8315,6 +8317,7 @@ const DailySpin = (() => {
 
   // ── Called when 'spin-prize' event fires from the React hook ─────────────
   function onPrize(prize) {
+    if (_safetyTimeout) { clearTimeout(_safetyTimeout); _safetyTimeout = null; } // spin succeeded — no fallback POST
     _prize = prize;
     _buildSegments(prize); // fix segment layout so winner sits at _winIndex
     // _animFrame's spinning branch will call _startLanding() on its next check
@@ -8416,6 +8419,10 @@ const DailySpin = (() => {
 
   // ── Called when server returns 402 (not enough coins) ────────────────────
   function onInsufficient() {
+    // A 402 while a prize is already in hand is the redundant safety-net POST
+    // being rejected as a paid spin — the first spin succeeded; let the wheel
+    // land and apply the prize instead of aborting the animation.
+    if (_prize) return;
     cancelAnimationFrame(_animRaf);
     _animPhase = 'idle';
     _drawWheel();

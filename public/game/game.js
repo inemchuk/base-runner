@@ -2094,7 +2094,8 @@ const Renderer = (() => {
   let canvas, ctx;
   let cameraY     = 0;
   let targetCamY  = 0;
-  let waterTime  = 0;   // animates water waves
+  let waterTime  = 0;   // animates water waves (constant-rate clock)
+  let waveTime   = 0;   // wave-phase clock: advances at dt * weather boost
   let walkTime   = 0;   // drives leg/arm swing animation
 
   // ── Weather system ───────────────────────────────────────
@@ -2806,6 +2807,7 @@ const Renderer = (() => {
     const dt_approx = (typeof dt === 'number' && dt > 0) ? Math.min(dt, 0.05) : 0.016;
     _frameDt   = dt_approx;
     waterTime  += dt_approx;
+    waveTime   += dt_approx * _waveBoost(); // integrate: speed changes smoothly, phase never jumps
     sirenPhase += dt_approx;
 
     // Advance walk cycle — only when player is jumping/moving
@@ -3651,24 +3653,32 @@ const Renderer = (() => {
 
   const CAR_COLORS = ['#E53935','#1E88E5','#43A047','#FB8C00','#8E24AA','#00ACC1'];
 
+  // Weather-dependent wave boost: rain 1.2x, storm 1.8x, wind 1.3x.
+  // Feeds wave amplitude AND the waveTime clock rate. Never multiply an
+  // absolute time by this — the phase would jump by waterTime*Δboost per
+  // frame whenever weatherRatio ramps (waves visibly thrash during fades).
+  function _waveBoost() {
+    let v = 0;
+    if (weatherState === 1) v = 1.2;
+    else if (weatherState === 3) v = 1.8;
+    else if (weatherState === 4) v = 1.3;
+    return 1 + Math.min(weatherRatio, 1) * v;
+  }
+
   function drawWaterEffect(rowY, rowIdx) {
-    const W  = COLS * CELL;
-    const wt = waterTime;
+    const W   = COLS * CELL;
+    const wt  = waterTime; // constant clock — glints/shimmer
+    const wvt = waveTime;  // weather-integrated clock — wave phase
     const salt = ((rowIdx || 0) * 137) % W; // per-row offset — no vertical glint columns
 
-    // Weather-dependent wave boost: rain 1.2x, storm 1.8x, wind 1.3x
-    let wBoostVal = 0;
-    if (weatherState === 1) wBoostVal = 1.2;
-    else if (weatherState === 3) wBoostVal = 1.8;
-    else if (weatherState === 4) wBoostVal = 1.3;
-    const wBoost = 1 + Math.min(weatherRatio, 1) * wBoostVal;
+    const wBoost = _waveBoost(); // amplitude only; speed boost lives in waveTime
     const waveStep  = 4;
 
     const allWaves = [
-      { yOff: 10, amp: 3.5 * wBoost, freq: 0.045, speed: 0.9  * wBoost, alpha: 0.22, h: 3 },
-      { yOff: 36, amp: 4   * wBoost, freq: 0.038, speed: 0.75 * wBoost, alpha: 0.20, h: 3 },
-      { yOff: 22, amp: 2.5 * wBoost, freq: 0.055, speed: -0.6 * wBoost, alpha: 0.15, h: 2.5 },
-      { yOff: 50, amp: 2   * wBoost, freq: 0.06,  speed: -0.5 * wBoost, alpha: 0.13, h: 2 },
+      { yOff: 10, amp: 3.5 * wBoost, freq: 0.045, speed: 0.9,  alpha: 0.22, h: 3 },
+      { yOff: 36, amp: 4   * wBoost, freq: 0.038, speed: 0.75, alpha: 0.20, h: 3 },
+      { yOff: 22, amp: 2.5 * wBoost, freq: 0.055, speed: -0.6, alpha: 0.15, h: 2.5 },
+      { yOff: 50, amp: 2   * wBoost, freq: 0.06,  speed: -0.5, alpha: 0.13, h: 2 },
     ];
 
     // Wave color — boost alpha at night so waves stay visible
@@ -3682,7 +3692,7 @@ const Renderer = (() => {
       ctx.beginPath();
       ctx.moveTo(0, baseY);
       for (let x = 0; x <= W; x += waveStep) {
-        const waveY = baseY + Math.sin(x * w.freq + wt * w.speed) * w.amp;
+        const waveY = baseY + Math.sin(x * w.freq + wvt * w.speed) * w.amp;
         ctx.lineTo(x, waveY);
       }
       ctx.lineTo(W, baseY + w.h + w.amp);

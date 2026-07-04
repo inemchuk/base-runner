@@ -2346,6 +2346,7 @@ const Renderer = (() => {
   let nightRatio  = 0;   // current blend value
   let nightTarget = 0;   // target (0 or 1)
   let _now        = 0;   // cached Date.now() — set once per draw(), shared by all sub-functions
+  let _frameDt    = 0.016; // cached frame delta — set once per draw(), for weather sub-draws
 
   // Call this every frame from main.js with current score
   let _lastNightScore = -1;
@@ -2779,6 +2780,7 @@ const Renderer = (() => {
 
     // Real frame delta from the game loop; clamped, with a fallback for stray calls
     const dt_approx = (typeof dt === 'number' && dt > 0) ? Math.min(dt, 0.05) : 0.016;
+    _frameDt   = dt_approx;
     waterTime  += dt_approx;
     sirenPhase += dt_approx;
 
@@ -2792,13 +2794,23 @@ const Renderer = (() => {
     if (weatherRatio < 0.005) weatherRatio = 0; // snap to zero — stop residual work
     if (pendingWeather !== null && weatherRatio === 0) _applyWeatherState(pendingWeather);
 
-    // Advance rain particles (rain + storm)
+    // Advance rain particles (rain + storm) — biome changes what "rain" is:
+    // snow biome gets slow flakes, desert gets a sideways sandstorm
     if (weatherState === 1 || weatherState === 3 || weatherRatio > 0.05) {
       initRain(weatherState === 3 ? STORM_RAIN_COUNT : RAIN_COUNT);
+      const pMode = _precipBiome();
       for (const p of rainParticles) {
-        p.y += p.speed * dt_approx;
-        // Storm: add horizontal drift
-        if (weatherState === 3) p.x += 0.02 * dt_approx;
+        if (pMode === 'snow') {
+          p.y += p.speed * 0.35 * dt_approx;
+          if (weatherState === 3) p.x += 0.03 * dt_approx; // blizzard drift
+        } else if (pMode === 'desert') {
+          p.x += p.speed * 1.1 * dt_approx;
+          p.y += p.speed * 0.25 * dt_approx;
+        } else {
+          p.y += p.speed * dt_approx;
+          // Storm: add horizontal drift
+          if (weatherState === 3) p.x += 0.02 * dt_approx;
+        }
         if (p.y > 1.05) { p.y = -0.05; p.x = Math.random(); }
         if (p.x > 1.05) { p.x = -0.05; }
       }
@@ -3021,6 +3033,12 @@ const Renderer = (() => {
       fogColor = lerpColor(FOG_DAY, FOG_NIGHT, nightRatio);
       playerRow = Player.getState().row;
     }
+    // Wet asphalt during rain/storm (sandstorms don't wet anything)
+    let wetRoadColor = null, wetRoadBlend = 0;
+    if (weatherRatio > 0.05 && (weatherState === 1 || weatherState === 3) && _precipBiome() !== 'desert') {
+      wetRoadColor = lerpColor('#33333e', '#12121e', nightRatio);
+      wetRoadBlend = Math.min(weatherRatio, 1) * (weatherState === 3 ? 0.45 : 0.3);
+    }
     for (const row of rows) {
       const y = World.rowToY(row.idx);
       if (y + CELL < visTop || y > visBot) continue;
@@ -3028,7 +3046,9 @@ const Renderer = (() => {
       if (row.type === 'grass') {
         drawGrassRow(row, y, bi);
       } else if (row.type === 'road') {
-        ctx.fillStyle = row.idx % 2 === 0 ? dcBiome('road0', bi) : dcBiome('road1', bi);
+        let roadColor = row.idx % 2 === 0 ? dcBiome('road0', bi) : dcBiome('road1', bi);
+        if (wetRoadColor) roadColor = lerpColor(roadColor, wetRoadColor, wetRoadBlend);
+        ctx.fillStyle = roadColor;
         ctx.fillRect(0, y, COLS * CELL, CELL);
         drawRoadMarkings(y, bi);
         drawCars(row, y);
@@ -3520,6 +3540,24 @@ const Renderer = (() => {
           ctx.fill();
         }
 
+        // === Wet-road reflection — vertical light smear under each headlight ===
+        if ((weatherState === 1 || weatherState === 3) && weatherRatio > 0.2 && _precipBiome() !== 'desert') {
+          const wet = Math.min(weatherRatio, 1);
+          ctx.fillStyle = 'rgb(255,240,190)';
+          for (const fl of lights.front) {
+            const { cx: fx, cy: fy } = toCanvas(fl.x, fl.y);
+            ctx.globalAlpha = hlAlpha * 0.10 * wet;
+            ctx.beginPath();
+            ctx.ellipse(fx, fy + lightR * 2.2, lightR * 0.9, lightR * 2.2, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.globalAlpha = hlAlpha * 0.05 * wet;
+            ctx.beginPath();
+            ctx.ellipse(fx, fy + lightR * 3.6, lightR * 0.6, lightR * 3.2, 0, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.globalAlpha = 1;
+        }
+
         // === Rear taillights — two layers ===
         for (const rl of lights.rear) {
           const { cx: rx, cy: ry } = toCanvas(rl.x, rl.y);
@@ -3724,31 +3762,103 @@ const Renderer = (() => {
 
   // ── Weather Effects ──────────────────────────────────────
 
+  // Which precipitation style the current biome gets (dominant side of a blend)
+  function _precipBiome() {
+    const bi = _currentBiomeInfo;
+    return (bi.blendT > 0.5 && bi.nextBiome) ? bi.nextBiome : bi.biome;
+  }
+
+  // Splash pool — short-lived ground rings where raindrops land
+  const SPLASH_MAX = 18;
+  let _splashes = [];
+
+  function _drawSplashes(W, H, intensity, isStorm) {
+    const cap = isStorm ? SPLASH_MAX : 10;
+    if (_splashes.length < cap && Math.random() < intensity * (isStorm ? 0.9 : 0.6)) {
+      const n = isStorm ? 2 : 1;
+      for (let i = 0; i < n && _splashes.length < cap; i++) {
+        _splashes.push({
+          x: Math.random(),
+          y: 0.45 + Math.random() * 0.53, // lower half — reads as "ground near the player"
+          t: 0,
+          life: 0.18 + Math.random() * 0.1,
+        });
+      }
+    }
+    ctx.strokeStyle = 'rgb(200,225,255)';
+    ctx.lineWidth = 1;
+    for (let i = _splashes.length - 1; i >= 0; i--) {
+      const s = _splashes[i];
+      s.t += _frameDt;
+      if (s.t >= s.life) { _splashes.splice(i, 1); continue; }
+      const k = s.t / s.life;
+      const r = 1.5 + k * 4;
+      ctx.globalAlpha = (1 - k) * 0.55 * intensity;
+      ctx.beginPath();
+      // Flattened expanding upper arc — a splash ring seen from above
+      ctx.ellipse(s.x * W, s.y * H, r, r * 0.45, 0, Math.PI, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+
   function drawRain(W, H, isStorm) {
     const intensity = Math.min(weatherRatio * 1.5, 1);
+    const pMode = _precipBiome();
     ctx.save();
 
-    // Rain darkening overlay (stronger for storm)
+    // Dim overlay — cold blue for rain, warm dust for desert, pale for snow
     const darkAlpha = isStorm ? intensity * 0.28 : intensity * 0.18;
-    ctx.fillStyle = `rgba(20,30,60,${darkAlpha})`;
+    ctx.fillStyle = pMode === 'desert' ? `rgba(90,70,30,${darkAlpha})`
+                  : pMode === 'snow'   ? `rgba(180,200,230,${darkAlpha * 0.6})`
+                  : `rgba(20,30,60,${darkAlpha})`;
     ctx.fillRect(0, 0, W, H);
 
-    // Rain streaks — storm has steeper angle and thicker drops
-    const tilt = isStorm ? 0.45 : 0.2;
-    ctx.strokeStyle = nightRatio > 0.5
-      ? `rgba(150,180,255,${intensity * 0.55})`
-      : `rgba(180,210,255,${intensity * 0.45})`;
+    if (pMode === 'snow') {
+      // Round flakes with sine sway; storm = blizzard (bigger flakes)
+      ctx.fillStyle = 'rgb(240,248,255)';
+      const sway = _now * 0.0012;
+      for (const p of rainParticles) {
+        const px = (p.x + Math.sin(sway * (0.6 + p.speed) + p.x * 12) * 0.015) * W;
+        const py = p.y * H;
+        const r  = (p.width || 1) * (isStorm ? 2.2 : 1.6);
+        ctx.globalAlpha = p.alpha * intensity;
+        ctx.beginPath();
+        ctx.arc(px, py, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (pMode === 'desert') {
+      // Sandstorm — near-horizontal sand streaks (no splashes, nothing to wet)
+      ctx.strokeStyle = 'rgb(214,178,110)';
+      for (const p of rainParticles) {
+        const px  = p.x * W;
+        const py  = p.y * H;
+        const len = p.len * H * (isStorm ? 1.6 : 1.1);
+        ctx.lineWidth = p.width || 1;
+        ctx.globalAlpha = p.alpha * intensity * 0.7;
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        ctx.lineTo(px - len * 2.6, py + len * 0.5);
+        ctx.stroke();
+      }
+    } else {
+      // Rain streaks — storm has steeper angle and thicker drops
+      const tilt = isStorm ? 0.45 : 0.2;
+      ctx.strokeStyle = nightRatio > 0.5
+        ? `rgba(150,180,255,${intensity * 0.55})`
+        : `rgba(180,210,255,${intensity * 0.45})`;
 
-    for (const p of rainParticles) {
-      const px  = p.x * W;
-      const py  = p.y * H;
-      const len = p.len * H * (isStorm ? 1.4 : 1);
-      ctx.lineWidth = p.width || 1;
-      ctx.globalAlpha = p.alpha * intensity;
-      ctx.beginPath();
-      ctx.moveTo(px, py);
-      ctx.lineTo(px - len * tilt, py + len);
-      ctx.stroke();
+      for (const p of rainParticles) {
+        const px  = p.x * W;
+        const py  = p.y * H;
+        const len = p.len * H * (isStorm ? 1.4 : 1);
+        ctx.lineWidth = p.width || 1;
+        ctx.globalAlpha = p.alpha * intensity;
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        ctx.lineTo(px - len * tilt, py + len);
+        ctx.stroke();
+      }
+      _drawSplashes(W, H, intensity, isStorm);
     }
 
     ctx.globalAlpha = 1;
@@ -3860,9 +3970,16 @@ const Renderer = (() => {
     ctx.save();
 
     const isNight = nightRatio > 0.5;
-    ctx.strokeStyle = isNight
-      ? `rgba(150,170,200,${intensity * 0.3})`
-      : `rgba(200,220,240,${intensity * 0.25})`;
+    if (_precipBiome() === 'desert') {
+      // Sand-tinted gusts instead of pale air streaks
+      ctx.strokeStyle = isNight
+        ? `rgba(140,115,70,${intensity * 0.35})`
+        : `rgba(214,184,120,${intensity * 0.3})`;
+    } else {
+      ctx.strokeStyle = isNight
+        ? `rgba(150,170,200,${intensity * 0.3})`
+        : `rgba(200,220,240,${intensity * 0.25})`;
+    }
     ctx.lineWidth = 1;
 
     for (const p of windParticles) {

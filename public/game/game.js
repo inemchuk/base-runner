@@ -2353,6 +2353,7 @@ const Renderer = (() => {
   let _nightOn = false;
 
   function setScore(score) {
+    _camScore = _dbgZoomForce !== null ? _dbgZoomForce : score;
     if (_dbgNightForce !== null) return; // debug override active
     if (score < 40) {
       _nightOn = false;
@@ -2754,13 +2755,36 @@ const Renderer = (() => {
     canvas.style.height = _viewH + 'px';
   }
 
+  // ── Dynamic camera zoom ───────────────────────────────────
+  // 1.25x close-up below score 100, smoothstep out to 1.0x by score 300.
+  // Curve is deliberately independent of World's difficulty smoothProgress
+  // so camera tuning never shifts silently with balance changes.
+  let _camScore     = 0;    // raw score, fed every frame via setScore()
+  let _zoomCur      = 1.25; // eased zoom factor, advanced once per frame
+  let _dbgZoomForce = null; // debug: non-null pins the curve to this score
+
+  function _zoomTarget() {
+    const t = Math.min(Math.max((_camScore - 100) / 200, 0), 1);
+    const s = t * t * (3 - 2 * t); // smoothstep
+    return 1.25 - 0.25 * s;
+  }
+
+  // Single source of truth for the world scale. The min(1,…) clamp keeps
+  // desktop unchanged and never pulls back wider than the 9-column field.
+  function getViewScale() {
+    const worldW = COLS * CELL;
+    return Math.min(1, ((_viewW || canvas.width) / worldW) * _zoomCur);
+  }
+
   function updateCamera(dt) {
     if (!canvas) return;
     const ps = Player.getState();
     const worldY  = World.rowToY(ps.row) + CELL / 2;
     // Учитываем масштаб: видимая высота в мировых координатах = высота вью / scale
-    const worldW = COLS * CELL;
-    const scale = Math.min(1, ((_viewW || canvas.width) / worldW) * 1.25);
+    // Ease zoom toward its score target; steps in-run are ~0.1%, the ease
+    // exists for run restarts (300→0 reads as a ~1.5s dive back in)
+    _zoomCur += (_zoomTarget() - _zoomCur) * Math.min(1, dt * 2);
+    const scale = getViewScale();
     const visibleH = (_viewH || canvas.height) / scale;
     targetCamY = worldY - visibleH * 0.65;
     // Не показывать пустоту ниже карты: камера не должна показывать область ниже нижних рядов

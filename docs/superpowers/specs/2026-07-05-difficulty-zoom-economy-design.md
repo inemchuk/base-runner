@@ -77,6 +77,17 @@ The world currently uses score-based difficulty in `public/game/game.js`.
 - Trains appear after score `20`, currently low chance and at least 25 rows
   apart.
 
+Existing independent danger schedulers:
+
+- trains are selected inside row generation with `trainChance` and
+  `lastTrainRow` spacing;
+- siren is a timer-driven event that locks a random road row with
+  `sirenLocked`, clears it, and injects a fast siren car.
+
+Any section-budget generator must reconcile these existing schedulers. They
+cannot remain fully independent while also counting against a section danger
+budget, or danger will be double-spent.
+
 ### Zoom
 
 The camera already has the right high-level design:
@@ -251,6 +262,9 @@ Budget rules:
   a stable river with a long log.
 - After any section with cost `10+`, force a lower-cost section or clear relief
   row soon after.
+- Train scheduling and siren scheduling must be coordinated with the section
+  budget. Either absorb them into the section planner or make their independent
+  schedulers reserve budget from the current/next section before firing.
 
 ## Lane Archetypes
 
@@ -409,15 +423,41 @@ Suggested ratings:
 
 Deferred coin-aware upgrades:
 
-- Deferred from V1. `sessionCoins` are currently sanitized but not fully
-  verified. Allowing coin-aware rating upgrades would let manipulated coin
-  values raise rating, XP multiplier, daily quality bonus, and `elite_runs`
-  progress up to the score-based plausibility cap.
+- `sessionCoins` are currently sanitized but not fully verified. Allowing
+  coin-aware rating upgrades would let manipulated coin values raise rating, XP
+  multiplier, daily quality bonus, and `elite_runs` progress up to the
+  score-based plausibility cap.
 - V1 run rating must be score-only, with new record used for XP record bonus
   only, not for rating upgrades.
 
 The rating should appear on game over as a concise result badge, not as a
 tutorial explanation.
+
+### Shared Rating Constants
+
+`public/game/game.js` is a vanilla browser script and cannot directly import
+`src/lib/economy/*.ts`. Rating and XP tables therefore have drift risk.
+
+This risk already exists for XP:
+
+- local fallback XP lives in `public/game/game.js`;
+- server XP lives in `src/lib/economy/levels.ts`.
+
+Implementation must avoid adding another silent duplicate table.
+
+Recommended approach:
+
+- define rating bands and XP multipliers in one canonical server-side module;
+- generate or verify a small browser-side constant for `game.js`;
+- add a static verifier that fails when JS and TS rating bands diverge.
+
+If generation is deferred, the first implementation plan must at least include
+a verifier comparing:
+
+- rating thresholds;
+- rating labels;
+- XP multipliers;
+- daily quality bonus values.
 
 ## XP Design
 
@@ -462,6 +502,33 @@ Daily quality bonus should be upgrade-based:
 This makes the first meaningful run of the day valuable without making repeated
 farming explode XP.
 
+Daily quality bonus requires new storage.
+
+Suggested state:
+
+```ts
+type DailyQualityState = {
+  utcDate: string;
+  bestRating: 'casual' | 'good' | 'great' | 'elite' | 'master';
+  claimedXp: number;
+}
+```
+
+Suggested storage key:
+
+```text
+economy_daily_quality:{address}:{utcDate}
+```
+
+or one normalized per-address state if easier to hydrate locally:
+
+```text
+economy_daily_quality:{address}
+```
+
+Phase 4 must add read/write helpers, Redis/memory fallback, normalization, and
+duplicate/upgrade protection. It is not only an XP formula change.
+
 ## Quest Design
 
 The current quest system has:
@@ -504,6 +571,25 @@ First recommended addition:
 
 - `elite_runs`, because it can be server-derived from accepted score and does
   not require trusting row-by-row client stats.
+
+`elite_runs` is not a drop-in row in the current quest table.
+
+Current quest code uses:
+
+- closed `QuestId` union;
+- fixed `QuestState = Record<QuestId, ...>`;
+- `defaultQuestState()` with explicit quest keys;
+- `QUEST_DEFS` with 8-level claimed arrays;
+- `updateQuestProgressFromRun(state, { score, sessionCoins })`, which does not
+  receive rating yet.
+
+Phase 5 must therefore:
+
+- extend the `QuestId` union;
+- update default state, normalization, hydration, claim handling, and tests;
+- compute rating before quest progress update;
+- extend `updateQuestProgressFromRun` to accept rating or an `isEliteRun` flag;
+- increment `elite_runs` from accepted server score/rating, not from client UI.
 
 ## Economy Interaction
 
@@ -701,17 +787,24 @@ High-skill player:
 - Generate sections with danger budget.
 - Keep existing pattern feel, but make spikes intentional and bounded.
 - Add relief rules after high-danger sections.
+- Reconcile the existing siren timer and train spacing with the section budget.
+  They must not double-spend danger. Either absorb them into section generation
+  or require the independent schedulers to reserve budget before they fire.
 
 ### Phase 3: Run Rating And XP
 
 - Add shared server/client run rating calculation.
 - In V1, compute rating strictly from accepted score bands.
+- Add a shared-constant generation or verification path so `game.js` and
+  server-side TS cannot silently drift on rating thresholds or multipliers.
 - Update XP multiplier to rating bands.
 - Add game over rating presentation.
 - Keep local fallback aligned with server formula.
 
 ### Phase 4: Daily Quality Bonus
 
+- Add new daily quality storage with Redis and memory fallback.
+- Store UTC date, best rating, and claimed XP delta/progress.
 - Store best rating claimed per UTC day.
 - Award upgrade-based daily XP bonus.
 - Show bonus only on game over when it changes.
@@ -720,6 +813,8 @@ High-skill player:
 ### Phase 5: Elite Runs Quest
 
 - Add server-derived `elite_runs` quest.
+- Extend the quest data model and `updateQuestProgressFromRun` signature; this
+  is not only a new `QUEST_DEFS` entry.
 - Rewards should follow Economy V1 pattern:
   - early coins/boosters;
   - mid Focus fragments;

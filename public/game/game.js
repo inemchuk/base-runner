@@ -16,6 +16,16 @@ function _uiIconHtml(name, className = '', alt = '') {
   return _imgHtml(`/game/ui-icons/${name}.png`, cls, alt, ' aria-hidden="true"');
 }
 
+const BOOSTER_ICON_SRCS = Object.freeze({
+  boost_magnet: '/game/boosters/coin_magnet.png',
+  boost_double: '/game/boosters/double_coins.png',
+  boost_shield: '/game/boosters/second_chance.png',
+});
+
+function _boosterIconHtml(className = '', alt = 'booster', id = 'boost_magnet') {
+  return _imgHtml(BOOSTER_ICON_SRCS[id] || BOOSTER_ICON_SRCS.boost_magnet, className, alt, ' aria-hidden="true"');
+}
+
 function _escapeHtml(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -147,10 +157,10 @@ const REWARD_CONTAINERS_LOCAL = Object.freeze({
 });
 
 const CHECKIN_REWARD_CYCLE = [
-  { coins: 20, icon: () => _imgHtml('/game/coin.png', 'ci-reward-icon-img', 'coins') },
-  { coins: 15, boosters: 1, icon: () => _uiIconHtml('coin-pouch', 'ci-reward-icon-img', 'coin pouch') },
+  { coins: 20, icon: () => _uiIconHtml('coin-pouch', 'ci-reward-icon-img', 'coins') },
+  { coins: 15, boosters: 1, icon: () => _boosterIconHtml('ci-reward-icon-img', 'booster', 'boost_magnet') },
   { fragments: 2, icon: () => _uiIconHtml('fragments', 'ci-reward-icon-img', 'fragments') },
-  { coins: 35, boosters: 1, icon: () => _uiIconHtml('starter-pack', 'ci-reward-icon-img', 'booster') },
+  { coins: 35, boosters: 1, icon: () => _boosterIconHtml('ci-reward-icon-img', 'booster', 'boost_double') },
   { coins: 20, fragments: 3, icon: () => _uiIconHtml('fragments', 'ci-reward-icon-img', 'fragments') },
   { coins: 50, xp: 75, icon: () => _uiIconHtml('xp', 'ci-reward-icon-img', 'xp') },
   { container: 'gear_crate', icon: () => _uiIconHtml('starter-pack', 'ci-reward-icon-img', 'gear crate') },
@@ -5593,7 +5603,7 @@ const UI = (() => {
     const parts = [];
     if (totals.coins) parts.push({ kind: 'coins', value: totals.coins, label: 'coins', icon: _imgHtml('/game/coin.png', 'ci-reward-chip-icon', 'coins') });
     if (totals.fragments) parts.push({ kind: 'frags', value: totals.fragments, label: 'frags', icon: _uiIconHtml('fragments', 'ci-reward-chip-icon', 'fragments') });
-    if (totals.boosters) parts.push({ kind: 'boost', value: totals.boosters, label: totals.boosters === 1 ? 'boost' : 'boosts', icon: _uiIconHtml('starter-pack', 'ci-reward-chip-icon', 'boosters') });
+    if (totals.boosters) parts.push({ kind: 'boost', value: totals.boosters, label: totals.boosters === 1 ? 'boost' : 'boosts', icon: _boosterIconHtml('ci-reward-chip-icon', 'boosters', 'boost_magnet') });
     if (totals.xp) parts.push({ kind: 'xp', value: totals.xp, label: 'XP', icon: _uiIconHtml('xp', 'ci-reward-chip-icon', 'xp') });
     return parts;
   }
@@ -5707,7 +5717,7 @@ const UI = (() => {
         claimBtn.disabled      = false;
         claimBtn.style.opacity = '1';
         claimBtn.style.display = '';
-        claimBtn.innerHTML     = `<span class="ci-claim-content">${todayReward.icon}<span class="ci-claim-copy">Claim</span>${_rewardChipsHtml(todayReward, 'ci-reward-chips-claim')}</span>`;
+        claimBtn.innerHTML     = `<span class="ci-claim-content"><span class="ci-claim-copy">Claim</span>${_rewardChipsHtml(todayReward, 'ci-reward-chips-claim')}</span>`;
       }
     } else {
       if (statusEl) statusEl.className = 'ci-status unavail';
@@ -7844,7 +7854,7 @@ const DailySpin = (() => {
   const DISPLAY_POOL = [
     { coin: true,        label: '15'   },
     { shirtImg: true,    label: 'Gear' },
-    { boosterBagImg: true, label: 'Frag' },
+    { fragmentImg: true, label: 'Frag' },
     { coin: true,        label: '35'   },
     { boosterBagImg: true, label: 'Boost' },
     { xpImg: true,       label: 'XP'   },
@@ -7861,9 +7871,11 @@ const DailySpin = (() => {
   let _hubImg    = null;   // preloaded /icon.png (game logo for wheel hub)
   let _shirtImg   = null;   // preloaded /game/shirt.png (random skin segment)
   let _boosterImg    = null;   // preloaded /game/trails.png (random trail segment)
-  let _boosterBagImg = null;   // preloaded /game/boosters.png (random booster segment)
+  let _boosterBagImg = null;   // preloaded booster reward icon
+  let _fragmentImg   = null;   // preloaded fragment reward icon
   let _xpImg         = null;   // preloaded XP reward icon
   let _fireImg       = null;   // preloaded fire utility icon
+  let _canvasLogicalSize = 0;
   let _segments  = [...DISPLAY_POOL];
   let _winIndex  = 0;
   let _prize     = null;
@@ -7912,8 +7924,13 @@ const DailySpin = (() => {
     // Preload booster bag icon once
     if (!_boosterBagImg) {
       _boosterBagImg = new Image();
-      _boosterBagImg.src = '/game/boosters.png';
+      _boosterBagImg.src = BOOSTER_ICON_SRCS.boost_magnet;
       _boosterBagImg.onload = () => { if (_animPhase === 'idle') _drawWheel(); };
+    }
+    if (!_fragmentImg) {
+      _fragmentImg = new Image();
+      _fragmentImg.src = '/game/ui-icons/fragments.png';
+      _fragmentImg.onload = () => { if (_animPhase === 'idle') _drawWheel(); };
     }
     if (!_xpImg) {
       _xpImg = new Image();
@@ -7937,15 +7954,24 @@ const DailySpin = (() => {
     const container = document.getElementById('game-container');
     const refW = container ? container.getBoundingClientRect().width : window.innerWidth;
     const size = Math.min(Math.floor(Math.min(refW, 360) * 0.82), 300);
-    _canvas.width  = size;
-    _canvas.height = size;
+    const dpr = Math.min(Math.max(window.devicePixelRatio || 1, 1), 2.5);
+    _canvasLogicalSize = size;
+    _canvas.style.width = `${size}px`;
+    _canvas.style.height = `${size}px`;
+    _canvas.width  = Math.round(size * dpr);
+    _canvas.height = Math.round(size * dpr);
+    if (_ctx) {
+      _ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      _ctx.imageSmoothingEnabled = true;
+      _ctx.imageSmoothingQuality = 'high';
+    }
   }
 
   // ── Wheel drawing ─────────────────────────────────────────────────────────
   function _drawWheel() {
     if (!_ctx || !_canvas) return;
-    const W  = _canvas.width;
-    const H  = _canvas.height;
+    const W  = _canvasLogicalSize || _canvas.width;
+    const H  = _canvasLogicalSize || _canvas.height;
     const cx = W / 2;
     const cy = H / 2;
     const r  = cx * 0.88;
@@ -8034,6 +8060,9 @@ const DailySpin = (() => {
       } else if (seg.boosterBagImg && _boosterBagImg && _boosterBagImg.complete && _boosterBagImg.naturalWidth) {
         const bs = iconSz * 1.12;
         _ctx.drawImage(_boosterBagImg, -bs / 2, iconY - bs / 2, bs, bs);
+      } else if (seg.fragmentImg && _fragmentImg && _fragmentImg.complete && _fragmentImg.naturalWidth) {
+        const fs = iconSz * 1.12;
+        _ctx.drawImage(_fragmentImg, -fs / 2, iconY - fs / 2, fs, fs);
       } else if (seg.xpImg && _xpImg && _xpImg.complete && _xpImg.naturalWidth) {
         const xs = iconSz * 1.16;
         _ctx.drawImage(_xpImg, -xs / 2, iconY - xs / 2, xs, xs);
@@ -8099,7 +8128,7 @@ const DailySpin = (() => {
       return { boosterBagImg: true, label: 'Boost' };
     }
     if (prize.type === 'fragments' || prize.type === 'fragment_burst') {
-      return { boosterBagImg: true, label: 'Frag' };
+      return { fragmentImg: true, label: 'Frag' };
     }
     if (prize.type === 'xp') {
       return { xpImg: true, label: 'XP' };
@@ -8340,7 +8369,7 @@ const DailySpin = (() => {
 
     if (cardEl && iconEl && labelEl && _prize) {
       const IMG = (src, size) =>
-        `<img src="${src}" style="width:${size};height:${size};object-fit:contain;image-rendering:pixelated;">`;
+        `<img src="${src}" style="width:${size};height:${size};object-fit:contain;">`;
 
       if (_prize.type === 'skin') {
         const src = _prize._resolvedSkinSprite || '/game/shirt.png';
@@ -8352,8 +8381,9 @@ const DailySpin = (() => {
         iconEl.innerHTML = IMG(src, '64px');
         labelEl.textContent = _prize._resolvedTrailName ? `${_prize._resolvedTrailName} trail!` : 'New trail!';
       } else if (_prize.type === 'booster') {
-        const BOOST_SP = { boost_magnet: '/game/boosters/coin_magnet.png', boost_double: '/game/boosters/double_coins.png', boost_shield: '/game/boosters/second_chance.png' };
-        const src = _prize._resolvedItemId && BOOST_SP[_prize._resolvedItemId] ? BOOST_SP[_prize._resolvedItemId] : '/game/boosters.png';
+        const src = _prize._resolvedItemId && BOOSTER_ICON_SRCS[_prize._resolvedItemId]
+          ? BOOSTER_ICON_SRCS[_prize._resolvedItemId]
+          : BOOSTER_ICON_SRCS.boost_magnet;
         iconEl.innerHTML = IMG(src, '56px');
         labelEl.textContent = _prize._resolvedBoosterName ? `${_prize._resolvedBoosterName}!` : 'New booster!';
       } else if (_prize.type === 'fragments' || _prize.type === 'fragment_burst') {

@@ -2604,7 +2604,7 @@
       font-size: 2.4rem; line-height: 1;
     }
     .spin-prize-icon img {
-      width: 64px; height: 64px; object-fit: contain; image-rendering: pixelated;
+      width: 64px; height: 64px; object-fit: contain; image-rendering: auto;
     }
     .spin-prize-label {
       font-size: 1rem; font-weight: 700; color: #fff;

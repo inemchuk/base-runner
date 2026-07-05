@@ -785,7 +785,7 @@ const World = (() => {
     { w: CELL * 1.5, h: CELL * 0.72, sprite: 'green_taxi',  weight: 10 },
     { w: CELL * 1.5, h: CELL * 0.72, sprite: 'taxi',        weight: 8  },
     { w: CELL * 1.5, h: CELL * 0.72, sprite: 'police',      weight: 4  },
-    { w: CELL * 1.45, h: CELL * 0.72, sprite: 'blue_hatchback',  weight: 4  },
+    { w: CELL * 1.75, h: CELL * 0.72, sprite: 'blue_hatchback',  weight: 4  },
     { w: CELL * 1.60, h: CELL * 0.72, sprite: 'black_suv',       weight: 3  },
     { w: CELL * 1.65, h: CELL * 0.72, sprite: 'silver_minivan',  weight: 3  },
     { w: CELL * 1.80, h: CELL * 0.72, sprite: 'orange_pickup',   weight: 3  },

@@ -145,11 +145,18 @@ The intended stack:
 
 ```text
 Zoom opens vision
-→ difficulty adds route choice
-→ route choice creates better runs
+→ difficulty adds survival route topology
+→ optional reward routes add risk/reward decisions
+→ better routing creates better runs
 → better runs earn coins, XP, and quest progress
 → quests/levels/check-in/spin grant fragments, crates, boosters, and cosmetics
 ```
+
+Key design risk: if route choice only exists through optional coin routes, the
+high-score game remains mostly a reaction test for players who are simply
+trying to survive. Survival route topology must therefore land before reward
+risk routes. Risk coin routes can enhance the system, but they cannot be the
+only source of meaningful choice.
 
 ## Difficulty Stages
 
@@ -159,9 +166,9 @@ Use score bands that align with the camera curve and existing progression.
 | --- | ---: | --- | --- |
 | Onboarding | 0-39 | close `1.25x` | Teach lanes, avoid speed spikes |
 | Baseline | 40-99 | close `1.25x` | Add light density and first trains |
-| Transition | 100-149 | pulling back | Start route planning, still fair speeds |
-| Skill Mode | 150-299 | wider every run | Hard patterns, risk routes, more choices |
-| Mastery | 300+ | full field | Pattern mastery, capped speed, prestige |
+| Transition | 100-149 | pulling back | Start survival route planning |
+| Skill Mode | 150-299 | wider every run | Hard patterns, survival choices, first reward routes |
+| Mastery | 300+ | full field | Multi-row planning, capped speed, tension ladder |
 
 ### Onboarding: 0-39
 
@@ -192,7 +199,10 @@ Purpose: camera starts widening, so route choice can begin.
 
 Rules:
 
-- Add early risk/reward coin routes.
+- Add early survival route topology: at least some sections should have more
+  than one viable line through the next 2-3 rows.
+- Add only light reward routes; they should not carry the main route-choice
+  promise yet.
 - Allow simple lane combos, but do not stack `rush + train + water chain`.
 - Water can use shorter logs, but must keep a readable landing option.
 - Player should start noticing multiple viable paths.
@@ -204,7 +214,8 @@ Purpose: this is the main arcade skill band.
 Rules:
 
 - Hard pattern pool is allowed.
-- Risk coin routes become meaningful.
+- Survival route topology becomes the main source of strategy.
+- Reward routes become meaningful, but remain optional.
 - Trains can appear as part of a section budget.
 - `rush` is allowed, but speed and siren spikes must be capped.
 - Consecutive water rows can appear, but need fairness guarantees.
@@ -216,9 +227,40 @@ Purpose: high-score play should be deep, not unreadable.
 Rules:
 
 - Do not keep increasing raw speeds after the intended cap.
-- Increase variety through lane archetypes and section composition.
+- Increase tension through lane archetypes, section composition, reduced relief,
+  and multi-row commitment.
 - Use prestige quests and run rating rather than extra fragment farming.
 - Keep deaths readable: the player should understand what mistake happened.
+
+### Mastery Tension Ladder: 300+
+
+Speed caps protect readability, but capped speed removes the easiest tension
+ramp. Post-300 gameplay needs an explicit tension ladder so high-skill runs do
+not flatten into the same-feeling loop.
+
+Suggested ladder:
+
+| Band | Tension Source |
+| --- | --- |
+| 300-449 | Full-field planning, more 2-3 row commitments |
+| 450-649 | Less relief, more cross-type sections, stricter timing windows |
+| 650+ | Rare high-budget sections, longer commitment, endurance pressure |
+
+Post-300 tension should grow through:
+
+- longer sections before relief;
+- fewer obviously safe center-column paths;
+- road/water/train composition that asks the player to plan 2-4 moves ahead;
+- directional water traps with a visible escape option;
+- occasional high-budget sections preceded or followed by readable relief;
+- prestige/rating/quest goals that recognize survival depth.
+
+Post-300 tension should not grow through:
+
+- uncapped car speed;
+- surprise siren/train stacking outside budget;
+- water rows with no readable landing;
+- coin routes being the only interesting branch.
 
 ## Difficulty Budget
 
@@ -241,6 +283,7 @@ Suggested row costs:
 | Stable river | 1 | Long logs, readable center |
 | Short-log river | 2 | Shorter logs, fair coverage |
 | River chain row | 3 | Used in 2-3 water sequences |
+| Survival branch | +1 | Adds another viable route through the section |
 | Risk coin route | +1 | Adds coins to a harder path |
 
 Suggested section budgets:
@@ -265,6 +308,16 @@ Budget rules:
 - Train scheduling and siren scheduling must be coordinated with the section
   budget. Either absorb them into the section planner or make their independent
   schedulers reserve budget from the current/next section before firing.
+
+Survival route rules:
+
+- Survival branches must be useful without coins.
+- At score `150+`, a meaningful share of sections should offer at least two
+  viable lines through the section.
+- At score `300+`, some sections should ask the player to choose a commitment
+  line for 2-4 moves, but every line must remain readable.
+- Reward routes may overlap with survival branches, but a section should still
+  be interesting when the player ignores coins.
 
 ## Lane Archetypes
 
@@ -369,6 +422,10 @@ Recommendations:
 
 Risk routes are the bridge between gameplay difficulty and economy.
 
+They are not the foundation of route choice. Survival route topology must work
+first. Risk routes add economic texture on top of a section that is already
+interesting to survive.
+
 They should:
 
 - appear mostly after score `100`;
@@ -384,6 +441,10 @@ Suggested design:
 - Transition stage can add small optional coin lines worth `+1-2 coins`.
 - Skill stage can add risk clusters worth `+2-5 coins` if routed well.
 - Mastery stage can add longer routes, but not unlimited coin farming.
+
+If risk routes do not test well, they can be reduced or delayed without
+invalidating high-score gameplay. The survival route topology from Phase 2 is
+the required core.
 
 Booster interaction:
 
@@ -740,6 +801,10 @@ Metrics to review:
 - average session coins by score band;
 - XP/day by player type;
 - percentage of runs reaching 40/80/150/300;
+- percentage of generated `150+` and `300+` sections with 2+ viable survival
+  lines;
+- player-selected lateral movement rate by score band;
+- repeated-death sections by generated archetype/budget;
 - booster use rate by rating;
 - quest completion pacing.
 
@@ -785,11 +850,33 @@ High-skill player:
 
 - Introduce explicit lane archetypes.
 - Generate sections with danger budget.
+- Add survival route topology as a first-class output of section generation.
+  This phase must prove route choice without relying on reward/risk coins.
 - Keep existing pattern feel, but make spikes intentional and bounded.
 - Add relief rules after high-danger sections.
 - Reconcile the existing siren timer and train spacing with the section budget.
   They must not double-spend danger. Either absorb them into section generation
   or require the independent schedulers to reserve budget before they fire.
+- Add a post-300 tension ladder based on section length, relief spacing, and
+  multi-row commitment instead of uncapped speed.
+
+### Phase 2B: Route Topology Playtest Gate
+
+Before XP/rating/reward work depends on the new difficulty model, verify that
+Phase 2 actually changes high-score play.
+
+Pass criteria:
+
+- At score `150+`, sampled sections regularly expose at least 2 viable survival
+  lines.
+- At score `300+`, playtest runs feel more planning-heavy than reaction-only.
+- Score `300-800` does not feel flat after speed caps are applied.
+- Deaths remain explainable: bad timing, bad line choice, or overcommitting,
+  not unreadable speed or invisible water.
+- Risk coin routes are not counted as the only meaningful branch in a section.
+
+If this gate fails, do not proceed by adding more economy rewards. Tune section
+topology first.
 
 ### Phase 3: Run Rating And XP
 
@@ -823,8 +910,9 @@ High-skill player:
 
 ### Phase 6: Risk Coin Routes
 
-- Add optional coin routes after score `100`.
-- Add stronger risk routes after score `150`.
+- Add optional reward routes after score `100` on top of already-working
+  survival topology.
+- Add stronger risk coin routes after score `150`.
 - Tune session coin income against existing coin budget.
 - Verify double coins and magnet do not overinflate daily economy.
 
@@ -854,11 +942,19 @@ High-skill player:
    - Recommendation: add only after fairness/caps land, then tune from
      session coin telemetry.
 
+6. Post-300 tension:
+   - Recommendation: do not rely on speed or reward routes. Validate section
+     topology with playtests before adding more economy on top.
+
 ## Acceptance Criteria
 
 - At score `<100`, the game remains readable in close camera.
-- At score `150+`, the player gets more route choices, not just faster deaths.
-- At score `300+`, difficulty feels like mastery and planning, not unfair speed.
+- At score `150+`, the player gets more survival route choices, not just faster
+  deaths or optional coin branches.
+- At score `300+`, difficulty feels like mastery and planning, not unfair speed
+  and not flat variety.
+- Risk coin routes enhance economy but are not the only source of high-score
+  route choice.
 - Water deaths are explainable and not caused by empty/unreadable first landing.
 - Raw speed spikes are capped.
 - XP/day increases for better play but does not explode for grinders.

@@ -4,11 +4,12 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "npm run rating:verify",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "rating:sync": "node scripts/sync-rating-config.mjs",
-    "rating:verify": "npm run rating:sync && node scripts/verify-rating-config.mjs"
+    "rating:verify": "node scripts/verify-rating-config.mjs"
   },
   "dependencies": {
     "@base-org/account": "^2.5.2",

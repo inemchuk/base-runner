@@ -25,21 +25,37 @@ Branch: codex/economy-v1-local-focus
 
 ## Phase 2 Implementation Notes
 
-- Danger and complexity budgets implemented: yes — `SECTION_BUDGETS` per stage
-  (onboarding..mastery) in `game.js`; sections carry `dangerBudget` and
-  `complexityBudget` as separate axes.
-- Trains reserve danger: yes — a train requires `dangerBudget >= 4` in the
-  active section and deducts `ROW_DANGER_COST.train` (4) when spawned.
-- Siren reserves danger: yes — a siren adds `sectionDangerReserved += 3` to its
-  road row and rows with reservation > 2 are excluded from future siren picks.
-- Relief floor implemented: yes — after 5 consecutive road/water rows the next
-  row is forced to grass; additionally at most two consecutive hard sections
-  before a medium relief section.
-- Route topology metadata present: yes — every generated row is stamped with
-  `sectionId`, `sectionStage`, `sectionFeatures` (`survival_branch` at 45% for
-  transition+, `commitment_2_4` at 35% for mastery, `relief` when forced).
+- Danger and complexity budgets implemented: partially — `SECTION_BUDGETS` per
+  stage in `game.js`; every generated row deducts its `ROW_DANGER_COST` from
+  the section's `dangerBudget`, and the train gate reads it. `complexityBudget`
+  is carried but not yet consumed (reserved for Task 10 route features).
+- Trains reserve danger: yes — a train requires `dangerBudget >=
+  ROW_DANGER_COST.train` (4) remaining in the active section, is blocked in
+  relief sections, and its cost is deducted like any other row. Note: with the
+  25-row `lastTrainRow` spacing the budget gate binds mostly in
+  onboarding/baseline sections (budget 4-6), rarely in skill/mastery.
+- Siren reserves danger: row-level dedup, not section accounting — a siren adds
+  `sectionDangerReserved += 3` to its road row; rows with reservation > 2 are
+  excluded from future siren picks. Behavior change vs before: each road row
+  hosts at most one siren per run (previously an idle player got repeat sirens
+  on the same rows).
+- Relief floor implemented: as a future-guard — a dedicated `streakDanger`
+  counter (road+water, not reset by type switch) forces grass after 5
+  consecutive dangerous rows. Current patterns end in grass and max out at 4
+  consecutive dangerous rows, so the floor only binds if longer/mixed patterns
+  are added later. The *active* relief mechanism is the section cadence: at
+  most two consecutive hard sections, then a medium relief section (no
+  features, no trains).
+- Route topology metadata present: yes — every row (including init grass rows)
+  is stamped with `sectionId`, `sectionStage`, `sectionFeatures`
+  (`survival_branch` at 45% for transition+, `commitment_2_4` at 35% for
+  mastery, `relief` when forced; relief sections roll no other features).
 - Speed caps from Task 3 (rush max 170->150, siren max ~425->300 px/s) are real
   gameplay softening — must be felt-checked in the Phase 2B playtest below.
+- Pool mapping change to felt-check: scores 50-100 now get simple patterns
+  (previously medium) — check that 50-100 does not feel flat.
+- Cadence to felt-check: hard/hard/relief softens sustained mastery pressure —
+  check that 300+ still feels demanding.
 
 ## Manual Phone Checks
 

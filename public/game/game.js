@@ -947,12 +947,12 @@ const World = (() => {
 
     // Ряды ниже старта — заполняют экран на мобиле (без пустоты снизу)
     for (let i = -12; i < 0; i++) {
-      rows.push(makeGrassRow(i));
+      rows.push(_stampInitSection(makeGrassRow(i)));
     }
 
     // 3 стартовых ряда — трава (безопасная зона)
     for (let i = 0; i < 3; i++) {
-      rows.push(makeGrassRow(i));
+      rows.push(_stampInitSection(makeGrassRow(i)));
     }
 
     // Процедурные ряды вперёд
@@ -1000,7 +1000,7 @@ const World = (() => {
   //     не может начинаться с grass (проверяется через lastType)
   const PATTERNS = {
 
-    // Simple (score < 50): 2–3 опасных ряда + grass
+    // Simple (onboarding/baseline, score < 100): 2–3 опасных ряда + grass
     simple: [
       ['road',  'road',  'grass'],                          // S1
       ['road',  'water', 'grass'],                          // S2
@@ -1008,7 +1008,7 @@ const World = (() => {
       ['road',  'road',  'water', 'grass'],                 // S4
     ],
 
-    // Medium (score 50–150): 3–4 опасных ряда + grass
+    // Medium (transition, score 100–150; также relief-передышка): 3–4 опасных ряда + grass
     medium: [
       ['road',  'road',  'road',  'grass'],                 // M1
       ['road',  'water', 'road',  'grass'],                 // M2
@@ -1017,7 +1017,7 @@ const World = (() => {
       ['road',  'road',  'water', 'road',  'grass'],        // M5
     ],
 
-    // Hard (score > 150): 4–5 опасных рядов + grass
+    // Hard (skill/mastery, score >= 150): 4–5 опасных рядов + grass
     hard: [
       ['road',  'road',  'road',  'water', 'grass'],        // H1
       ['water', 'road',  'water', 'road',  'grass'],        // H2
@@ -1056,6 +1056,7 @@ const World = (() => {
   let streakRoad    = 0;
   let streakWater   = 0;
   let streakGrass   = 0;
+  let streakDanger  = 0;        // road+water подряд (не сбрасывается при смене типа)
   let lastType      = 'grass';  // тип последнего выданного ряда
 
   let activeSection     = null; // секция, чьи ряды сейчас в patternBuffer
@@ -1084,10 +1085,12 @@ const World = (() => {
 
     const rows = [...randFrom(pool)];
 
-    if ((stage === 'transition' || stage === 'skill' || stage === 'mastery') && Math.random() < 0.45) {
+    // Секция-передышка остаётся чистой: без веток и обязательств
+    const isRelief = features.includes('relief');
+    if (!isRelief && (stage === 'transition' || stage === 'skill' || stage === 'mastery') && Math.random() < 0.45) {
       features.push('survival_branch');
     }
-    if (stage === 'mastery' && Math.random() < 0.35) {
+    if (!isRelief && stage === 'mastery' && Math.random() < 0.35) {
       features.push('commitment_2_4');
     }
 
@@ -1111,10 +1114,11 @@ const World = (() => {
   }
 
   function updateStreaks(type) {
-    streakRoad  = type === 'road'  ? streakRoad  + 1 : 0;
-    streakWater = type === 'water' ? streakWater + 1 : 0;
-    streakGrass = type === 'grass' ? streakGrass + 1 : 0;
-    lastType    = type;
+    streakRoad   = type === 'road'  ? streakRoad  + 1 : 0;
+    streakWater  = type === 'water' ? streakWater + 1 : 0;
+    streakGrass  = type === 'grass' ? streakGrass + 1 : 0;
+    streakDanger = type === 'road' || type === 'water' ? streakDanger + 1 : 0;
+    lastType     = type;
   }
 
   // Заполнить буфер рядами одной секции
@@ -1129,8 +1133,11 @@ const World = (() => {
         type = 'road';
       }
 
-      // Пол передышки: после 5 опасных рядов подряд принудительный grass
-      if (streakRoad + streakWater >= 5 && type !== 'grass') {
+      // Пол передышки: после 5 опасных рядов подряд принудительный grass.
+      // Future-guard: текущие паттерны заканчиваются на grass и дают максимум
+      // 4 опасных ряда подряд — сработает только на более длинных/смешанных
+      // паттернах (например road,water,road,water,road на стыке секций).
+      if (streakDanger >= 5 && type !== 'grass') {
         type = 'grass';
       }
 
@@ -1155,10 +1162,20 @@ const World = (() => {
     streakRoad        = 0;
     streakWater       = 0;
     streakGrass       = 0;
+    streakDanger      = 0;
     lastType          = 'grass';
     activeSection     = null;
     rowSectionId      = 0;
     highSectionStreak = 0;
+  }
+
+  // Стартовые ряды создаются вне секций — штампуем единообразную форму,
+  // чтобы потребители метаданных не проверяли undefined
+  function _stampInitSection(row) {
+    row.sectionId       = null;
+    row.sectionStage    = 'onboarding';
+    row.sectionFeatures = [];
+    return row;
   }
 
   // Создать ряд нужного типа
@@ -1167,14 +1184,14 @@ const World = (() => {
     let row;
     if (type === 'grass') { row = makeGrassRow(rowIdx); }
     else if (type === 'road') {
-      // Поезд: только если score >= 20, давно не было поезда
-      // и в бюджете опасности секции хватает на поезд (стоимость 4)
-      const trainAllowedByBudget = !activeSection || activeSection.dangerBudget >= 4;
-      const trainChance = currentScore >= 20 && trainAllowedByBudget ? 0.04 : 0;
+      // Поезд: только если score >= 20, давно не было поезда,
+      // секция не передышка и в бюджете опасности хватает на поезд (4)
+      const inRelief = activeSection && activeSection.features.includes('relief');
+      const trainAllowedByBudget = !activeSection || activeSection.dangerBudget >= ROW_DANGER_COST.train;
+      const trainChance = currentScore >= 20 && trainAllowedByBudget && !inRelief ? 0.04 : 0;
       const farEnough   = rowIdx - lastTrainRow >= 25;
       if (farEnough && Math.random() < trainChance) {
         lastTrainRow = rowIdx;
-        if (activeSection) activeSection.dangerBudget -= ROW_DANGER_COST.train;
         row = makeTrainRow(rowIdx);
       } else {
         row = makeRoadRow(rowIdx);
@@ -1182,6 +1199,8 @@ const World = (() => {
     } else {
       row = makeWaterRow(rowIdx);
     }
+    // Каждый ряд списывает свою стоимость с бюджета опасности секции
+    if (activeSection) activeSection.dangerBudget -= ROW_DANGER_COST[row.type] || 0;
     // Stamp biome info
     const bi = getBiomeForRow(rowIdx);
     row.biome     = bi.biome;

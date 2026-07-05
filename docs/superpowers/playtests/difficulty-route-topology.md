@@ -8,7 +8,7 @@ Branch: codex/economy-v1-local-focus
 - Economy V1 prerequisite checked: `src/app/api/score/submit/route.ts` wires `updateQuestProgressFromRun`, `updateLevelProgressFromRun`, `writeQuestState`, and `writeLevelState`; `src/app/api/quests/route.ts` returns `ignored: true` from `POST`.
 - `/api/quests POST` cannot overwrite quest progress: it reads stored quest state only and marks the sync response as ignored.
 - `/api/score/submit` updates quests and levels: it loads stored quest and level state, applies run progress, and persists both states together.
-- Current best known issues: no blocking prerequisite issues found in the checked routes; deeper phase 2B balance data still needs manual playtest sampling.
+- Current best known issues: route-level prerequisites are green, but baseline verification is not fully green; `npm run lint` failed on pre-existing repo issues (`prefer-const` in `src/app/api/coins/leaderboard/route.ts` and multiple `no-explicit-any` errors in hook files), and `npm run build` failed in the sandbox with `Failed to write app endpoint /page` and `binding to a port - Operation not permitted (os error 1)`. Deeper phase 2B balance data still needs manual playtest sampling.
 
 ## Phase 2B Gate
 

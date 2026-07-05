@@ -1,5 +1,6 @@
 import type { CraftableType } from './config.ts';
 import type { RewardBundle } from './config.ts';
+import { getRatingXpMultiplier, getRunRating, type RunRating } from './rating.ts';
 
 export interface LevelRewardBase {
   label: string;
@@ -30,6 +31,7 @@ export interface RunXpBreakdown {
   multi: number;
   streakBonus: number;
   recordBonus: number;
+  rating: RunRating;
 }
 
 export const LEVEL_REWARDS: Record<number, LevelReward> = {
@@ -78,13 +80,14 @@ export function calculateRunXp(run: RunLevelProgress): { earned: number; breakdo
   const score = Math.max(0, Math.floor(Number(run.score) || 0));
   const sessionCoins = sanitizeRunCoins(score, run.sessionCoins);
   const baseXp = score + sessionCoins * 2;
-  const multi = score >= 150 ? 1.2 : score >= 75 ? 1.1 : 1.0;
+  const rating = getRunRating(score);
+  const multi = getRatingXpMultiplier(rating);
   const base = Math.round(baseXp * multi);
   const streakBonus = Math.min(Math.max(0, Math.floor(Number(run.checkinStreak) || 0)) * 2, 20);
   const recordBonus = run.isNewRecord ? Math.round(base * 0.5) : 0;
   return {
     earned: Math.max(0, base + streakBonus + recordBonus),
-    breakdown: { base, multi, streakBonus, recordBonus },
+    breakdown: { base, multi, streakBonus, recordBonus, rating },
   };
 }
 

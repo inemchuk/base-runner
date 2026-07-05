@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createHmac } from 'crypto';
 import { updateLevelProgressFromRun } from '@/lib/economy/levels.ts';
 import { updateQuestProgressFromRun } from '@/lib/economy/quests.ts';
+import { getRatingDef, getRunRating } from '@/lib/economy/rating.ts';
 import {
   readCheckinRewardState,
   readLevelState,
@@ -135,6 +136,8 @@ export async function POST(req: NextRequest) {
       readLevelState(addr),
       readCheckinRewardState(addr),
     ]);
+    const rating = getRunRating(score);
+    const ratingDef = getRatingDef(rating);
     const nextQuestState = updateQuestProgressFromRun(questState, { score, sessionCoins });
     const levelUpdate = updateLevelProgressFromRun(levelState, {
       score,
@@ -152,6 +155,7 @@ export async function POST(req: NextRequest) {
       ok: true,
       quests: nextQuestState,
       levels: levelUpdate.state,
+      rating: { id: ratingDef.id, label: ratingDef.label },
       xp: {
         earned: levelUpdate.xpEarned,
         breakdown: levelUpdate.breakdown,

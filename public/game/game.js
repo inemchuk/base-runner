@@ -5550,11 +5550,22 @@ const UI = (() => {
   }
 
   // ===== Показать экран Game Over =====
-  function showGameOver(score, best, xpEarned, xpBreakdown) {
+  function showGameOver(score, best, xpEarned, xpBreakdown, rating) {
     const goScore = document.getElementById('go-score');
     const goBest  = document.getElementById('go-best');
     if (goScore) goScore.textContent = score;
     if (goBest)  goBest.textContent  = best;
+
+    // Rating badge (скрыт для casual — без бейджа за низкий счёт)
+    const ratingRow   = document.getElementById('go-rating-row');
+    const ratingLabel = document.getElementById('go-rating-label');
+    const showRating  = rating && rating.id && rating.id !== 'casual';
+    if (showRating && ratingLabel && ratingRow) {
+      ratingLabel.textContent = `${rating.label || rating.id} Run`;
+      ratingRow.style.display = 'flex';
+    } else if (ratingRow) {
+      ratingRow.style.display = 'none';
+    }
 
     // Coins row
     const coinsRow    = document.getElementById('go-coins-row');
@@ -9193,9 +9204,22 @@ function _closeLevelUp() {
   if (_levelUpQueue.length > 0) setTimeout(_showNextLevelUp, 300);
 }
 
+// Локальный рейтинг забега из общего конфига (rating-config.js, грузится до game.js).
+// Держит локальный XP в согласии с серверным getRunRating без дублирования порогов.
+function _getLocalRunRating(score) {
+  const config  = window.__BASE_RATING_CONFIG;
+  const ratings = config && Array.isArray(config.ratings) ? config.ratings : [];
+  let rating = ratings[0] || { id: 'casual', label: 'Casual', minScore: 0, xpMultiplier: 1, dailyQualityXp: 0 };
+  for (const def of ratings) {
+    if (score >= def.minScore) rating = def;
+  }
+  return rating;
+}
+
 function _calculateLocalRunXp(score, isNewRecord) {
   const baseXp        = score * 1 + _sessionCoins * 2;
-  const multi         = score >= 150 ? 1.2 : score >= 75 ? 1.1 : 1.0;
+  const rating        = _getLocalRunRating(score);
+  const multi         = rating.xpMultiplier;
   const multiplied    = Math.round(baseXp * multi);
   const checkinStreak = (Save.getCheckin().streak || 0);
   const streakBonus   = Math.min(checkinStreak * 2, 20);
@@ -9204,7 +9228,7 @@ function _calculateLocalRunXp(score, isNewRecord) {
     : 0;
   return {
     xpEarned: multiplied + streakBonus + recordBonus,
-    xpBreakdown: { base: multiplied, multi, streakBonus, recordBonus },
+    xpBreakdown: { base: multiplied, multi, streakBonus, recordBonus, rating: rating.id },
   };
 }
 
@@ -9255,6 +9279,8 @@ async function onGameOver() {
   const localXp = _calculateLocalRunXp(score, isNewRecord);
   let xpEarned = localXp.xpEarned;
   let xpBreakdown = localXp.xpBreakdown;
+  const localRating = _getLocalRunRating(score);
+  let runRating = { id: localRating.id, label: localRating.label };
   const submitResult = await scoreSubmitPromise;
 
   if (submitResult && submitResult.ok && submitResult.levels && typeof Xp !== 'undefined') {
@@ -9264,6 +9290,9 @@ async function onGameOver() {
     }
     if (submitResult.xp && submitResult.xp.breakdown) {
       xpBreakdown = submitResult.xp.breakdown;
+    }
+    if (submitResult.rating && submitResult.rating.id) {
+      runRating = submitResult.rating;
     }
     _levelUpQueue = _queueFromServerLevelUps(submitResult.levelUps);
     _claimLevelRewards(_levelUpQueue);
@@ -9275,7 +9304,7 @@ async function onGameOver() {
   }
 
   setTimeout(() => {
-    UI.showGameOver(score, best, xpEarned, xpBreakdown);
+    UI.showGameOver(score, best, xpEarned, xpBreakdown, runRating);
     if (_levelUpQueue.length > 0) setTimeout(_showNextLevelUp, 900);
   }, 600);
 }

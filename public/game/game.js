@@ -834,6 +834,15 @@ const World = (() => {
   }
   function _lerp(a, b, t) { return a + (b - a) * t; }
 
+  /** Стадия сложности по счёту — основа для секционных бюджетов. */
+  function getDifficultyStage(score) {
+    if (score < 40) return 'onboarding';
+    if (score < 100) return 'baseline';
+    if (score < 150) return 'transition';
+    if (score < 300) return 'skill';
+    return 'mastery';
+  }
+
   /**
    * Возвращает параметры сложности для текущего счёта.
    * Плавная интерполяция вместо ступенчатых milestones.
@@ -878,17 +887,19 @@ const World = (() => {
       carDistMax *= 0.8;
     } else if (personality === 'rush') {
       carCount   = Math.min(7, carCount + 1);
-      // rush = скорость ×1.6; дистанции обычные (раньше ×0.75 — двойной штраф)
+      // rush = скорость ×1.4 с капом 150 px/s; дистанции обычные
+      const rushSpeedBase = Math.min(carSpeedBase * 1.4, 150);
       return {
         carCount,
         carDistMin,
         carDistMax,
         logCount:     weightedPick([5, 6, 7], [30, 50, 20]),
-        carSpeedBase: carSpeedBase * 1.6,
+        carSpeedBase: rushSpeedBase,
         carSpeedVar:  10,
         logSpeedBase,
         logSpeedVar,
         isFast: true,
+        archetype: 'rush_road',
       };
     }
 
@@ -1402,8 +1413,9 @@ const World = (() => {
         return !out;
       });
       if (lane.obstacles.length === 0) {
-        // Lane clear — spawn siren car
-        const speed = lane.speed * 2.5;   // 2.5x faster
+        // Lane clear — spawn siren car (2x lane speed, capped at 330 px/s)
+        const sirenAbs = Math.min(Math.abs(lane.speed) * 2.0, 330);
+        const speed = sirenAbs * lane.dir;
         const spawnX = speed > 0 ? -(SPAWN_EDGE + CAR_W) : WORLD_W + SPAWN_EDGE;
         sirenCar = {
           type: 'car', x: spawnX, width: CAR_W, height: CAR_H,

@@ -9,7 +9,8 @@
     "start": "next start",
     "lint": "eslint",
     "rating:sync": "node scripts/sync-rating-config.mjs",
-    "rating:verify": "node scripts/verify-rating-config.mjs"
+    "rating:verify": "node scripts/verify-rating-config.mjs",
+    "difficulty:sim": "node scripts/simulate-difficulty.mjs"
   },
   "dependencies": {
     "@base-org/account": "^2.5.2",

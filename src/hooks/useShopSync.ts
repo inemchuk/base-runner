@@ -13,6 +13,21 @@ interface ShopPayload {
   deathPacks:     string[];
 }
 
+type ShopWindow = Window & {
+  Shop?: {
+    applyServerData?: (
+      owned: string[],
+      equipped: string,
+      boosterCharges: Record<string, number>,
+      trailPacks: string[],
+      equippedTrail: string,
+      equippedDeath: string,
+      deathPacks: string[],
+    ) => void;
+  };
+  __BASE_SHOP_SYNC?: (payload: ShopPayload) => Promise<void>;
+};
+
 export function useShopSync() {
   const { address } = useAccount();
 
@@ -36,7 +51,7 @@ export function useShopSync() {
     try {
       const res  = await fetch(`/api/shop?address=${address}`);
       const data: ShopPayload = await res.json();
-      const applyFn = (window as any).Shop?.applyServerData;
+      const applyFn = (window as ShopWindow).Shop?.applyServerData;
       if (applyFn) {
         applyFn(
           data.owned,
@@ -54,11 +69,12 @@ export function useShopSync() {
   }, [address]);
 
   useEffect(() => {
-    (window as any).__BASE_SHOP_SYNC = syncShop;
+    const shopWindow = window as ShopWindow;
+    shopWindow.__BASE_SHOP_SYNC = syncShop;
     // Load server data shortly after mount (give game.js time to init Shop)
     const timer = setTimeout(loadShop, 1500);
     return () => {
-      delete (window as any).__BASE_SHOP_SYNC;
+      delete shopWindow.__BASE_SHOP_SYNC;
       clearTimeout(timer);
     };
   }, [syncShop, loadShop]);

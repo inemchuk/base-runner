@@ -10,6 +10,20 @@ import { CHECKIN_ABI, CHECKIN_ADDRESS } from '@/config/checkin-contract';
 const DATA_SUFFIX = Attribution.toDataSuffix({ codes: ['bc_2a3sfttm'] });
 const PAYMASTER_URL = process.env.NEXT_PUBLIC_PAYMASTER_URL;
 
+type WalletRequestClient = {
+  request(args: { method: string; params?: unknown }): Promise<unknown>;
+};
+
+type CheckInWindow = Window & {
+  __BASE_CHECKIN?: {
+    streak: number;
+    total: number;
+    isAvailable: boolean;
+    isPending: boolean;
+  };
+  __BASE_CHECKIN_CLAIM?: () => Promise<void>;
+};
+
 export function useCheckIn() {
   const { address, chainId } = useAccount();
   const { switchChainAsync } = useSwitchChain();
@@ -62,14 +76,15 @@ export function useCheckIn() {
     // Try gasless via Paymaster (only if wallet supports wallet_sendCalls)
     if (PAYMASTER_URL && walletClient) {
       try {
+        const rpcClient = walletClient as WalletRequestClient;
         const callData = encodeFunctionData({
           abi: CHECKIN_ABI,
           functionName: 'checkIn',
         });
 
         setPaymasterPending(true);
-        const callsId = await walletClient.request({
-          method: 'wallet_sendCalls' as any,
+        const callsId = await rpcClient.request({
+          method: 'wallet_sendCalls',
           params: [{
             version: '1.0',
             chainId: numberToHex(base.id),
@@ -82,7 +97,7 @@ export function useCheckIn() {
               paymasterService: { url: PAYMASTER_URL },
             },
           }],
-        } as any) as string;
+        }) as string;
 
         // Poll wallet_getCallsStatus until confirmed (max 90s)
         let elapsed = 0;
@@ -96,10 +111,10 @@ export function useCheckIn() {
         const iv = setInterval(async () => {
           elapsed += 2000;
           try {
-            const res = await walletClient.request({
-              method: 'wallet_getCallsStatus' as any,
+            const res = await rpcClient.request({
+              method: 'wallet_getCallsStatus',
               params: [callsId],
-            } as any) as { status: number | string };
+            }) as { status: number | string };
             const s = res?.status;
             const confirmed = s === 200 || s === 'CONFIRMED' || s === 'confirmed';
             const failed    = s === 400 || s === 'FAILED'    || s === 'failed';
@@ -134,17 +149,18 @@ export function useCheckIn() {
 
   // Expose to game.js via window
   useEffect(() => {
-    (window as any).__BASE_CHECKIN = {
+    const checkInWindow = window as CheckInWindow;
+    checkInWindow.__BASE_CHECKIN = {
       streak,
       total,
       isAvailable,
       isPending,
     };
-    (window as any).__BASE_CHECKIN_CLAIM = claim;
+    checkInWindow.__BASE_CHECKIN_CLAIM = claim;
 
     return () => {
-      delete (window as any).__BASE_CHECKIN;
-      delete (window as any).__BASE_CHECKIN_CLAIM;
+      delete checkInWindow.__BASE_CHECKIN;
+      delete checkInWindow.__BASE_CHECKIN_CLAIM;
     };
   }, [streak, total, isAvailable, isPending, claim]);
 

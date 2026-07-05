@@ -3,6 +3,17 @@
 import { useCallback, useEffect } from 'react';
 import { useAccount } from 'wagmi';
 
+type CoinClaimWindow = Window & {
+  Save?: {
+    getCoins?: () => number;
+  };
+  __BASE_CLAIM_COINS?: (amount: number) => Promise<void>;
+  __BASE_COIN_CLAIM?: {
+    isPending: boolean;
+  };
+  __BASE_SYNC_COINS?: (balance: number) => Promise<void>;
+};
+
 export function useCoinClaim() {
   const { address } = useAccount();
 
@@ -24,7 +35,7 @@ export function useCoinClaim() {
     try {
       // game.js already added coins to Save during gameplay
       // Just sync the total balance to Redis
-      const totalCoins = (window as any).Save?.getCoins?.() ?? 0;
+      const totalCoins = (window as CoinClaimWindow).Save?.getCoins?.() ?? 0;
       await syncCoins(totalCoins);
       // Instant confirmation
       window.dispatchEvent(new CustomEvent('base-coins-claimed'));
@@ -34,13 +45,14 @@ export function useCoinClaim() {
   }, [address, syncCoins]);
 
   useEffect(() => {
-    (window as any).__BASE_CLAIM_COINS = claim;
-    (window as any).__BASE_COIN_CLAIM = { isPending: false };
-    (window as any).__BASE_SYNC_COINS = syncCoins;
+    const coinClaimWindow = window as CoinClaimWindow;
+    coinClaimWindow.__BASE_CLAIM_COINS = claim;
+    coinClaimWindow.__BASE_COIN_CLAIM = { isPending: false };
+    coinClaimWindow.__BASE_SYNC_COINS = syncCoins;
     return () => {
-      delete (window as any).__BASE_CLAIM_COINS;
-      delete (window as any).__BASE_COIN_CLAIM;
-      delete (window as any).__BASE_SYNC_COINS;
+      delete coinClaimWindow.__BASE_CLAIM_COINS;
+      delete coinClaimWindow.__BASE_COIN_CLAIM;
+      delete coinClaimWindow.__BASE_SYNC_COINS;
     };
   }, [claim, syncCoins]);
 

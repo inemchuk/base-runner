@@ -54,7 +54,7 @@ async function batchResolveAvatars(addresses: string[]): Promise<Map<string, str
 
 export async function GET() {
   try {
-    let raw: Array<{ address: string; balance: number }> = [];
+    const raw: Array<{ address: string; balance: number }> = [];
 
     if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
       const { Redis } = await import('@upstash/redis');

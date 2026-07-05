@@ -8,6 +8,16 @@ import { NFT_ABI, NFT_CONTRACT, NFT_DEPLOYED } from '@/config/nft-contract';
 
 const PAYMASTER_URL = process.env.NEXT_PUBLIC_PAYMASTER_URL;
 
+type WalletRequestClient = {
+  request(args: { method: string; params?: unknown }): Promise<unknown>;
+};
+
+type NftMintWindow = Window & {
+  __NFT_MINT?: (itemId: string) => Promise<void>;
+  __NFT_PENDING?: boolean;
+  __NFT_DEPLOYED?: boolean;
+};
+
 export function useNftMint() {
   const { address, chainId }   = useAccount();
   const { switchChainAsync }   = useSwitchChain();
@@ -80,8 +90,9 @@ export function useNftMint() {
     // 2. Try paymaster via wallet_sendCalls + poll wallet_getCallsStatus
     if (PAYMASTER_URL && walletClient) {
       try {
-        const callsId = await walletClient.request({
-          method: 'wallet_sendCalls' as any,
+        const rpcClient = walletClient as WalletRequestClient;
+        const callsId = await rpcClient.request({
+          method: 'wallet_sendCalls',
           params: [{
             version:  '1.0',
             chainId:  numberToHex(base.id),
@@ -89,7 +100,7 @@ export function useNftMint() {
             calls:    [{ to: NFT_CONTRACT, data: callData }],
             capabilities: { paymasterService: { url: PAYMASTER_URL } },
           }],
-        } as any) as string;
+        }) as string;
 
         setPaymasterPath(true);
 
@@ -100,10 +111,10 @@ export function useNftMint() {
         pollRef.current = setInterval(async () => {
           elapsed += 2000;
           try {
-            const res = await walletClient.request({
-              method: 'wallet_getCallsStatus' as any,
+            const res = await rpcClient.request({
+              method: 'wallet_getCallsStatus',
               params: [callsId],
-            } as any) as { status: number | string; receipts?: unknown[] };
+            }) as { status: number | string; receipts?: unknown[] };
 
             const s = res?.status;
             const confirmed = s === 200 || s === 'CONFIRMED' || s === 'confirmed';
@@ -153,13 +164,14 @@ export function useNftMint() {
 
   // Expose to game.js
   useEffect(() => {
-    (window as any).__NFT_MINT     = mint;
-    (window as any).__NFT_PENDING  = isPending;
-    (window as any).__NFT_DEPLOYED = NFT_DEPLOYED;
+    const nftWindow = window as NftMintWindow;
+    nftWindow.__NFT_MINT = mint;
+    nftWindow.__NFT_PENDING = isPending;
+    nftWindow.__NFT_DEPLOYED = NFT_DEPLOYED;
     return () => {
-      delete (window as any).__NFT_MINT;
-      delete (window as any).__NFT_PENDING;
-      delete (window as any).__NFT_DEPLOYED;
+      delete nftWindow.__NFT_MINT;
+      delete nftWindow.__NFT_PENDING;
+      delete nftWindow.__NFT_DEPLOYED;
     };
   }, [mint, isPending]);
 

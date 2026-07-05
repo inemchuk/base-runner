@@ -1561,6 +1561,12 @@
       align-items: center;
       justify-content: flex-end;
     }
+    .shop-action-boost {
+      max-width: none;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 6px;
+    }
     .shop-badge-on {
       display: inline-flex;
       align-items: center;
@@ -1600,6 +1606,12 @@
       justify-content:center;
       gap:4px;
       white-space: nowrap;
+    }
+    .shop-btn-booster {
+      padding: 7px 9px;
+      font-size: 0.68rem;
+      letter-spacing: 0.35px;
+      min-width: 92px;
     }
     .shop-btn-buy.disabled { opacity: 0.4; cursor: not-allowed; }
     .shop-btn-claim-equip {

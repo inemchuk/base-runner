@@ -6939,7 +6939,7 @@ const Shop = (() => {
       const canAfford = balance >= item.packPrice;
 
       const el = document.createElement('div');
-      el.className = 'shop-item' + (hasActive ? ' shop-item-equipped' : '');
+      el.className = 'shop-item shop-item-boost' + (hasActive ? ' shop-item-equipped' : '');
       const boosterIconHtml = item.sprite
         ? `<span class="shop-icon shop-icon-img"><img src="${item.sprite}" alt="${item.name}" style="width:48px;height:48px;object-fit:contain;display:block;image-rendering:pixelated;"></span>`
         : `<span class="shop-icon">${item.icon}</span>`;
@@ -6949,9 +6949,9 @@ const Shop = (() => {
           <span class="shop-name">${item.name}</span>
           <span class="shop-desc">${item.desc}</span>
         </div>
-        <div class="shop-action" style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+        <div class="shop-action shop-action-boost">
           ${hasActive ? `<span class="shop-badge-owned" style="font-size:0.6rem;padding:2px 8px;">${charges} left</span>` : ''}
-          <button class="shop-btn shop-btn-buy${canAfford ? '' : ' disabled'}" data-id="${item.id}" data-price="${item.packPrice}" data-pack="${item.packSize}" style="display:inline-flex;flex-direction:row;align-items:center;justify-content:center;gap:4px;white-space:nowrap;">+${item.packSize} uses · <img src="/game/coin.png" style="width:14px;height:14px;object-fit:contain;display:block;flex-shrink:0;vertical-align:middle;"> ${item.packPrice}</button>
+          <button class="shop-btn shop-btn-buy shop-btn-booster${canAfford ? '' : ' disabled'}" data-id="${item.id}" data-price="${item.packPrice}" data-pack="${item.packSize}" style="display:inline-flex;flex-direction:row;align-items:center;justify-content:center;gap:4px;white-space:nowrap;">+${item.packSize} · <img src="/game/coin.png" style="width:14px;height:14px;object-fit:contain;display:block;flex-shrink:0;vertical-align:middle;"> ${item.packPrice}</button>
         </div>`;
       container.appendChild(el);
     }

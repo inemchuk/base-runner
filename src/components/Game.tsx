@@ -88,6 +88,7 @@ export default function Game() {
   return (
     <div id="game-container" className="game-container">
       {/* Game Scripts */}
+      <Script src="/game/generated/rating-config.js" strategy="beforeInteractive" />
       <Script src="/game/game.js" strategy="afterInteractive" />
 
       {/* Canvas */}

@@ -47,6 +47,8 @@ The player should feel:
 - better runs naturally produce more XP, quest progress, and coins;
 - Focus fragments still come from controlled reward gates such as check-in,
   spin, quests, levels, and crates, not from unlimited raw gameplay farming.
+- skilled players have a long enough economy runway after the early level track
+  so difficulty mastery does not run into an empty progression ceiling.
 
 ## Non-Goals
 
@@ -216,7 +218,7 @@ Rules:
 - Hard pattern pool is allowed.
 - Survival route topology becomes the main source of strategy.
 - Reward routes become meaningful, but remain optional.
-- Trains can appear as part of a section budget.
+- Trains can appear as part of a section danger budget.
 - `rush` is allowed, but speed and siren spikes must be capped.
 - Consecutive water rows can appear, but need fairness guarantees.
 
@@ -244,7 +246,12 @@ Suggested ladder:
 | --- | --- |
 | 300-449 | Full-field planning, more 2-3 row commitments |
 | 450-649 | Less relief, more cross-type sections, stricter timing windows |
-| 650+ | Rare high-budget sections, longer commitment, endurance pressure |
+| 650+ | Rare high-danger/high-complexity sections, longer commitment, endurance pressure |
+
+Relief cadence and commitment length are bounded. Endurance pressure grows
+toward those bounds, not past them. The mastery game should never recreate
+unbounded speed scaling through endlessly shrinking relief or endlessly growing
+commitment chains.
 
 Post-300 tension should grow through:
 
@@ -252,23 +259,35 @@ Post-300 tension should grow through:
 - fewer obviously safe center-column paths;
 - road/water/train composition that asks the player to plan 2-4 moves ahead;
 - directional water traps with a visible escape option;
-- occasional high-budget sections preceded or followed by readable relief;
+- occasional high-danger/high-complexity sections preceded or followed by
+  readable relief;
 - prestige/rating/quest goals that recognize survival depth.
 
 Post-300 tension should not grow through:
 
 - uncapped car speed;
-- surprise siren/train stacking outside budget;
+- surprise siren/train stacking outside the danger budget;
 - water rows with no readable landing;
 - coin routes being the only interesting branch.
 
 ## Difficulty Budget
 
-Replace independent row randomness with a section-level danger budget.
+Replace independent row randomness with section-level budgets.
 
-A section is 4-6 rows plus a relief opportunity. The generator spends a budget
-on row archetypes. Higher score gives a bigger budget, but every section remains
-bounded.
+A section is 4-6 rows plus a relief opportunity. The generator spends a danger
+budget on hazards and a separate complexity budget on route-planning asks.
+Higher score gives larger budgets, but both axes remain bounded.
+
+Why two axes:
+
+- danger budget answers "how lethal is this section?";
+- complexity budget answers "how much planning does this section ask for?";
+- survival branches are usually not danger. They often make a section fairer by
+  adding an alternate viable line, while still increasing planning complexity.
+
+Do not tune high-score difficulty from one blended number. A high-danger section
+and a high-complexity section can both be hard, but they need different relief
+rules and different playtest interpretation.
 
 Suggested row costs:
 
@@ -283,18 +302,25 @@ Suggested row costs:
 | Stable river | 1 | Long logs, readable center |
 | Short-log river | 2 | Shorter logs, fair coverage |
 | River chain row | 3 | Used in 2-3 water sequences |
-| Survival branch | +1 | Adds another viable route through the section |
-| Risk coin route | +1 | Adds coins to a harder path |
+
+Suggested complexity costs:
+
+| Feature | Cost | Notes |
+| --- | ---: | --- |
+| Survival branch | 1 | Adds another viable route through the section |
+| 2-3 move commitment | 1 | Player must choose a line and hold it briefly |
+| Cross-type read | 1 | Planning crosses road/water/train boundaries |
+| Reward route branch | 1 | Optional harder coin line, not required to survive |
 
 Suggested section budgets:
 
-| Stage | Budget |
-| --- | ---: |
-| Onboarding | 3-4 |
-| Baseline | 4-6 |
-| Transition | 6-8 |
-| Skill Mode | 8-11 |
-| Mastery | 10-13 |
+| Stage | Danger Budget | Complexity Budget |
+| --- | ---: | ---: |
+| Onboarding | 3-4 | 0-1 |
+| Baseline | 4-6 | 1-2 |
+| Transition | 6-8 | 2-3 |
+| Skill Mode | 8-11 | 3-5 |
+| Mastery | 10-13 | 4-6 |
 
 Budget rules:
 
@@ -303,11 +329,20 @@ Budget rules:
 - No more than 2 water rows in a row before score `120`.
 - 3 water rows in a row are allowed after score `150`, but at least one must be
   a stable river with a long log.
-- After any section with cost `10+`, force a lower-cost section or clear relief
-  row soon after.
+- After any section with danger cost `10+`, force a lower-danger section or
+  clear relief row soon after.
+- High complexity without high danger still needs readable relief. The player
+  can be asked to plan, but not asked to hold a hidden route forever.
+- Mastery relief cadence has a floor: do not go below one clear relief
+  opportunity per section, and do not chain more than two high-danger or
+  high-complexity sections without an easier reset.
+- Mastery commitment length has a ceiling: normal commitments should be 2-4
+  moves, and rare 5-move commitments need obvious telegraphing plus relief soon
+  after.
 - Train scheduling and siren scheduling must be coordinated with the section
-  budget. Either absorb them into the section planner or make their independent
-  schedulers reserve budget from the current/next section before firing.
+  danger budget. Either absorb them into the section planner or make their
+  independent schedulers reserve danger budget from the current/next section
+  before firing.
 
 Survival route rules:
 
@@ -375,7 +410,7 @@ Use named lane archetypes instead of tuning only raw speed/count.
 
 `train_warning`
 - High danger, high readability.
-- Must count heavily against section budget.
+- Must count heavily against section danger budget.
 - Keep the warning clear and early enough for mobile reaction.
 
 ## Water Fairness
@@ -849,14 +884,15 @@ High-skill player:
 ### Phase 2: Section Budget And Archetypes
 
 - Introduce explicit lane archetypes.
-- Generate sections with danger budget.
+- Generate sections with danger and complexity budgets.
 - Add survival route topology as a first-class output of section generation.
   This phase must prove route choice without relying on reward/risk coins.
 - Keep existing pattern feel, but make spikes intentional and bounded.
 - Add relief rules after high-danger sections.
-- Reconcile the existing siren timer and train spacing with the section budget.
-  They must not double-spend danger. Either absorb them into section generation
-  or require the independent schedulers to reserve budget before they fire.
+- Reconcile the existing siren timer and train spacing with the section danger
+  budget. They must not double-spend danger. Either absorb them into section
+  generation or require the independent schedulers to reserve budget before they
+  fire.
 - Add a post-300 tension ladder based on section length, relief spacing, and
   multi-row commitment instead of uncapped speed.
 
@@ -916,6 +952,26 @@ topology first.
 - Tune session coin income against existing coin budget.
 - Verify double coins and magnet do not overinflate daily economy.
 
+### Phase 6B: Economy Runway Check
+
+This is owned by Economy V1 balance, not by the section generator, but it is a
+required follow-up before relying on mastery difficulty as a long-term retention
+driver.
+
+Check whether skilled players can exhaust the meaningful level track before
+they have enough Focus fragments or crate progress to approach legendary goals.
+The known risk is:
+
+- level rewards currently concentrate early and may feel empty after about
+  level `35`;
+- rating multipliers and the Master daily XP bonus accelerate high-skill XP;
+- legendary fragment progress remains deliberately slow.
+
+If playtests show this runway gap, solve it in Economy V1 balance with prestige
+levels, recurring mastery crates, long-tail level rewards, or explicit
+post-level-35 goals. Do not compensate by making raw difficulty pay unlimited
+fragments.
+
 ### Phase 7: Advanced Mastery Quests
 
 - Add roads/rivers/trains quests only after row stats can be trusted or safely
@@ -946,6 +1002,10 @@ topology first.
    - Recommendation: do not rely on speed or reward routes. Validate section
      topology with playtests before adding more economy on top.
 
+7. Economy runway after level `35`:
+   - Recommendation: track in Economy V1 balance. Difficulty can create mastery
+     demand, but level/crate/prestige rewards must provide the long-tail goals.
+
 ## Acceptance Criteria
 
 - At score `<100`, the game remains readable in close camera.
@@ -958,6 +1018,8 @@ topology first.
 - Water deaths are explainable and not caused by empty/unreadable first landing.
 - Raw speed spikes are capped.
 - XP/day increases for better play but does not explode for grinders.
+- Skilled players have visible long-tail goals after the early level track,
+  without turning raw hard lanes into unlimited fragment farming.
 - Focus fragments remain controlled through check-in, spin, quests, levels, and
   crates.
 - Existing on-chain check-in, paymaster, spin, and NFT mint flows are untouched.

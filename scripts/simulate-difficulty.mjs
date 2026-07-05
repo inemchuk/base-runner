@@ -25,6 +25,15 @@ function stage(score) {
   return 'mastery';
 }
 
+// Mirrors SECTION_BUDGETS in public/game/game.js.
+const budgets = {
+  onboarding: { danger: [3, 4], complexity: [0, 1] },
+  baseline: { danger: [4, 6], complexity: [1, 2] },
+  transition: { danger: [6, 8], complexity: [2, 3] },
+  skill: { danger: [8, 11], complexity: [3, 5] },
+  mastery: { danger: [10, 13], complexity: [4, 6] },
+};
+
 for (const score of scores) {
   const p = smoothProgress(score, 0, 250);
   const base = lerp(60, 100, p);
@@ -33,11 +42,14 @@ for (const score of scores) {
   // Fastest possible siren: doubled top rush lane speed, capped at 330 (also a
   // future-guard — with the current curve the observed max is ~300).
   const sirenMax = Math.min((rush + RUSH_SPEED_VAR) * 2.0, 330);
+  const band = stage(score);
   console.log(JSON.stringify({
     score,
-    stage: stage(score),
+    stage: band,
     baseSpeed: Math.round(base),
     rushSpeed: Math.round(rush),
     sirenSpeedMax: Math.round(sirenMax),
+    dangerBudget: budgets[band].danger,
+    complexityBudget: budgets[band].complexity,
   }));
 }

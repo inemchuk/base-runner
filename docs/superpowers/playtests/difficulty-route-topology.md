@@ -23,6 +23,24 @@ Branch: codex/economy-v1-local-focus
 - Deaths remain explainable:
 - Risk coin routes are not counted as the only meaningful branch:
 
+## Phase 2 Implementation Notes
+
+- Danger and complexity budgets implemented: yes — `SECTION_BUDGETS` per stage
+  (onboarding..mastery) in `game.js`; sections carry `dangerBudget` and
+  `complexityBudget` as separate axes.
+- Trains reserve danger: yes — a train requires `dangerBudget >= 4` in the
+  active section and deducts `ROW_DANGER_COST.train` (4) when spawned.
+- Siren reserves danger: yes — a siren adds `sectionDangerReserved += 3` to its
+  road row and rows with reservation > 2 are excluded from future siren picks.
+- Relief floor implemented: yes — after 5 consecutive road/water rows the next
+  row is forced to grass; additionally at most two consecutive hard sections
+  before a medium relief section.
+- Route topology metadata present: yes — every generated row is stamped with
+  `sectionId`, `sectionStage`, `sectionFeatures` (`survival_branch` at 45% for
+  transition+, `commitment_2_4` at 35% for mastery, `relief` when forced).
+- Speed caps from Task 3 (rush max 170->150, siren max ~425->300 px/s) are real
+  gameplay softening — must be felt-checked in the Phase 2B playtest below.
+
 ## Manual Phone Checks
 
 - Viewport:

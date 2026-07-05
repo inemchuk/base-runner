@@ -1029,20 +1029,77 @@ const World = (() => {
 
   const RARE_CHANCE = 0.0;    // rare-паттерны убраны — используем hard при score>150
 
+  // ── Секционные бюджеты ───────────────────────────────────────────────────
+  // danger и complexity — независимые оси. Бюджет опасности тратят поезда и
+  // сирена; бюджет сложности зарезервирован под будущие фичи маршрутов.
+  const SECTION_BUDGETS = {
+    onboarding: { danger: [3, 4], complexity: [0, 1] },
+    baseline: { danger: [4, 6], complexity: [1, 2] },
+    transition: { danger: [6, 8], complexity: [2, 3] },
+    skill: { danger: [8, 11], complexity: [3, 5] },
+    mastery: { danger: [10, 13], complexity: [4, 6] },
+  };
+
+  const ROW_DANGER_COST = {
+    grass: 0,
+    road: 1,
+    dense_slow_road: 2,
+    fast_sparse_road: 2,
+    rush_road: 3,
+    train: 4,
+    water: 1,
+    short_log_river: 2,
+    river_chain: 3,
+  };
+
   let patternBuffer = [];
   let streakRoad    = 0;
   let streakWater   = 0;
   let streakGrass   = 0;
   let lastType      = 'grass';  // тип последнего выданного ряда
 
+  let activeSection     = null; // секция, чьи ряды сейчас в patternBuffer
+  let rowSectionId      = 0;
+  let highSectionStreak = 0;    // подряд идущие hard-секции
+
   function randFrom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
-  // Выбрать паттерн по сложности
-  function pickPattern() {
-    const s = currentScore;
-    if (s < 50)  return randFrom(PATTERNS.simple);
-    if (s < 150) return randFrom(PATTERNS.medium);
-    return randFrom(PATTERNS.hard);
+  // Собрать дескриптор секции по текущей стадии сложности
+  function buildSection(score) {
+    const stage = getDifficultyStage(score);
+    let pool = stage === 'onboarding' ? PATTERNS.simple
+      : stage === 'baseline' ? PATTERNS.simple
+      : stage === 'transition' ? PATTERNS.medium
+      : PATTERNS.hard;
+    const features = [];
+
+    // Не более двух hard-секций подряд — затем секция-передышка
+    if (pool === PATTERNS.hard && highSectionStreak >= 2) {
+      pool = PATTERNS.medium;
+      features.push('relief');
+      highSectionStreak = 0;
+    } else {
+      highSectionStreak = pool === PATTERNS.hard ? highSectionStreak + 1 : 0;
+    }
+
+    const rows = [...randFrom(pool)];
+
+    if ((stage === 'transition' || stage === 'skill' || stage === 'mastery') && Math.random() < 0.45) {
+      features.push('survival_branch');
+    }
+    if (stage === 'mastery' && Math.random() < 0.35) {
+      features.push('commitment_2_4');
+    }
+
+    const budget = SECTION_BUDGETS[stage];
+    return {
+      id: rowSectionId++,
+      stage,
+      rows,
+      dangerBudget: budget.danger[1],
+      complexityBudget: budget.complexity[1],
+      features,
+    };
   }
 
   // Проверка safety limits
@@ -1060,15 +1117,21 @@ const World = (() => {
     lastType    = type;
   }
 
-  // Заполнить буфер одним паттерном
+  // Заполнить буфер рядами одной секции
   function fillBuffer() {
-    const pattern = pickPattern();
+    activeSection = buildSection(currentScore);
+    const pattern = activeSection.rows;
     for (let i = 0; i < pattern.length; i++) {
       let type = pattern[i];
 
       // Если предыдущий ряд — grass, следующий паттерн не начинается с grass
       if (i === 0 && lastType === 'grass' && type === 'grass') {
         type = 'road';
+      }
+
+      // Пол передышки: после 5 опасных рядов подряд принудительный grass
+      if (streakRoad + streakWater >= 5 && type !== 'grass') {
+        type = 'grass';
       }
 
       // Safety: заменяем нарушителя на grass (только если это не опасно)
@@ -1088,11 +1151,14 @@ const World = (() => {
   }
 
   function resetPatternGen() {
-    patternBuffer = [];
-    streakRoad    = 0;
-    streakWater   = 0;
-    streakGrass   = 0;
-    lastType      = 'grass';
+    patternBuffer     = [];
+    streakRoad        = 0;
+    streakWater       = 0;
+    streakGrass       = 0;
+    lastType          = 'grass';
+    activeSection     = null;
+    rowSectionId      = 0;
+    highSectionStreak = 0;
   }
 
   // Создать ряд нужного типа
@@ -1101,11 +1167,14 @@ const World = (() => {
     let row;
     if (type === 'grass') { row = makeGrassRow(rowIdx); }
     else if (type === 'road') {
-      // Поезд: 7% шанс, только если score >= 20 и давно не было поезда
-      const trainChance = currentScore >= 20 ? 0.04 : 0;
+      // Поезд: только если score >= 20, давно не было поезда
+      // и в бюджете опасности секции хватает на поезд (стоимость 4)
+      const trainAllowedByBudget = !activeSection || activeSection.dangerBudget >= 4;
+      const trainChance = currentScore >= 20 && trainAllowedByBudget ? 0.04 : 0;
       const farEnough   = rowIdx - lastTrainRow >= 25;
       if (farEnough && Math.random() < trainChance) {
         lastTrainRow = rowIdx;
+        if (activeSection) activeSection.dangerBudget -= ROW_DANGER_COST.train;
         row = makeTrainRow(rowIdx);
       } else {
         row = makeRoadRow(rowIdx);
@@ -1118,6 +1187,10 @@ const World = (() => {
     row.biome     = bi.biome;
     row.nextBiome = bi.nextBiome;
     row.blendT    = bi.blendT;
+    // Топология маршрутов: метаданные секции для будущих фич и телеметрии
+    row.sectionId       = activeSection ? activeSection.id : null;
+    row.sectionStage    = activeSection ? activeSection.stage : getDifficultyStage(currentScore);
+    row.sectionFeatures = activeSection ? [...activeSection.features] : [];
     return row;
   }
 
@@ -1395,11 +1468,14 @@ const World = (() => {
 
     if (sirenState === 'idle') {
       if (sirenTimer > 0) return;
-      // Pick a random visible road row
-      const roadRows = rows.filter(r => r.type === 'road' && !r.sirenLocked);
+      // Pick a random visible road row — пропускаем ряды, где бюджет
+      // опасности уже зарезервирован прошлыми сиренами
+      const roadRows = rows.filter(r => r.type === 'road' && !r.sirenLocked
+        && (!r.sectionDangerReserved || r.sectionDangerReserved <= 2));
       if (roadRows.length === 0) return;
       sirenRow = roadRows[Math.floor(Math.random() * roadRows.length)];
       sirenRow.sirenLocked = true;
+      sirenRow.sectionDangerReserved = (sirenRow.sectionDangerReserved || 0) + 3;
       sirenRow.spawnQueue  = [];   // clear pending spawns
       sirenState = 'clearing';
 

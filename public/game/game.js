@@ -5563,7 +5563,7 @@ const UI = (() => {
     // Quest notification
     const questNotify = document.getElementById('go-quest-notify');
     if (questNotify) {
-      questNotify.style.display = Quests.hasClaimable() ? 'block' : 'none';
+      questNotify.style.display = Quests.hasClaimable() ? 'inline-flex' : 'none';
     }
 
     show('gameover');

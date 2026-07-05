@@ -321,12 +321,20 @@ const CheckIn = (() => {
 
 const Leaderboard = (() => {
 
+  const DEFAULT_AVATAR_SRC = '/game/ui-icons/default-avatar.png';
   const MEDALS = [
     _uiIconHtml('medal-gold', 'lb-medal-img', 'gold medal'),
     _uiIconHtml('medal-silver', 'lb-medal-img', 'silver medal'),
     _uiIconHtml('medal-bronze', 'lb-medal-img', 'bronze medal'),
   ];
   let mode = 'personal'; // 'personal' | 'global' | 'coins'
+
+  function avatarHtml(entry) {
+    const hasAvatar = Boolean(entry && entry.avatar);
+    const src = hasAvatar ? _escapeHtml(entry.avatar) : DEFAULT_AVATAR_SRC;
+    const fallback = hasAvatar ? ` onerror="this.onerror=null;this.src='${DEFAULT_AVATAR_SRC}';"` : '';
+    return `<img class="lb-avatar${hasAvatar ? '' : ' lb-avatar-default'}" src="${src}" alt="" aria-hidden="true"${fallback}>`;
+  }
 
   function setMode(m) {
     mode = m;
@@ -379,12 +387,9 @@ const Leaderboard = (() => {
     container.innerHTML = onChain.map((entry, i) => {
       const rankClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
       const medal = MEDALS[i] || `${i + 1}`;
-      const avatarHtml = entry.avatar
-        ? `<img class="lb-avatar" src="${entry.avatar}" onerror="this.style.background='rgba(0,82,255,0.3)';this.removeAttribute('src');" />`
-        : `<span class="lb-avatar"></span>`;
       return `<div class="lb-row ${rankClass}">
         <span class="lb-rank">${medal}</span>
-        ${avatarHtml}
+        ${avatarHtml(entry)}
         <span class="lb-name">${entry.name}</span>
         <span class="lb-pts">${entry.score}</span>
       </div>`;
@@ -402,12 +407,9 @@ const Leaderboard = (() => {
     container.innerHTML = entries.map((entry, i) => {
       const rankClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
       const medal = MEDALS[i] || `${i + 1}`;
-      const avatarHtml = entry.avatar
-        ? `<img class="lb-avatar" src="${entry.avatar}" onerror="this.style.background='rgba(0,82,255,0.3)';this.removeAttribute('src');" />`
-        : `<span class="lb-avatar"></span>`;
       return `<div class="lb-row ${rankClass}">
         <span class="lb-rank">${medal}</span>
-        ${avatarHtml}
+        ${avatarHtml(entry)}
         <span class="lb-name">${entry.name}</span>
         <span class="lb-pts" style="display:flex;align-items:center;gap:4px;">
           <img src="/game/coin.png" style="width:14px;height:14px;object-fit:contain;"> ${entry.balance}

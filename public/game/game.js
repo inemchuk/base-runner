@@ -1609,7 +1609,7 @@ const World = (() => {
     return true;
   }
 
-  return { init, update, extendWorld, setScore, getRow, getRows, rowToY, getBiomeForRow, collectCoin, CELL, COLS };
+  return { init, update, extendWorld, setScore, getRow, getRows, rowToY, getBiomeForRow, collectCoin, getDifficultyStage, CELL, COLS };
 
 })();
 
@@ -8766,6 +8766,27 @@ function menuLoop(timestamp) {
 let _sessionCoins     = 0;
 let _recordBonusUsed  = false; // only first record break per game awards XP bonus
 
+// Сводка забега — только для локальной телеметрии, не несёт экономических данных
+let _runSummary = null;
+
+function _resetRunSummary() {
+  _runSummary = {
+    highestStage: 'onboarding',
+    deathCause: 'unknown',
+    deathRowType: null,
+    boostersUsed: [],
+  };
+}
+
+function _markDeathCause(row) {
+  if (!_runSummary || !row) return;
+  _runSummary.deathRowType = row.type || null;
+  if (row.type === 'train') _runSummary.deathCause = 'train';
+  else if (row.type === 'water') _runSummary.deathCause = 'water';
+  else if (row.type === 'road') _runSummary.deathCause = 'road';
+  else _runSummary.deathCause = 'unknown';
+}
+
 const CONTINUE_COST   = 100;
 let _continueUsed     = false;
 let _continueInterval = null;
@@ -8801,6 +8822,7 @@ function initGame() {
   _sessionCoins    = 0;
   _continueUsed    = false;
   _recordBonusUsed = false;
+  _resetRunSummary();
   if (_continueInterval) { clearInterval(_continueInterval); _continueInterval = null; }
   hideContinueOverlay();
   Renderer.init();
@@ -8835,6 +8857,7 @@ function gameLoop(timestamp) {
     Renderer.setWeather(Player.getScore());  // погода
     Collision.check();
     UI.updateScore(Player.getScore());
+    if (_runSummary) _runSummary.highestStage = World.getDifficultyStage(Player.getScore());
 
     if (!Player.isAlive()) {
       // Trigger animation exactly once
@@ -8843,6 +8866,7 @@ function gameLoop(timestamp) {
         const ps = Player.getState();
         const row = World.getRow(ps.row);
         const type = row && row.type === 'water' ? 'water' : 'car';
+        _markDeathCause(row);
         Renderer.triggerDeath(ps.visualX, ps.visualY, type);
         // Вибрация при смерти
         if (type === 'water') Vibrate.water();
@@ -8994,6 +9018,9 @@ async function onGameOver() {
   // Sync coins
   const syncFn = window.__BASE_SYNC_COINS;
   if (syncFn) syncFn(Save.getCoins());
+  window.dispatchEvent(new CustomEvent('base-game-run-summary', {
+    detail: { score, sessionCoins: _sessionCoins, summary: _runSummary },
+  }));
   const scoreSubmitPromise = _submitScoreToServer(score, _sessionCoins);
   const localXp = _calculateLocalRunXp(score, isNewRecord);
   let xpEarned = localXp.xpEarned;

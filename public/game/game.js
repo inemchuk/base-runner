@@ -785,6 +785,11 @@ const World = (() => {
     { w: CELL * 1.5, h: CELL * 0.72, sprite: 'green_taxi',  weight: 10 },
     { w: CELL * 1.5, h: CELL * 0.72, sprite: 'taxi',        weight: 8  },
     { w: CELL * 1.5, h: CELL * 0.72, sprite: 'police',      weight: 4  },
+    { w: CELL * 1.45, h: CELL * 0.72, sprite: 'blue_hatchback',  weight: 4  },
+    { w: CELL * 1.60, h: CELL * 0.72, sprite: 'black_suv',       weight: 3  },
+    { w: CELL * 1.65, h: CELL * 0.72, sprite: 'silver_minivan',  weight: 3  },
+    { w: CELL * 1.80, h: CELL * 0.72, sprite: 'orange_pickup',   weight: 3  },
+    { w: CELL * 1.90, h: CELL * 0.72, sprite: 'white_panel_van', weight: 3  },
     { w: CELL * 2.0, h: CELL * 0.72, sprite: 'ambulance',   weight: 4  },
     { w: CELL * 3.0, h: CELL * 0.72, sprite: 'truck',       weight: 4  },
     { w: CELL * 3.0, h: CELL * 0.72, sprite: 'bus',         weight: 4  },
@@ -1262,7 +1267,11 @@ const World = (() => {
 
     // 25-35% density, but ensure at least one gap (path through)
     const biomeInfo = getBiomeForRow(rowIdx);
-    const BIOME_DECO = { default: ['bush', 'bush', 'tree', 'rock'], desert: ['cactus', 'cactus', 'tumbleweed', 'rock'], snow: ['pine', 'pine', 'snowman', 'rock'] };
+    const BIOME_DECO = {
+      default: ['bush', 'bush', 'bush', 'tree', 'tree', 'rock', 'rock', 'shrub', 'stump', 'rock_pile'],
+      desert: ['cactus', 'cactus', 'tumbleweed', 'rock'],
+      snow: ['pine', 'pine', 'snowman', 'rock'],
+    };
     const TYPES = BIOME_DECO[biomeInfo.biome] || BIOME_DECO.default;
     const occupied = new Set();
     const targetCount = 2 + Math.floor(rng(0) * 2);  // 2-3 objects per row
@@ -2215,6 +2224,11 @@ const CAR_SPRITE_SRCS = {
   truck: '/game/vehicles/traffic-premium-v1/truck.png',
   bus: '/game/vehicles/traffic-premium-v1/bus.png',
   firetruck: '/game/vehicles/traffic-premium-v1/firetruck.png',
+  black_suv: '/game/vehicles/traffic-addons-v1/black_suv.png',
+  blue_hatchback: '/game/vehicles/traffic-addons-v1/blue_hatchback.png',
+  white_panel_van: '/game/vehicles/traffic-addons-v1/white_panel_van.png',
+  orange_pickup: '/game/vehicles/traffic-addons-v1/orange_pickup.png',
+  silver_minivan: '/game/vehicles/traffic-addons-v1/silver_minivan.png',
 };
 
 
@@ -2588,7 +2602,7 @@ const Renderer = (() => {
   };
 
   const BIOME_DECORATIONS = {
-    default: ['bush', 'bush', 'tree', 'rock'],
+    default: ['bush', 'bush', 'bush', 'tree', 'tree', 'rock', 'rock', 'shrub', 'stump', 'rock_pile'],
     desert:  ['cactus', 'cactus', 'tumbleweed', 'rock'],
     snow:    ['pine', 'pine', 'snowman', 'rock'],
   };
@@ -2684,6 +2698,9 @@ const Renderer = (() => {
     bush:       '/game/env/bush.png',
     tree:       '/game/env/tree.png',
     rock:       '/game/env/rock.png',
+    rock_pile:  '/game/env/addons-v1/rock_pile.png',
+    stump:      '/game/env/addons-v1/stump.png',
+    shrub:      '/game/env/addons-v1/shrub.png',
     cactus:     '/game/env/cactus.png',
     tumbleweed: '/game/env/tumbleweed.png',
     pine:       '/game/env/pine.png',
@@ -2724,6 +2741,9 @@ const Renderer = (() => {
     bush:       { size: 0.82, sw: 0.32, sh: 0.09, base: 0.92, shadowLift: 0.14 },
     tree:       { size: 1.05, sw: 0.30, sh: 0.08, base: 0.94 },
     rock:       { size: 0.72, sw: 0.28, sh: 0.08, base: 0.90, shadowLift: 0.12 },
+    rock_pile:  { size: 0.76, sw: 0.30, sh: 0.08, base: 0.90, shadowLift: 0.11 },
+    stump:      { size: 0.74, sw: 0.28, sh: 0.08, base: 0.92, shadowLift: 0.10 },
+    shrub:      { size: 0.82, sw: 0.32, sh: 0.09, base: 0.92, shadowLift: 0.14 },
     cactus:     { size: 0.88, sw: 0.22, sh: 0.07, base: 0.94 },
     tumbleweed: { size: 0.65, sw: 0.20, sh: 0.06, base: 0.92 },
     pine:       { size: 1.05, sw: 0.28, sh: 0.08, base: 0.94 },
@@ -2813,6 +2833,11 @@ const Renderer = (() => {
     truck:       { front: [{x:187,y:9},{x:187,y:36}],rear: [{x:3,y:9},{x:3,y:38}] },
     firetruck:   { front: [{x:186,y:10},{x:186,y:35}],rear:[{x:4,y:8},{x:4,y:37}] },
     bus:         { front: [{x:188,y:8},{x:188,y:38}],rear: [{x:3,y:9},{x:3,y:37}] },
+    black_suv:      { front: [{x:91,y:10},{x:91,y:36}], rear: [{x:5,y:8},{x:5,y:38}] },
+    blue_hatchback: { front: [{x:92,y:10},{x:92,y:36}], rear: [{x:6,y:8},{x:6,y:38}] },
+    white_panel_van: { front: [{x:91,y:10},{x:91,y:36}], rear: [{x:5,y:8},{x:5,y:38}] },
+    orange_pickup:  { front: [{x:91,y:10},{x:91,y:36}], rear: [{x:5,y:8},{x:5,y:38}] },
+    silver_minivan: { front: [{x:91,y:10},{x:91,y:36}], rear: [{x:5,y:8},{x:5,y:38}] },
   };
 
   // ── Car sprites loaded from embedded base64 ──────────────

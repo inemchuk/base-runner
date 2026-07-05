@@ -35,11 +35,11 @@ export interface RunXpBreakdown {
 export const LEVEL_REWARDS: Record<number, LevelReward> = {
   2: { type: 'bundle', value: { coins: 75, boosters: 1 }, iconSrc: '/game/ui-icons/starter-pack.png', label: '+75 coins + booster' },
   3: { type: 'skin', value: 'skin_street_runner', sprite: '/game/chars/street_runner.png', label: 'Street Runner unlocked!' },
-  5: { type: 'bundle', value: { container: 'focus_chest' }, iconSrc: '/game/ui-icons/gem.png', label: 'Focus Chest' },
+  5: { type: 'bundle', value: { container: 'focus_chest' }, iconSrc: '/game/ui-icons/fragments.png', label: 'Focus Chest' },
   7: { type: 'trail', value: 'trail_sparkle', sprite: '/nft/images/trail_sparkle.png', label: 'Sparkle Trail unlocked!' },
   10: { type: 'bundle', value: { container: 'rare_crate' }, iconSrc: '/game/ui-icons/starter-pack.png', label: 'Rare Crate' },
   12: { type: 'trail', value: 'trail_hearts', sprite: '/nft/images/trail_hearts.png', label: 'Hearts Trail unlocked!' },
-  15: { type: 'bundle', value: { coins: 120, fragments: 8 }, iconSrc: '/game/ui-icons/gem.png', label: '+120 coins + 8 fragments' },
+  15: { type: 'bundle', value: { coins: 120, fragments: 8 }, iconSrc: '/game/ui-icons/fragments.png', label: '+120 coins + 8 fragments' },
   18: { type: 'trail', value: 'trail_fire', sprite: '/nft/images/trail_fire.png', label: 'Fire Trail unlocked!' },
   20: { type: 'skin', value: 'skin_founder', sprite: '/game/chars/founder.png', label: 'Founder unlocked!' },
   25: { type: 'bundle', value: { container: 'epic_crate' }, iconSrc: '/game/ui-icons/starter-pack.png', label: 'Epic Crate' },

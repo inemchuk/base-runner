@@ -16,6 +16,15 @@ function _uiIconHtml(name, className = '', alt = '') {
   return _imgHtml(`/game/ui-icons/${name}.png`, cls, alt, ' aria-hidden="true"');
 }
 
+function _escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 const Save = (() => {
 
   const KEY = 'crossy_save_v1';
@@ -140,9 +149,9 @@ const REWARD_CONTAINERS_LOCAL = Object.freeze({
 const CHECKIN_REWARD_CYCLE = [
   { coins: 20, icon: () => _imgHtml('/game/coin.png', 'ci-reward-icon-img', 'coins') },
   { coins: 15, boosters: 1, icon: () => _uiIconHtml('coin-pouch', 'ci-reward-icon-img', 'coin pouch') },
-  { fragments: 2, icon: () => _uiIconHtml('gem', 'ci-reward-icon-img', 'fragments') },
+  { fragments: 2, icon: () => _uiIconHtml('fragments', 'ci-reward-icon-img', 'fragments') },
   { coins: 35, boosters: 1, icon: () => _uiIconHtml('starter-pack', 'ci-reward-icon-img', 'booster') },
-  { coins: 20, fragments: 3, icon: () => _uiIconHtml('gem', 'ci-reward-icon-img', 'fragments') },
+  { coins: 20, fragments: 3, icon: () => _uiIconHtml('fragments', 'ci-reward-icon-img', 'fragments') },
   { coins: 50, xp: 75, icon: () => _uiIconHtml('xp', 'ci-reward-icon-img', 'xp') },
   { container: 'gear_crate', icon: () => _uiIconHtml('starter-pack', 'ci-reward-icon-img', 'gear crate') },
 ];
@@ -5583,7 +5592,7 @@ const UI = (() => {
     const totals = RewardEconomy.collect(bundle);
     const parts = [];
     if (totals.coins) parts.push({ kind: 'coins', value: totals.coins, label: 'coins', icon: _imgHtml('/game/coin.png', 'ci-reward-chip-icon', 'coins') });
-    if (totals.fragments) parts.push({ kind: 'frags', value: totals.fragments, label: 'frags', icon: _uiIconHtml('gem', 'ci-reward-chip-icon', 'fragments') });
+    if (totals.fragments) parts.push({ kind: 'frags', value: totals.fragments, label: 'frags', icon: _uiIconHtml('fragments', 'ci-reward-chip-icon', 'fragments') });
     if (totals.boosters) parts.push({ kind: 'boost', value: totals.boosters, label: totals.boosters === 1 ? 'boost' : 'boosts', icon: _uiIconHtml('starter-pack', 'ci-reward-chip-icon', 'boosters') });
     if (totals.xp) parts.push({ kind: 'xp', value: totals.xp, label: 'XP', icon: _uiIconHtml('xp', 'ci-reward-chip-icon', 'xp') });
     return parts;
@@ -6743,7 +6752,7 @@ const Shop = (() => {
             </div>
             <button class="shop-btn shop-btn-daily-chest${disabledClass}"${disabledAttr}>
               <span>${rewardLabel}</span>
-              ${_uiIconHtml('gem', 'daily-fragment-chest-gem', 'fragments')}
+              ${_uiIconHtml('fragments', 'daily-fragment-chest-gem', 'fragments')}
               <span class="daily-fragment-chest-price"><img src="/game/coin.png" alt="coins"> ${chest.cost}</span>
             </button>
           </div>`;
@@ -7241,6 +7250,50 @@ const RewardEconomy = (() => {
     return parts.join(' + ') || label(bundle);
   }
 
+  function currencyHtml(kind, amount, labelText = '') {
+    const value = Math.max(0, Math.floor(Number(amount) || 0));
+    if (!value) return '';
+    const iconSrc = kind === 'fragments' ? '/game/ui-icons/fragments.png' : '/game/coin.png';
+    const safeKind = kind === 'fragments' ? 'fragments' : 'coins';
+    const labelPart = labelText ? `<span class="reward-inline-label">${_escapeHtml(labelText)}</span>` : '';
+    return `<span class="reward-inline reward-inline-${safeKind}">` +
+      _imgHtml(iconSrc, `reward-inline-icon reward-inline-icon-${safeKind}`, '', ' aria-hidden="true"') +
+      `<span class="reward-inline-plus">+</span><span class="reward-inline-value">${value}</span>${labelPart}</span>`;
+  }
+
+  function _textRewardHtml(text) {
+    return `<span class="reward-inline reward-inline-text">${_escapeHtml(text)}</span>`;
+  }
+
+  function _bundleHtml(bundle, options = {}) {
+    if (!bundle) return '';
+    if (bundle.container && !options.expandContainer) {
+      return _escapeHtml(CONTAINER_NAMES[bundle.container] || 'Reward Crate');
+    }
+
+    const totals = options.expandContainer ? collect(bundle) : {
+      coins: Math.max(0, Math.floor(Number(bundle.coins) || 0)),
+      fragments: Math.max(0, Math.floor(Number(bundle.fragments) || 0)),
+      boosters: Math.max(0, Math.floor(Number(bundle.boosters) || 0)),
+      xp: Math.max(0, Math.floor(Number(bundle.xp) || 0)),
+    };
+    const compact = Boolean(options.compact);
+    const parts = [];
+    if (totals.coins) parts.push(currencyHtml('coins', totals.coins, compact ? '' : 'coins'));
+    if (totals.fragments) parts.push(currencyHtml('fragments', totals.fragments, compact ? '' : 'Focus fragments'));
+    if (totals.boosters) parts.push(_textRewardHtml(`+${totals.boosters} booster${totals.boosters === 1 ? '' : 's'}`));
+    if (totals.xp) parts.push(_textRewardHtml(`+${totals.xp} XP`));
+    return parts.join('<span class="reward-separator">&middot;</span>') || _escapeHtml(label(bundle));
+  }
+
+  function labelHtml(bundle) {
+    return _bundleHtml(bundle, { compact: false, expandContainer: false });
+  }
+
+  function shortLabelHtml(bundle) {
+    return _bundleHtml(bundle, { compact: true, expandContainer: true });
+  }
+
   function setCoinsLocal(balance) {
     const d = Save.load();
     d.coins = Math.max(0, Math.floor(Number(balance) || 0));
@@ -7331,6 +7384,9 @@ const RewardEconomy = (() => {
     collect,
     label,
     shortLabel,
+    labelHtml,
+    shortLabelHtml,
+    currencyHtml,
     applyBundleLocal,
     setCoinsLocal,
     resolveBoosterName,
@@ -7735,8 +7791,8 @@ const Quests = (() => {
       const pct = isMaxed ? 100 : Math.min(100, Math.floor((progress / target) * 100));
       const canClaim = !isMaxed && progress >= target && !q.claimed[lvl];
       const isPending = canClaim && _pendingClaims.has(`${def.id}:${lvl}`);
-      const rewardLabel = levelInfo ? RewardEconomy.label(levelInfo.reward) : '';
-      const rewardShort = levelInfo ? RewardEconomy.shortLabel(levelInfo.reward) : '';
+      const rewardLabel = levelInfo ? RewardEconomy.labelHtml(levelInfo.reward) : '';
+      const rewardShort = levelInfo ? RewardEconomy.shortLabelHtml(levelInfo.reward) : '';
 
       const card = document.createElement('div');
       card.className = 'quest-card' + (canClaim ? ' quest-claimable' : '') + (isPending ? ' quest-pending' : '');
@@ -8301,22 +8357,24 @@ const DailySpin = (() => {
         iconEl.innerHTML = IMG(src, '56px');
         labelEl.textContent = _prize._resolvedBoosterName ? `${_prize._resolvedBoosterName}!` : 'New booster!';
       } else if (_prize.type === 'fragments' || _prize.type === 'fragment_burst') {
-        iconEl.innerHTML = IMG('/game/ui-icons/gem.png', '56px');
+        iconEl.innerHTML = IMG('/game/ui-icons/fragments.png', '56px');
         const awarded = Number(_prize.fragmentsAwarded || _prize.value || 0);
         const fallback = Number(_prize.fallbackCoins || 0);
-        labelEl.textContent = fallback > 0 && awarded <= 0
-          ? `Overflow +${fallback} coins`
-          : `+${awarded} Focus fragments${fallback > 0 ? ` + Overflow ${fallback} coins` : ''}`;
+        labelEl.innerHTML = fallback > 0 && awarded <= 0
+          ? `<span class="reward-overflow">Overflow ${RewardEconomy.currencyHtml('coins', fallback, 'coins')}</span>`
+          : `${RewardEconomy.currencyHtml('fragments', awarded, 'Focus fragments')}${fallback > 0 ? `<span class="reward-overflow">Overflow ${RewardEconomy.currencyHtml('coins', fallback, 'coins')}</span>` : ''}`;
       } else if (_prize.type === 'crate') {
         iconEl.innerHTML = IMG('/game/ui-icons/starter-pack.png', '56px');
         const fallback = Number(_prize.fallbackCoins || 0);
-        labelEl.textContent = fallback > 0 ? `${_prize.label || 'Crate'} + Overflow ${fallback} coins` : (_prize.label || 'Reward crate!');
+        labelEl.innerHTML = fallback > 0
+          ? `${_escapeHtml(_prize.label || 'Crate')} <span class="reward-overflow">Overflow ${RewardEconomy.currencyHtml('coins', fallback, 'coins')}</span>`
+          : _escapeHtml(_prize.label || 'Reward crate!');
       } else if (_prize.type === 'xp') {
         iconEl.innerHTML = IMG('/game/ui-icons/xp.png', '56px');
         labelEl.textContent = _prize.label || `+${_prize.value} XP`;
       } else if (_prize.type === 'coins') {
         iconEl.innerHTML = IMG('/game/coin.png', '56px');
-        labelEl.textContent = _prize.label || `${_prize.value} Coins`;
+        labelEl.innerHTML = RewardEconomy.currencyHtml('coins', _prize.value, 'Coins');
       } else if (_prize.type === 'nothing') {
         iconEl.innerHTML = IMG('/game/ui-icons/fire.png', '56px');
         labelEl.textContent = 'Better luck next time!';
@@ -8586,11 +8644,11 @@ const Xp = (() => {
   const LEVEL_REWARDS = {
     2:  { type: 'bundle', value: { coins: 75, boosters: 1 }, iconSrc: '/game/ui-icons/starter-pack.png', label: '+75 coins + booster' },
     3:  { type: 'skin',  value: 'skin_street_runner', sprite: '/game/chars/street_runner.png', label: 'Street Runner unlocked!' },
-    5:  { type: 'bundle', value: { container: 'focus_chest' }, iconSrc: '/game/ui-icons/gem.png', label: 'Focus Chest' },
+    5:  { type: 'bundle', value: { container: 'focus_chest' }, iconSrc: '/game/ui-icons/fragments.png', label: 'Focus Chest' },
     7:  { type: 'trail', value: 'trail_sparkle', sprite: '/nft/images/trail_sparkle.png', label: 'Sparkle Trail unlocked!' },
     10: { type: 'bundle', value: { container: 'rare_crate' }, iconSrc: '/game/ui-icons/starter-pack.png', label: 'Rare Crate' },
     12: { type: 'trail', value: 'trail_hearts',  sprite: '/nft/images/trail_hearts.png',  label: 'Hearts Trail unlocked!' },
-    15: { type: 'bundle', value: { coins: 120, fragments: 8 }, iconSrc: '/game/ui-icons/gem.png', label: '+120 coins + 8 fragments' },
+    15: { type: 'bundle', value: { coins: 120, fragments: 8 }, iconSrc: '/game/ui-icons/fragments.png', label: '+120 coins + 8 fragments' },
     18: { type: 'trail', value: 'trail_fire',    sprite: '/nft/images/trail_fire.png',    label: 'Fire Trail unlocked!' },
     20: { type: 'skin',  value: 'skin_founder',  sprite: '/game/chars/founder.png',       label: 'Founder unlocked!' },
     25: { type: 'bundle', value: { container: 'epic_crate' }, iconSrc: '/game/ui-icons/starter-pack.png', label: 'Epic Crate' },
@@ -8757,11 +8815,16 @@ const Xp = (() => {
         : r.type === 'coins'
           ? `<img src="/game/coin.png" class="xpr-coin-img" alt="coins">`
           : `<div class="xpr-icon">${r.iconSrc ? _imgHtml(r.iconSrc, 'xpr-icon-img ui-icon', r.label, ' aria-hidden="true"') : _uiIconHtml('celebration', 'xpr-icon-img', r.label)}</div>`;
+      const labelHtml = r.type === 'bundle'
+        ? RewardEconomy.labelHtml(r.value)
+        : r.type === 'coins'
+          ? RewardEconomy.currencyHtml('coins', r.value, 'Coins')
+          : _escapeHtml(r.label);
       html += `
         <div class="${cls}">
           <div class="xpr-level-num">Lv.${lvl}</div>
           ${iconHtml}
-          <div class="xpr-label">${r.label}</div>
+          <div class="xpr-label">${labelHtml}</div>
           ${badge}
         </div>`;
     }
@@ -9024,7 +9087,15 @@ function _showNextLevelUp() {
     }
   }
   if (lvlEl)  lvlEl.textContent   = `Lv.${item.level}`;
-  if (rwdEl)  rwdEl.textContent   = r ? r.label : '';
+  if (rwdEl) {
+    rwdEl.innerHTML = r
+      ? (r.type === 'bundle'
+        ? RewardEconomy.labelHtml(r.value)
+        : r.type === 'coins'
+          ? RewardEconomy.currencyHtml('coins', r.value, 'Coins')
+          : _escapeHtml(r.label))
+      : '';
+  }
   if (rwdEl)  rwdEl.style.display = r ? '' : 'none';
 
   // NFT mint button for skin/trail rewards
@@ -9283,9 +9354,9 @@ function _updateCiBanner() {
     const daySlot   = state.streak % 7;
     const reward    = RewardEconomy.getCheckInReward(daySlot);
     const isDay7    = daySlot === 6;
-    sub.textContent = isDay7
-      ? `Day 7 · ${RewardEconomy.label(reward)}`
-      : `Day ${state.streak + 1} · ${RewardEconomy.shortLabel(reward)}`;
+    sub.innerHTML = isDay7
+      ? `Day 7 · ${RewardEconomy.labelHtml(reward)}`
+      : `Day ${state.streak + 1} · ${RewardEconomy.shortLabelHtml(reward)}`;
   } else {
     banner.classList.remove('ci-banner-available');
     const ms = _msUntilNextMidnightUTC();

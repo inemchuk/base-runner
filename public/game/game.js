@@ -26,6 +26,11 @@ function _boosterIconHtml(className = '', alt = 'booster', id = 'boost_magnet') 
   return _imgHtml(BOOSTER_ICON_SRCS[id] || BOOSTER_ICON_SRCS.boost_magnet, className, alt, ' aria-hidden="true"');
 }
 
+function _checkinDayIconHtml(day) {
+  const safeDay = Math.min(7, Math.max(1, Math.floor(Number(day) || 1)));
+  return _imgHtml(`/game/ui-icons/checkin/day-${safeDay}.png`, 'ci-reward-icon-img ci-checkin-day-icon', `day ${safeDay}`, ' aria-hidden="true"');
+}
+
 function _escapeHtml(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -157,13 +162,13 @@ const REWARD_CONTAINERS_LOCAL = Object.freeze({
 });
 
 const CHECKIN_REWARD_CYCLE = [
-  { coins: 20, icon: () => _uiIconHtml('coin-pouch', 'ci-reward-icon-img', 'coins') },
-  { coins: 15, boosters: 1, icon: () => _boosterIconHtml('ci-reward-icon-img', 'booster', 'boost_magnet') },
-  { fragments: 2, icon: () => _uiIconHtml('fragments', 'ci-reward-icon-img', 'fragments') },
-  { coins: 35, boosters: 1, icon: () => _boosterIconHtml('ci-reward-icon-img', 'booster', 'boost_double') },
-  { coins: 20, fragments: 3, icon: () => _uiIconHtml('fragments', 'ci-reward-icon-img', 'fragments') },
-  { coins: 50, xp: 75, icon: () => _uiIconHtml('xp', 'ci-reward-icon-img', 'xp') },
-  { container: 'gear_crate', icon: () => _uiIconHtml('starter-pack', 'ci-reward-icon-img', 'gear crate') },
+  { coins: 20, icon: () => _checkinDayIconHtml(1) },
+  { coins: 15, boosters: 1, icon: () => _checkinDayIconHtml(2) },
+  { fragments: 2, icon: () => _checkinDayIconHtml(3) },
+  { coins: 35, boosters: 1, icon: () => _checkinDayIconHtml(4) },
+  { coins: 20, fragments: 3, icon: () => _checkinDayIconHtml(5) },
+  { coins: 50, xp: 75, icon: () => _checkinDayIconHtml(6) },
+  { container: 'gear_crate', icon: () => _checkinDayIconHtml(7) },
 ];
 
 const DAILY_FRAGMENT_CHEST_COST = 90;

@@ -957,6 +957,10 @@
     }
     .ci-day-icon  { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; margin-bottom: 2px; }
     .ci-day-icon img { width: 28px; height: 28px; object-fit: contain; }
+    .ci-checkin-day-icon {
+      image-rendering: auto;
+      filter: drop-shadow(0 2px 5px rgba(0,0,0,0.18));
+    }
     .ci-reward-chips {
       display: flex;
       flex-wrap: wrap;

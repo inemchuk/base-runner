@@ -4515,7 +4515,7 @@ const Renderer = (() => {
     ctx.fill();
 
     ctx.translate(centerX, centerY);
-    ctx.scale(dir > 0 ? -1 : 1, 1);
+    ctx.scale(dir < 0 ? -1 : 1, 1);
     ctx.drawImage(_trainSpriteImg, -drawW / 2, -drawH / 2, drawW, drawH);
     ctx.restore();
     return true;
@@ -4536,7 +4536,7 @@ const Renderer = (() => {
       const cx     = train.x + carIdx * (carW + gap);
 
       // Wagon body
-      const isEngine = (dir > 0 && i === 0) || (dir < 0 && i === CARS - 1);
+      const isEngine = (dir > 0 && carIdx === CARS - 1) || (dir < 0 && carIdx === 0);
       ctx.fillStyle = isEngine ? '#B71C1C' : '#C62828';
       roundRect(ctx, cx, y, carW, carH, 5);
       ctx.fill();

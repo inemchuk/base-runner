@@ -8774,10 +8774,12 @@ function _resetRunSummary() {
     highestStage: 'onboarding',
     deathCause: 'unknown',
     deathRowType: null,
-    boostersUsed: [],
+    boostersUsed: [], // заполняется задачей pre-run loadout (Product Priority 3)
   };
 }
 
+// При continue финальная смерть перезаписывает предыдущую — это намеренно:
+// сводка описывает терминальную смерть забега.
 function _markDeathCause(row) {
   if (!_runSummary || !row) return;
   _runSummary.deathRowType = row.type || null;

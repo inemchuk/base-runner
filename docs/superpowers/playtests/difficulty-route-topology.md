@@ -88,3 +88,30 @@ Branch: codex/economy-v1-local-focus
 - Viewport:
 - Score band:
 - Notes:
+
+## Final Verification
+
+Run 2026-07-06 (all automated commands green):
+
+- `npm run rating:verify`: PASS — "rating config verified".
+- `npm run difficulty:sim`: PASS — all bands 0..650 print speeds, danger/complexity
+  budgets, and reward-route chance/cap; rush ≤150, siren ≤300.
+- `npm run economy:runway`: PASS — casual ~196d / active ~38d / skilled ~12d /
+  master ~6d to level 35.
+- `npm run lint`: exit 0 (97 warnings, 0 errors — baseline).
+- `npm run build`: exit 0 (prebuild rating drift check runs and passes).
+- `tsc --noEmit`: exit 0.
+- Pre-existing economy suite: `verify-economy-{server-authority,telemetry,
+  reward-claims,v1-local}.mjs` exit 0; `test-economy-core.mjs` passes with
+  `node --experimental-strip-types` (it imports .ts directly; the plain-node
+  failure is pre-existing and loader-related, not a regression from this work).
+- On-chain flows touched: no (check-in, paymaster, spin config, NFT mint
+  untouched).
+- Phone viewport result: NOT performed — the Phase 2B manual playtest gate was
+  waived by the user; the felt-checks above (50-100 easing, hard/hard/relief
+  cadence, rush/siren softening, route readability at 150+) remain open for a
+  future real play session.
+- Known follow-ups: felt-checks above; skill/mastery reward-route caps are
+  future-guards (single-grass-row sections add ~1 coin); local elite_runs only
+  advances offline by design; game_difficulty_band_reached telemetry name is
+  reserved for a future client emitter.

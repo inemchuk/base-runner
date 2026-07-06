@@ -13,6 +13,7 @@ import {
   writeQuestState,
 } from '@/lib/economy/storage.ts';
 import { applyDailyQualityRun } from '@/lib/economy/daily-quality.ts';
+import { trackEconomyEventAfter } from '@/lib/economy/telemetry.ts';
 
 const SECRET              = process.env.ANTI_CHEAT_SECRET ?? 'dev_secret_change_in_prod';
 const MAX_ROWS_PER_SEC    = 5;    // generous upper bound on player speed
@@ -157,6 +158,27 @@ export async function POST(req: NextRequest) {
       writeLevelState(addr, levelUpdate.state),
       writeDailyQualityState(addr, dailyQualityUpdate.state),
     ]);
+
+    // Non-blocking telemetry (after() runs post-response).
+    trackEconomyEventAfter('game_run_completed', addr, {
+      score,
+      sessionCoins,
+      rating,
+      xpEarned: levelUpdate.xpEarned,
+      dailyQualityXp: dailyQualityUpdate.xpDelta,
+    });
+    if (dailyQualityUpdate.xpDelta > 0) {
+      trackEconomyEventAfter('economy_daily_quality_bonus_claimed', addr, {
+        rating,
+        xpDelta: dailyQualityUpdate.xpDelta,
+      });
+    }
+    if (rating === 'great' || rating === 'elite' || rating === 'master') {
+      trackEconomyEventAfter('quest_elite_run_progressed', addr, {
+        rating,
+        progress: nextQuestState.elite_runs.progress,
+      });
+    }
 
     return NextResponse.json({
       ok: true,

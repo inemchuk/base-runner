@@ -19,7 +19,11 @@ export type EconomyTelemetryEventName =
   | 'economy_spin_result'
   | 'economy_checkin_claimed'
   | 'economy_quest_claimed'
-  | 'economy_level_reward_claimed';
+  | 'economy_level_reward_claimed'
+  | 'game_run_completed'
+  | 'game_difficulty_band_reached'
+  | 'economy_daily_quality_bonus_claimed'
+  | 'quest_elite_run_progressed';
 
 export interface EconomyTelemetryEvent {
   event: EconomyTelemetryEventName;

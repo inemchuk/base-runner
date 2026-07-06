@@ -65,6 +65,24 @@ Branch: codex/economy-v1-local-focus
 - Cadence to felt-check: hard/hard/relief softens sustained mastery pressure —
   check that 300+ still feels demanding.
 
+## Economy Runway Simulation
+
+`npm run economy:runway` (approx days to reach level 35 / top reward tier):
+
+- Casual (4 runs/day, ~55 score, Good): baseRunXp 70, dailyXp 305, ~196 days.
+- Active (10 runs/day, ~110 score, Great): baseRunXp 155, dailyXp 1600, ~38 days.
+- Skilled (15 runs/day, ~240 score, Elite): baseRunXp 348, dailyXp 5320, ~12 days.
+- Master (20 runs/day, ~330 score, Master): baseRunXp 509, dailyXp 10330, ~6 days.
+- Runway risk found: none blocking. The 196-day casual runway is long but
+  acceptable — level 35 is the aspirational top tier (legendary bundle); casual
+  players are expected to plateau at mid levels. The daily-quality bonus adds a
+  meaningful floor for low-volume players without collapsing the skilled/master
+  spread. No reward-inflation risk (master's 6 days reflects rare, high-skill
+  volume, not a farmable exploit — elite_runs and rating are score-gated).
+- Follow-up reward changes needed: none now. Monitor casual retention; if the
+  mid-game (levels 10-20) feels slow for casual players, revisit the daily
+  quality XP values rather than the base multiplier.
+
 ## Manual Phone Checks
 
 - Viewport:

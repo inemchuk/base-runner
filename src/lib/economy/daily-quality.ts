@@ -1,4 +1,4 @@
-import { getDailyQualityTargetXp, getRunRating, type RunRating } from './rating.ts';
+import { getDailyQualityTargetXp, getRunRating, RUN_RATING_DEFS, type RunRating } from './rating.ts';
 
 export interface DailyQualityState {
   utcDate: string;
@@ -39,9 +39,7 @@ export function applyDailyQualityRun(
 }
 
 function ratingToMinScore(rating: unknown): number {
-  if (rating === 'master') return 300;
-  if (rating === 'elite') return 150;
-  if (rating === 'great') return 80;
-  if (rating === 'good') return 40;
-  return 0;
+  // Derive from the canonical rating table so bands stay a single source of truth.
+  const def = RUN_RATING_DEFS.find((d) => d.id === rating);
+  return def ? def.minScore : 0;
 }

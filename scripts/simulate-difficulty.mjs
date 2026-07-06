@@ -34,6 +34,16 @@ const budgets = {
   mastery: { danger: [10, 13], complexity: [4, 6] },
 };
 
+// Mirrors shouldAddRewardRoute() + REWARD_ROUTE_CAP in public/game/game.js:
+// per-section chance of an optional risk coin route, and its per-section coin cap.
+const rewardRoute = {
+  onboarding: { chance: 0, cap: 0 },
+  baseline: { chance: 0, cap: 0 },
+  transition: { chance: 0.15, cap: 1 },
+  skill: { chance: 0.28, cap: 2 },
+  mastery: { chance: 0.35, cap: 3 },
+};
+
 for (const score of scores) {
   const p = smoothProgress(score, 0, 250);
   const base = lerp(60, 100, p);
@@ -51,5 +61,7 @@ for (const score of scores) {
     sirenSpeedMax: Math.round(sirenMax),
     dangerBudget: budgets[band].danger,
     complexityBudget: budgets[band].complexity,
+    rewardRouteChance: rewardRoute[band].chance,
+    rewardRouteCoinCap: rewardRoute[band].cap,
   }));
 }

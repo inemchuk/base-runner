@@ -1083,6 +1083,13 @@ const World = (() => {
     river_chain: 3,
   };
 
+  // Верхняя граница доп. монет risk-маршрута на секцию (по стадии)
+  const REWARD_ROUTE_CAP = {
+    transition: 1,
+    skill: 2,
+    mastery: 3,
+  };
+
   let patternBuffer = [];
   let streakRoad    = 0;
   let streakWater   = 0;
@@ -1124,6 +1131,11 @@ const World = (() => {
     if (!isRelief && stage === 'mastery' && Math.random() < 0.35) {
       features.push('commitment_2_4');
     }
+    // Опциональный risk-маршрут: доп. монеты в боковых колонках. Не единственный
+    // осмысленный выбор — только шанс поверх обычной генерации, не в передышке.
+    if (!isRelief && shouldAddRewardRoute(stage)) {
+      features.push('reward_route');
+    }
 
     const budget = SECTION_BUDGETS[stage];
     return {
@@ -1133,7 +1145,17 @@ const World = (() => {
       dangerBudget: budget.danger[1],
       complexityBudget: budget.complexity[1],
       features,
+      rewardRouteCap: REWARD_ROUTE_CAP[stage] || 0,
+      rewardCoinsAdded: 0,
     };
+  }
+
+  // Шанс risk-маршрута по стадии (нет на onboarding/baseline)
+  function shouldAddRewardRoute(stage) {
+    if (stage === 'transition') return Math.random() < 0.15;
+    if (stage === 'skill')      return Math.random() < 0.28;
+    if (stage === 'mastery')    return Math.random() < 0.35;
+    return false;
   }
 
   // Проверка safety limits
@@ -1312,6 +1334,20 @@ const World = (() => {
       coinAttempts++;
       const col = Math.floor(rng(coinAttempts + 70) * COLS);
       if (!coinOccupied.has(col)) { coinOccupied.add(col); coinsList.push({ col, collected: false }); }
+    }
+
+    // Risk-маршрут: до rewardRouteCap доп. монет на секцию в боковых колонках.
+    // Опционально и ограниченно — не единственный осмысленный путь.
+    if (activeSection && activeSection.features.includes('reward_route')
+        && activeSection.rewardCoinsAdded < activeSection.rewardRouteCap
+        && coinsList.length < 2) {
+      const sideCols = [1, 2, COLS - 3, COLS - 2].filter(col => !coinOccupied.has(col));
+      if (sideCols.length) {
+        const col = sideCols[Math.floor(rng(123) * sideCols.length)];
+        coinOccupied.add(col);
+        coinsList.push({ col, collected: false, riskRoute: true });
+        activeSection.rewardCoinsAdded += 1;
+      }
     }
 
     return { idx: rowIdx, type: 'grass', obstacles: [], spawnQueue: [], spawnTimer: 0, dir: 0, speed: 0, decorations, coins: coinsList };

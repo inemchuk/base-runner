@@ -5589,6 +5589,7 @@ const UI = (() => {
       const bonuses = [];
       if (xpBreakdown.recordBonus)  bonuses.push(`${_uiIconHtml('leaderboard', 'go-xp-bonus-icon', 'record')} +${xpBreakdown.recordBonus}`);
       if (xpBreakdown.streakBonus)  bonuses.push(`${_uiIconHtml('fire', 'go-xp-bonus-icon', 'streak')} +${xpBreakdown.streakBonus}`);
+      if (xpBreakdown.dailyQualityBonus)  bonuses.push(`${_uiIconHtml('celebration', 'go-xp-bonus-icon', 'daily')} daily +${xpBreakdown.dailyQualityBonus}`);
       if (xpBonusEl) {
         xpBonusEl.innerHTML     = bonuses.map(item => `<span class="go-xp-bonus-chip">${item}</span>`).join('');
         xpBonusEl.style.display = bonuses.length ? '' : 'none';

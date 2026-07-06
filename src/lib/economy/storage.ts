@@ -1,6 +1,7 @@
 import { normalizeShopData, type EconomyShopData } from './core.ts';
 import { normalizeLevelState, type LevelState } from './levels.ts';
 import { normalizeQuestState, type QuestState } from './quests.ts';
+import { normalizeDailyQualityState, type DailyQualityState } from './daily-quality.ts';
 
 const memShop = new Map<string, EconomyShopData>();
 const memCoins = new Map<string, number>();
@@ -10,6 +11,7 @@ const memCheckinReward = new Map<string, EconomyCheckinRewardState>();
 const memDailyFragmentChest = new Map<string, EconomyDailyFragmentChestState>();
 const memQuest = new Map<string, QuestState>();
 const memLevel = new Map<string, LevelState>();
+const memDailyQuality = new Map<string, DailyQualityState>();
 
 export interface EconomyCheckinRewardState {
   lastDate: string | null;
@@ -154,6 +156,23 @@ export async function writeDailyFragmentChestState(address: string, state: Econo
   const redis = await getRedis();
   if (redis) await redis.set(`economy_daily_fragment_chest:${addr}`, normalized);
   else memDailyFragmentChest.set(addr, normalized);
+}
+
+export async function readDailyQualityState(address: string): Promise<DailyQualityState> {
+  const addr = normalizeAddress(address);
+  const redis = await getRedis();
+  const data = redis
+    ? await redis.get<Partial<DailyQualityState>>(`economy_daily_quality:${addr}`)
+    : memDailyQuality.get(addr) ?? null;
+  return normalizeDailyQualityState(data ?? {});
+}
+
+export async function writeDailyQualityState(address: string, state: DailyQualityState): Promise<void> {
+  const addr = normalizeAddress(address);
+  const normalized = normalizeDailyQualityState(state);
+  const redis = await getRedis();
+  if (redis) await redis.set(`economy_daily_quality:${addr}`, normalized);
+  else memDailyQuality.set(addr, normalized);
 }
 
 function normalizeCheckinRewardState(input: Partial<EconomyCheckinRewardState>): EconomyCheckinRewardState {

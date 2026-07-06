@@ -5,11 +5,14 @@ import { updateQuestProgressFromRun } from '@/lib/economy/quests.ts';
 import { getRatingDef, getRunRating } from '@/lib/economy/rating.ts';
 import {
   readCheckinRewardState,
+  readDailyQualityState,
   readLevelState,
   readQuestState,
+  writeDailyQualityState,
   writeLevelState,
   writeQuestState,
 } from '@/lib/economy/storage.ts';
+import { applyDailyQualityRun } from '@/lib/economy/daily-quality.ts';
 
 const SECRET              = process.env.ANTI_CHEAT_SECRET ?? 'dev_secret_change_in_prod';
 const MAX_ROWS_PER_SEC    = 5;    // generous upper bound on player speed
@@ -131,24 +134,28 @@ export async function POST(req: NextRequest) {
       if (score > current) memStore.set(addr, score);
     }
 
-    const [questState, levelState, checkinRewardState] = await Promise.all([
+    const [questState, levelState, checkinRewardState, dailyQualityState] = await Promise.all([
       readQuestState(addr),
       readLevelState(addr),
       readCheckinRewardState(addr),
+      readDailyQualityState(addr),
     ]);
     const rating = getRunRating(score);
     const ratingDef = getRatingDef(rating);
+    const dailyQualityUpdate = applyDailyQualityRun(dailyQualityState, rating);
     const nextQuestState = updateQuestProgressFromRun(questState, { score, sessionCoins });
     const levelUpdate = updateLevelProgressFromRun(levelState, {
       score,
       sessionCoins,
       checkinStreak: checkinRewardState.streak,
       isNewRecord: score > previousBest,
+      extraXp: dailyQualityUpdate.xpDelta,
     });
 
     await Promise.all([
       writeQuestState(addr, nextQuestState),
       writeLevelState(addr, levelUpdate.state),
+      writeDailyQualityState(addr, dailyQualityUpdate.state),
     ]);
 
     return NextResponse.json({
@@ -156,6 +163,11 @@ export async function POST(req: NextRequest) {
       quests: nextQuestState,
       levels: levelUpdate.state,
       rating: { id: ratingDef.id, label: ratingDef.label },
+      dailyQuality: {
+        xpDelta: dailyQualityUpdate.xpDelta,
+        claimedXp: dailyQualityUpdate.state.claimedXp,
+        bestRating: dailyQualityUpdate.state.bestRating,
+      },
       xp: {
         earned: levelUpdate.xpEarned,
         breakdown: levelUpdate.breakdown,

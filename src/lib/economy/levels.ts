@@ -24,13 +24,15 @@ export interface RunLevelProgress {
   sessionCoins?: number;
   checkinStreak?: number;
   isNewRecord?: boolean;
+  extraXp?: number;
 }
 
 export interface RunXpBreakdown {
   base: number;
-  multi: number;
+  multi: number; // derived from `rating` via the shared rating table — keep consistent
   streakBonus: number;
   recordBonus: number;
+  dailyQualityBonus: number;
   rating: RunRating;
 }
 
@@ -85,9 +87,10 @@ export function calculateRunXp(run: RunLevelProgress): { earned: number; breakdo
   const base = Math.round(baseXp * multi);
   const streakBonus = Math.min(Math.max(0, Math.floor(Number(run.checkinStreak) || 0)) * 2, 20);
   const recordBonus = run.isNewRecord ? Math.round(base * 0.5) : 0;
+  const dailyQualityBonus = Math.max(0, Math.floor(Number(run.extraXp) || 0));
   return {
-    earned: Math.max(0, base + streakBonus + recordBonus),
-    breakdown: { base, multi, streakBonus, recordBonus, rating },
+    earned: Math.max(0, base + streakBonus + recordBonus + dailyQualityBonus),
+    breakdown: { base, multi, streakBonus, recordBonus, dailyQualityBonus, rating },
   };
 }
 

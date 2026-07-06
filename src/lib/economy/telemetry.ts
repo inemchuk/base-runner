@@ -21,6 +21,7 @@ export type EconomyTelemetryEventName =
   | 'economy_quest_claimed'
   | 'economy_level_reward_claimed'
   | 'game_run_completed'
+  // Reserved for a future client-side emitter; no server emitter today.
   | 'game_difficulty_band_reached'
   | 'economy_daily_quality_bonus_claimed'
   | 'quest_elite_run_progressed';

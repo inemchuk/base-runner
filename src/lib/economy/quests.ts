@@ -201,7 +201,7 @@ function getQuestLevel(entry: { claimed: boolean[] }): number {
   return idx === -1 ? entry.claimed.length : idx;
 }
 
-function sanitizeRunCoins(score: number, sessionCoins: unknown): number {
+export function sanitizeRunCoins(score: number, sessionCoins: unknown): number {
   const raw = Math.max(0, Math.floor(Number(sessionCoins) || 0));
   const plausibleCap = score > 0 ? score * 4 + 20 : 0;
   return Math.min(raw, plausibleCap);

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createHmac } from 'crypto';
 import { updateLevelProgressFromRun } from '@/lib/economy/levels.ts';
-import { updateQuestProgressFromRun } from '@/lib/economy/quests.ts';
+import { sanitizeRunCoins, updateQuestProgressFromRun } from '@/lib/economy/quests.ts';
 import { getRatingDef, getRunRating } from '@/lib/economy/rating.ts';
 import {
   readCheckinRewardState,
@@ -159,10 +159,11 @@ export async function POST(req: NextRequest) {
       writeDailyQualityState(addr, dailyQualityUpdate.state),
     ]);
 
-    // Non-blocking telemetry (after() runs post-response).
+    // Non-blocking telemetry (after() runs post-response). Log the credited
+    // (sanitized) coin figure, not the raw request value.
     trackEconomyEventAfter('game_run_completed', addr, {
       score,
-      sessionCoins,
+      sessionCoins: sanitizeRunCoins(score, sessionCoins),
       rating,
       xpEarned: levelUpdate.xpEarned,
       dailyQualityXp: dailyQualityUpdate.xpDelta,

@@ -17,6 +17,14 @@ Branch: codex/economy-v1-local-focus
 
 ## Phase 2B Gate
 
+> Status 2026-07-05: user **waived** the manual phone playtest gate and
+> authorized proceeding to the economy tasks on the strength of the simulator
+> output (speeds capped, budgets scale cleanly per stage). The felt-checks below
+> remain open and should be sampled in a later real play session; the balance
+> changes flagged (50-100 easing, hard/hard/relief cadence, rush/siren softening)
+> are not yet human-verified.
+
+
 - Score `150+` sampled sections regularly expose at least 2 viable survival lines:
 - Score `300+` runs feel planning-heavy rather than reaction-only:
 - Score `300-800` does not feel flat after speed caps:

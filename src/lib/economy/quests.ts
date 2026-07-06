@@ -1,6 +1,7 @@
 import type { RewardBundle } from './config.ts';
+import type { RunRating } from './rating.ts';
 
-export type QuestId = 'rows' | 'coins' | 'games' | 'record';
+export type QuestId = 'rows' | 'coins' | 'games' | 'record' | 'elite_runs';
 
 export interface QuestLevel {
   target: number;
@@ -20,6 +21,7 @@ export type QuestState = Record<QuestId, {
 export interface RunQuestProgress {
   score: number;
   sessionCoins?: number;
+  rating?: RunRating;
 }
 
 export const QUEST_DEFS = [
@@ -75,6 +77,19 @@ export const QUEST_DEFS = [
       { target: 900, reward: { container: 'legendary_crate' } },
     ],
   },
+  {
+    id: 'elite_runs',
+    levels: [
+      { target: 1, reward: { coins: 40 } },
+      { target: 3, reward: { boosters: 1 } },
+      { target: 7, reward: { fragments: 3 } },
+      { target: 15, reward: { coins: 80, boosters: 1 } },
+      { target: 30, reward: { fragments: 6 } },
+      { target: 50, reward: { container: 'rare_crate' } },
+      { target: 80, reward: { fragments: 10, boosters: 2 } },
+      { target: 120, reward: { container: 'epic_crate' } },
+    ],
+  },
 ] as const satisfies readonly QuestDef[];
 
 export function defaultQuestState(): QuestState {
@@ -83,6 +98,7 @@ export function defaultQuestState(): QuestState {
     coins: defaultEntry(),
     games: defaultEntry(),
     record: defaultEntry(),
+    elite_runs: defaultEntry(),
   };
 }
 
@@ -106,6 +122,8 @@ export function updateQuestProgressFromRun(state: QuestState, run: RunQuestProgr
   const normalized = normalizeQuestState(state);
   const score = Math.max(0, Math.floor(Number(run.score) || 0));
   const sessionCoins = sanitizeRunCoins(score, run.sessionCoins);
+  // Server-derived: only a Great+ rating (from the accepted score) counts.
+  const eliteRunDelta = run.rating === 'great' || run.rating === 'elite' || run.rating === 'master' ? 1 : 0;
 
   return {
     rows: {
@@ -123,6 +141,10 @@ export function updateQuestProgressFromRun(state: QuestState, run: RunQuestProgr
     record: {
       ...normalized.record,
       progress: Math.max(normalized.record.progress, score),
+    },
+    elite_runs: {
+      ...normalized.elite_runs,
+      progress: normalized.elite_runs.progress + eliteRunDelta,
     },
   };
 }

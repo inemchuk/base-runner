@@ -143,7 +143,7 @@ export async function POST(req: NextRequest) {
     const rating = getRunRating(score);
     const ratingDef = getRatingDef(rating);
     const dailyQualityUpdate = applyDailyQualityRun(dailyQualityState, rating);
-    const nextQuestState = updateQuestProgressFromRun(questState, { score, sessionCoins });
+    const nextQuestState = updateQuestProgressFromRun(questState, { score, sessionCoins, rating });
     const levelUpdate = updateLevelProgressFromRun(levelState, {
       score,
       sessionCoins,

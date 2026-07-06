@@ -7688,6 +7688,17 @@ const Quests = (() => {
         { target: 600, reward: { container: 'epic_crate' } },
         { target: 900, reward: { container: 'legendary_crate' } },
       ]},
+    { id: 'elite_runs', name: 'Elite Runner', iconSrc: '/game/ui-icons/quests.png', desc: 'Finish Great or better runs', type: 'cumulative',
+      levels: [
+        { target: 1,   reward: { coins: 40 } },
+        { target: 3,   reward: { boosters: 1 } },
+        { target: 7,   reward: { fragments: 3 } },
+        { target: 15,  reward: { coins: 80, boosters: 1 } },
+        { target: 30,  reward: { fragments: 6 } },
+        { target: 50,  reward: { container: 'rare_crate' } },
+        { target: 80,  reward: { fragments: 10, boosters: 2 } },
+        { target: 120, reward: { container: 'epic_crate' } },
+      ]},
   ];
 
   function _loadData() {
@@ -7735,6 +7746,18 @@ const Quests = (() => {
     data.coins.progress += sessionCoins;
     data.games.progress += 1;
     data.record.progress = Math.max(data.record.progress, score);
+    // elite_runs is server-authoritative when connected (server increments it
+    // from the accepted score's rating). Only advance it locally when offline,
+    // so a client can't inflate it past the server value via applyServerData's max().
+    if (data.elite_runs) {
+      const connected = Boolean(window.__BASE_WALLET);
+      if (!connected) {
+        const rating = typeof _getLocalRunRating === 'function' ? _getLocalRunRating(score).id : 'casual';
+        if (rating === 'great' || rating === 'elite' || rating === 'master') {
+          data.elite_runs.progress += 1;
+        }
+      }
+    }
     _saveData(data);
   }
 

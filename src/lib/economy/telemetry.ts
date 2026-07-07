@@ -5,7 +5,7 @@ import type { AppliedRewardSummary } from './rewards.ts';
 export type EconomyTelemetryEventName =
   | 'economy_focus_set'
   | 'economy_fragment_earned'
-  | 'economy_fragment_overflowed'
+  | 'economy_fragment_pooled'
   | 'economy_reward_claimed'
   | 'economy_coin_earned'
   | 'economy_coin_spent'
@@ -80,12 +80,11 @@ export function trackRewardBundleTelemetryAfter(
     trackEconomyEventAfter('economy_fragment_earned', address, { source, amount: fragmentsAwarded, ...extra });
   }
 
-  const fragmentsOverflowed = Math.max(0, Math.floor(Number(result.fragmentsOverflowed) || 0));
-  if (fragmentsOverflowed > 0) {
-    trackEconomyEventAfter('economy_fragment_overflowed', address, {
+  const fragmentsPooled = Math.max(0, Math.floor(Number(result.fragmentsPooled) || 0));
+  if (fragmentsPooled > 0) {
+    trackEconomyEventAfter('economy_fragment_pooled', address, {
       source,
-      amount: fragmentsOverflowed,
-      fallbackCoins: Math.max(0, Math.floor(Number(result.fallbackCoins) || 0)),
+      amount: fragmentsPooled,
       ...extra,
     });
   }

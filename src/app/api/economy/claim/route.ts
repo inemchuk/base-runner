@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createPublicClient, http, isAddress, type Address } from 'viem';
 import { base } from 'viem/chains';
 import { CHECKIN_ABI, CHECKIN_ADDRESS } from '@/config/checkin-contract';
-import { CHECKIN_REWARDS, FRAGMENT_FALLBACK_COINS } from '@/lib/economy/config.ts';
+import { CHECKIN_REWARDS } from '@/lib/economy/config.ts';
 import { grantOwnedItem } from '@/lib/economy/core.ts';
 import { claimLevelReward } from '@/lib/economy/levels.ts';
 import { claimQuestReward } from '@/lib/economy/quests.ts';
@@ -37,8 +37,7 @@ function dateFromUtcDay(day: number): string {
 const EMPTY_RESULT = {
   coinsDelta: 0,
   fragmentsAwarded: 0,
-  fragmentsOverflowed: 0,
-  fallbackCoins: 0,
+  fragmentsPooled: 0,
   boostersDelta: 0,
   xpDelta: 0,
 };
@@ -78,7 +77,7 @@ export async function POST(req: NextRequest) {
       let result: typeof EMPTY_RESULT & { unlockedItem?: string } = { ...EMPTY_RESULT };
 
       if (claimed.reward.type === 'bundle') {
-        const applied = applyRewardBundle(shop, coins, claimed.reward.value, { fallbackCoinsPerFragment: FRAGMENT_FALLBACK_COINS });
+        const applied = applyRewardBundle(shop, coins, claimed.reward.value);
         nextShop = applied.state;
         nextCoins = applied.coins;
         result = applied.result;
@@ -138,7 +137,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: false, error: claimed.error, quests: claimed.state }, { status: 400 });
       }
 
-      const applied = applyRewardBundle(shop, coins, claimed.reward, { fallbackCoinsPerFragment: FRAGMENT_FALLBACK_COINS });
+      const applied = applyRewardBundle(shop, coins, claimed.reward);
 
       await Promise.all([
         writeShop(address as string, applied.state),
@@ -209,7 +208,7 @@ export async function POST(req: NextRequest) {
       total: Math.max(checkin.total + 1, chainTotal),
     };
     const reward = CHECKIN_REWARDS[(nextStreak - 1) % CHECKIN_REWARDS.length];
-    const applied = applyRewardBundle(shop, coins, reward, { fallbackCoinsPerFragment: FRAGMENT_FALLBACK_COINS });
+    const applied = applyRewardBundle(shop, coins, reward);
 
     await Promise.all([
       writeShop(address as string, applied.state),

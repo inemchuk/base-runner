@@ -32,13 +32,17 @@ interface RedisLike {
   zadd(key: string, value: { score: number; member: string }): Promise<unknown>;
 }
 
+let redisClient: RedisLike | null = null;
+
 async function getRedis(): Promise<RedisLike | null> {
   if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) return null;
+  if (redisClient) return redisClient;
   const { Redis } = await import('@upstash/redis');
-  return new Redis({
+  redisClient = new Redis({
     url: process.env.UPSTASH_REDIS_REST_URL,
     token: process.env.UPSTASH_REDIS_REST_TOKEN,
   }) as RedisLike;
+  return redisClient;
 }
 
 const memLocks = new Set<string>();

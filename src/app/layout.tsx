@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import Script from 'next/script';
 import Providers from '@/components/Providers';
 import './globals.css';
 
@@ -46,6 +47,9 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body suppressHydrationWarning>
+        {/* Shared rating thresholds — beforeInteractive must live in the root
+            layout per Next.js docs; game.js (afterInteractive) reads the global. */}
+        <Script src="/game/generated/rating-config.js" strategy="beforeInteractive" />
         <Providers>{children}</Providers>
       </body>
     </html>

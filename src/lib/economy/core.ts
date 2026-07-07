@@ -230,13 +230,13 @@ function normalizeNumberRecord(value: unknown): Record<string, number> {
   return output;
 }
 
-function ownsItem(state: EconomyShopData, itemId: string, type: CraftableType): boolean {
+export function ownsItem(state: EconomyShopData, itemId: string, type: CraftableType): boolean {
   if (type === 'skin') return state.owned.includes(itemId);
   if (type === 'trail') return state.trailPacks.includes(itemId);
   return state.deathPacks.includes(itemId);
 }
 
-function grantItem(state: EconomyShopData, itemId: string, type: CraftableType): EconomyShopData {
+export function grantItem(state: EconomyShopData, itemId: string, type: CraftableType): EconomyShopData {
   if (type === 'skin') return { ...state, owned: Array.from(new Set([...state.owned, itemId])) };
   if (type === 'trail') return { ...state, trailPacks: Array.from(new Set([...state.trailPacks, itemId])) };
   return { ...state, deathPacks: Array.from(new Set([...state.deathPacks, itemId])) };

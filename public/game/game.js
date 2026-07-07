@@ -8342,8 +8342,16 @@ const DailySpin = (() => {
       if (typeof prize.serverCoins === 'number') {
         RewardEconomy.setCoinsLocal(prize.serverCoins);
       }
-      if (prize.type === 'xp' && typeof Xp !== 'undefined' && Xp.add) {
-        Xp.add(Number(prize.value) || 0);
+      if (prize.type === 'xp' && typeof Xp !== 'undefined') {
+        // Server already persisted the XP to level state; apply the authoritative
+        // result so it isn't erased by the next level-state sync. Fall back to a
+        // local add only when the server didn't return level state.
+        if (prize.serverLevels && Xp.applyServerState) {
+          Xp.applyServerState(prize.serverLevels);
+          _claimLevelRewards(_queueFromServerLevelUps(prize.levelUps));
+        } else if (Xp.add) {
+          Xp.add(Number(prize.value) || 0);
+        }
       }
       if (_prize && prize.type === 'booster') {
         _prize._resolvedItemId = String(prize.value);
@@ -9345,6 +9353,12 @@ async function onGameOver() {
   const localRating = _getLocalRunRating(score);
   let runRating = { id: localRating.id, label: localRating.label };
   const submitResult = await scoreSubmitPromise;
+
+  // Reconcile locally-bumped quest progress with the server's authoritative
+  // state so claimable state can't drift from what the server will honor.
+  if (submitResult && submitResult.ok && submitResult.quests && typeof Quests !== 'undefined' && Quests.applyServerData) {
+    Quests.applyServerData(submitResult.quests);
+  }
 
   if (submitResult && submitResult.ok && submitResult.levels && typeof Xp !== 'undefined') {
     Xp.applyServerState && Xp.applyServerState(submitResult.levels);

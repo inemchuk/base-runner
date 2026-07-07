@@ -1,5 +1,5 @@
-import { FRAGMENT_FALLBACK_COINS, REWARD_CONTAINERS, type CraftableType, type RewardBundle } from './config.ts';
-import { awardFragments, getCraftMeta, type EconomyShopData } from './core.ts';
+import { FRAGMENT_FALLBACK_COINS, REWARD_CONTAINERS, type RewardBundle } from './config.ts';
+import { awardFragments, getCraftMeta, ownsItem, type EconomyShopData } from './core.ts';
 
 type BoosterId = 'boost_magnet' | 'boost_double' | 'boost_shield';
 
@@ -142,10 +142,4 @@ function addRandomBoosters(state: EconomyShopData, amount: number, random: () =>
     nextCharges[id] = (nextCharges[id] || 0) + 1;
   }
   return { ...state, boosterCharges: nextCharges };
-}
-
-function ownsItem(state: EconomyShopData, itemId: string, type: CraftableType): boolean {
-  if (type === 'skin') return state.owned.includes(itemId);
-  if (type === 'trail') return state.trailPacks.includes(itemId);
-  return state.deathPacks.includes(itemId);
 }

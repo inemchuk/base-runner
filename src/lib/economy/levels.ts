@@ -1,6 +1,7 @@
 import type { CraftableType } from './config.ts';
 import type { RewardBundle } from './config.ts';
 import { getRatingXpMultiplier, getRunRating, type RunRating } from './rating.ts';
+import { sanitizeRunCoins } from './quests.ts';
 
 export interface LevelRewardBase {
   label: string;
@@ -94,12 +95,15 @@ export function calculateRunXp(run: RunLevelProgress): { earned: number; breakdo
   };
 }
 
-export function updateLevelProgressFromRun(
+// Adds a flat XP amount to a level state, advancing levels and collecting the
+// rewards unlocked along the way. Shared by run scoring and flat XP grants
+// (e.g. daily-spin XP prizes) so the level-up loop lives in one place.
+export function addXpToLevelState(
   state: LevelState,
-  run: RunLevelProgress,
-): { state: LevelState; xpEarned: number; breakdown: RunXpBreakdown; levelUps: Array<{ level: number; reward: LevelReward | null }> } {
+  xp: number,
+): { state: LevelState; levelUps: Array<{ level: number; reward: LevelReward | null }> } {
   const normalized = normalizeLevelState(state);
-  const { earned, breakdown } = calculateRunXp(run);
+  const earned = Math.max(0, Math.floor(Number(xp) || 0));
   const levelUps: Array<{ level: number; reward: LevelReward | null }> = [];
 
   let level = normalized.level;
@@ -112,17 +116,16 @@ export function updateLevelProgressFromRun(
     levelUps.push({ level, reward: LEVEL_REWARDS[level] ?? null });
   }
 
-  return {
-    state: {
-      ...normalized,
-      level,
-      xpInLevel,
-      totalXp,
-    },
-    xpEarned: earned,
-    breakdown,
-    levelUps,
-  };
+  return { state: { ...normalized, level, xpInLevel, totalXp }, levelUps };
+}
+
+export function updateLevelProgressFromRun(
+  state: LevelState,
+  run: RunLevelProgress,
+): { state: LevelState; xpEarned: number; breakdown: RunXpBreakdown; levelUps: Array<{ level: number; reward: LevelReward | null }> } {
+  const { earned, breakdown } = calculateRunXp(run);
+  const { state: nextState, levelUps } = addXpToLevelState(state, earned);
+  return { state: nextState, xpEarned: earned, breakdown, levelUps };
 }
 
 export function claimLevelReward(
@@ -156,10 +159,4 @@ function normalizeClaimedLevels(value: unknown): number[] {
       .map((item) => Math.floor(Number(item) || 0))
       .filter((item) => item >= 2 && Boolean(LEVEL_REWARDS[item])),
   )).sort((a, b) => a - b);
-}
-
-function sanitizeRunCoins(score: number, sessionCoins: unknown): number {
-  const raw = Math.max(0, Math.floor(Number(sessionCoins) || 0));
-  const plausibleCap = score > 0 ? score * 4 + 20 : 0;
-  return Math.min(raw, plausibleCap);
 }

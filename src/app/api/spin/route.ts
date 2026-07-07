@@ -9,8 +9,9 @@ import {
   type EconomyTier,
   type RewardBundle,
 } from '@/lib/economy/config.ts';
-import { awardFragments, getCraftMeta, type EconomyShopData } from '@/lib/economy/core.ts';
-import { readCoins, readShop, writeCoins, writeShop } from '@/lib/economy/storage.ts';
+import { awardFragments, getCraftMeta, grantItem, ownsItem, type EconomyShopData } from '@/lib/economy/core.ts';
+import { addXpToLevelState, type LevelReward, type LevelState } from '@/lib/economy/levels.ts';
+import { readCoins, readLevelState, readShop, writeCoins, writeLevelState, writeShop } from '@/lib/economy/storage.ts';
 import { trackEconomyEventAfter, trackRewardBundleTelemetryAfter } from '@/lib/economy/telemetry.ts';
 
 type Rarity = EconomyTier | 'uncommon';
@@ -42,6 +43,8 @@ type AwardedPrize = Omit<SpinPrize, 'weight'> & {
   fragmentsOverflowed?: number;
   fallbackCoins?: number;
   itemType?: CraftableType;
+  serverLevels?: LevelState;
+  levelUps?: Array<{ level: number; reward: LevelReward | null }>;
 };
 
 type SpinResponse = {
@@ -189,18 +192,6 @@ function addRandomBoosters(shop: EconomyShopData, amount: number): EconomyShopDa
   return next;
 }
 
-function ownsItem(shop: EconomyShopData, itemId: string, type: CraftableType): boolean {
-  if (type === 'skin') return shop.owned.includes(itemId);
-  if (type === 'trail') return shop.trailPacks.includes(itemId);
-  return shop.deathPacks.includes(itemId);
-}
-
-function grantItem(shop: EconomyShopData, itemId: string, type: CraftableType): EconomyShopData {
-  if (type === 'skin') return { ...shop, owned: Array.from(new Set([...shop.owned, itemId])) };
-  if (type === 'trail') return { ...shop, trailPacks: Array.from(new Set([...shop.trailPacks, itemId])) };
-  return { ...shop, deathPacks: Array.from(new Set([...shop.deathPacks, itemId])) };
-}
-
 function focusCanReceiveFragments(shop: EconomyShopData, amount: number) {
   const focusId = shop.focusItemId;
   const meta = getCraftMeta(focusId);
@@ -313,9 +304,15 @@ async function applySpinPrize(
   let shop = startingShop;
   let coins = startingCoins - cost;
   let awarded: AwardedPrize = { ...prize, serverApplied: true };
+  let nextLevels: LevelState | null = null;
 
   if (prize.type === 'coins') {
     coins += Number(prize.value) || 0;
+  } else if (prize.type === 'xp') {
+    const levelState = await readLevelState(address);
+    const applied = addXpToLevelState(levelState, Number(prize.value) || 0);
+    nextLevels = applied.state;
+    awarded = { ...awarded, serverLevels: applied.state, levelUps: applied.levelUps };
   } else if (prize.type === 'booster') {
     shop = addBooster(shop, String(prize.value), prize.amount || 1);
   } else if (prize.type === 'fragments' || prize.type === 'fragment_burst') {
@@ -361,6 +358,7 @@ async function applySpinPrize(
   await Promise.all([
     writeShop(address, shop),
     writeCoins(address, coins),
+    ...(nextLevels ? [writeLevelState(address, nextLevels)] : []),
   ]);
 
   return { shop, coins, prize: awarded };

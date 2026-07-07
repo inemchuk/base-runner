@@ -164,6 +164,7 @@ export default function Game() {
               <span className="menu-focus-track">
                 <span className="menu-focus-fill" id="menu-focus-fill" />
               </span>
+              <span className="menu-focus-pool" id="menu-focus-pool"></span>
             </button>
           </div>
           <div className="menu-missions">

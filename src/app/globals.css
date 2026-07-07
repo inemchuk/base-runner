@@ -1466,6 +1466,15 @@
       border-radius: inherit;
       background: linear-gradient(90deg, #4D8FFF, #FFD700);
     }
+    .menu-focus-pool {
+      grid-column: 1 / -1;
+      color: rgba(136,170,255,0.82);
+      font-size: 0.6rem;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+    }
+    .menu-focus-pool:empty { display: none; }
 
     /* ===== КНОПКА МАГАЗИНА ===== */
     .btn-shop {

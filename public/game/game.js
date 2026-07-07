@@ -175,7 +175,6 @@ const DAILY_FRAGMENT_CHEST_COST = 90;
 const DAILY_FRAGMENT_CHEST_FRAGMENTS = 3;
 const DAILY_FRAGMENT_CHEST_LIMIT = 1;
 const DAILY_FRAGMENT_CHEST_LOCAL_KEY = 'daily_fragment_chest_v1';
-const FRAGMENT_FALLBACK_COINS = 10;
 
 
 /* ===== checkin.js ===== */
@@ -5990,10 +5989,10 @@ const Shop = (() => {
   const DEFAULT_TRAIL = { id: 'default', name: 'Default', sprite: '/nft/images/trail_default.png', desc: 'Footprints, dust and ripples', color: 'rgba(255,255,255,0.07)', glow: 'rgba(255,255,255,0.12)' };
 
   const ECONOMY_TIERS = Object.freeze({
-    common:    { fragments: 10, craftFee: 40,  topUpCost: 20,  topUpCapPct: 0.2 },
-    rare:      { fragments: 20, craftFee: 100, topUpCost: 35,  topUpCapPct: 0.2 },
-    epic:      { fragments: 35, craftFee: 220, topUpCost: 60,  topUpCapPct: 0.2 },
-    legendary: { fragments: 60, craftFee: 500, topUpCost: 160, topUpCapPct: 0 },
+    common:    { fragments: 10, craftFee: 40,  topUpCost: 20,  topUpCapPct: 0.2, poolCapPct: 1 },
+    rare:      { fragments: 20, craftFee: 100, topUpCost: 35,  topUpCapPct: 0.2, poolCapPct: 1 },
+    epic:      { fragments: 35, craftFee: 220, topUpCost: 60,  topUpCapPct: 0.2, poolCapPct: 1 },
+    legendary: { fragments: 60, craftFee: 500, topUpCost: 160, topUpCapPct: 0,   poolCapPct: 0.5 },
   });
 
   const CRAFT_CONFIG = Object.freeze({
@@ -6232,6 +6231,8 @@ const Shop = (() => {
       fragments:      local.fragments || {},
       focusItemId:    local.focusItemId || null,
       topUpFragments: local.topUpFragments || {},
+      pooledFragments:      Math.max(0, Math.floor(Number(local.pooledFragments) || 0)),
+      poolAppliedFragments: (local.poolAppliedFragments && typeof local.poolAppliedFragments === 'object' && !Array.isArray(local.poolAppliedFragments)) ? local.poolAppliedFragments : {},
     };
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(d)); } catch {}
     _shopCache = d;
@@ -6258,6 +6259,12 @@ const Shop = (() => {
       topUpFragments: serverData.topUpFragments && typeof serverData.topUpFragments === 'object'
         ? serverData.topUpFragments
         : local.topUpFragments,
+      pooledFragments: typeof serverData.pooledFragments === 'number'
+        ? Math.max(0, Math.floor(serverData.pooledFragments))
+        : local.pooledFragments,
+      poolAppliedFragments: serverData.poolAppliedFragments && typeof serverData.poolAppliedFragments === 'object' && !Array.isArray(serverData.poolAppliedFragments)
+        ? serverData.poolAppliedFragments
+        : local.poolAppliedFragments,
     });
     saveShopDataLocal(d);
     if (typeof Renderer !== 'undefined') Renderer.reloadPlayerSprite();
@@ -6412,6 +6419,9 @@ const Shop = (() => {
     _migrateCharges(d);
     if (!d.fragments || typeof d.fragments !== 'object' || Array.isArray(d.fragments)) d.fragments = {};
     if (!d.topUpFragments || typeof d.topUpFragments !== 'object' || Array.isArray(d.topUpFragments)) d.topUpFragments = {};
+    if (typeof d.pooledFragments !== 'number' || !Number.isFinite(d.pooledFragments) || d.pooledFragments < 0) d.pooledFragments = 0;
+    else d.pooledFragments = Math.floor(d.pooledFragments);
+    if (!d.poolAppliedFragments || typeof d.poolAppliedFragments !== 'object' || Array.isArray(d.poolAppliedFragments)) d.poolAppliedFragments = {};
     if (typeof d.focusItemId !== 'string' || !getCraftMeta(d.focusItemId)) d.focusItemId = null;
     return d;
   }
@@ -6482,11 +6492,29 @@ const Shop = (() => {
     return d.focusItemId;
   }
 
+  function getPooledFragments() {
+    const d = _migrateEconomy(loadShopData());
+    return Math.max(0, Math.floor(Number(d.pooledFragments) || 0));
+  }
+
   function setFocusItemLocal(itemId) {
     const meta = getCraftMeta(itemId);
     if (!meta || _ownsItemOfType(itemId, meta.type)) return false;
     const d = _migrateEconomy(loadShopData());
     d.focusItemId = itemId;
+
+    // Auto-drain the pool into the item, capped per tier (mirrors server setFocus).
+    const current = Math.max(0, Math.floor(Number(d.fragments[itemId]) || 0));
+    const capTotal = Math.floor(meta.fragments * (meta.poolCapPct != null ? meta.poolCapPct : 1));
+    const alreadyPooled = Math.max(0, Math.floor(Number(d.poolAppliedFragments[itemId]) || 0));
+    const allowedFromPool = Math.max(0, capTotal - alreadyPooled);
+    const drain = Math.min(d.pooledFragments, meta.fragments - current, allowedFromPool);
+    if (drain > 0) {
+      d.fragments[itemId] = current + drain;
+      d.pooledFragments -= drain;
+      d.poolAppliedFragments[itemId] = alreadyPooled + drain;
+    }
+
     saveShopDataLocal(d);
     if (typeof Shop !== 'undefined' && Shop.refreshVisible) Shop.refreshVisible();
     if (typeof Shop !== 'undefined' && Shop.renderFocusStrip) Shop.renderFocusStrip();
@@ -6499,17 +6527,30 @@ const Shop = (() => {
 
   function addFragmentsLocal(itemId, amount) {
     const meta = getCraftMeta(itemId);
-    if (!meta) return 0;
+    if (!meta) return { toFocus: 0, toPool: 0 };
     const add = Math.max(0, Math.floor(Number(amount) || 0));
-    if (add <= 0) return getCraftStatus(itemId).fragments || 0;
+    if (add <= 0) return { toFocus: 0, toPool: 0 };
     const d = _migrateEconomy(loadShopData());
     const current = Math.max(0, Math.floor(Number(d.fragments[itemId]) || 0));
     const next = Math.min(meta.fragments, current + add);
+    const toFocus = next - current;
+    const toPool = add - toFocus;
     d.fragments[itemId] = next;
+    d.pooledFragments += toPool;
     saveShopDataLocal(d);
     if (typeof Shop !== 'undefined' && Shop.refreshVisible) Shop.refreshVisible();
     if (typeof Shop !== 'undefined' && Shop.renderFocusStrip) Shop.renderFocusStrip();
-    return next;
+    return { toFocus, toPool };
+  }
+
+  function bankPooledFragments(amount) {
+    const add = Math.max(0, Math.floor(Number(amount) || 0));
+    if (add <= 0) return getPooledFragments();
+    const d = _migrateEconomy(loadShopData());
+    d.pooledFragments += add;
+    saveShopDataLocal(d);
+    if (typeof Shop !== 'undefined' && Shop.renderFocusStrip) Shop.renderFocusStrip();
+    return d.pooledFragments;
   }
 
   function getCraftStatus(itemId) {
@@ -6923,7 +6964,11 @@ const Shop = (() => {
     const title = document.getElementById('menu-focus-title');
     const progress = document.getElementById('menu-focus-progress');
     const fill = document.getElementById('menu-focus-fill');
+    const poolEl = document.getElementById('menu-focus-pool');
     if (!strip || !title || !progress || !fill) return;
+
+    const pooled = getPooledFragments();
+    if (poolEl) poolEl.textContent = pooled > 0 ? `Pool: ${pooled}` : '';
 
     const focusId = getFocusItem();
     if (!focusId) {
@@ -7305,6 +7350,8 @@ const Shop = (() => {
     getCraftStatus,
     setFocusItemLocal,
     addFragmentsLocal,
+    bankPooledFragments,
+    getPooledFragments,
     craftItemLocal,
     topUpFragmentsLocal,
     buyDailyFragmentChestLocal,
@@ -7440,32 +7487,17 @@ const RewardEconomy = (() => {
 
   function _awardFragments(amount) {
     const fragments = Math.max(0, Math.floor(Number(amount) || 0));
-    if (!fragments) return { awarded: 0, fragmentsOverflowed: 0, fallbackCoins: 0 };
-    const overflowCoins = count => Math.max(0, Math.floor(Number(count) || 0)) * FRAGMENT_FALLBACK_COINS;
-    if (typeof Shop === 'undefined' || !Shop.getFocusItem || !Shop.addFragmentsLocal) {
-      const fallbackCoins = overflowCoins(fragments);
-      _awardCoins(fallbackCoins);
-      return { awarded: 0, fragmentsOverflowed: fragments, fallbackCoins };
+    if (!fragments) return { awarded: 0, fragmentsPooled: 0 };
+    if (typeof Shop === 'undefined' || !Shop.addFragmentsLocal) {
+      return { awarded: 0, fragmentsPooled: fragments };
     }
-    const focusId = Shop.getFocusItem();
+    const focusId = Shop.getFocusItem ? Shop.getFocusItem() : null;
     if (!focusId) {
-      const fallbackCoins = overflowCoins(fragments);
-      _awardCoins(fallbackCoins);
-      return { awarded: 0, fragmentsOverflowed: fragments, fallbackCoins };
+      if (Shop.bankPooledFragments) Shop.bankPooledFragments(fragments);
+      return { awarded: 0, fragmentsPooled: fragments };
     }
-    const before = Shop.getCraftStatus ? Shop.getCraftStatus(focusId) : null;
-    if (!before || before.owned || before.missing <= 0) {
-      const fallbackCoins = overflowCoins(fragments);
-      _awardCoins(fallbackCoins);
-      return { awarded: 0, fragmentsOverflowed: fragments, fallbackCoins };
-    }
-    const beforeCount = before.fragments || 0;
-    const afterCount = Shop.addFragmentsLocal(focusId, fragments);
-    const awarded = Math.max(0, afterCount - beforeCount);
-    const leftover = Math.max(0, fragments - awarded);
-    const fallbackCoins = overflowCoins(leftover);
-    if (fallbackCoins > 0) _awardCoins(fallbackCoins);
-    return { awarded, fragmentsOverflowed: leftover, fallbackCoins };
+    const split = Shop.addFragmentsLocal(focusId, fragments);
+    return { awarded: split.toFocus || 0, fragmentsPooled: split.toPool || 0 };
   }
 
   function _awardBoosters(amount) {
@@ -7479,7 +7511,7 @@ const RewardEconomy = (() => {
 
   function applyBundleLocal(bundle, source = 'reward') {
     const totals = collect(bundle);
-    let fragmentResult = { awarded: 0, fragmentsOverflowed: 0, fallbackCoins: 0 };
+    let fragmentResult = { awarded: 0, fragmentsPooled: 0 };
     if (totals.coins) _awardCoins(totals.coins);
     if (totals.fragments) fragmentResult = _awardFragments(totals.fragments);
     if (totals.boosters) _awardBoosters(totals.boosters);
@@ -7489,10 +7521,9 @@ const RewardEconomy = (() => {
     if (source !== 'server-spin') _syncCoins();
     return {
       ...totals,
-      coins: totals.coins + fragmentResult.fallbackCoins,
+      coins: totals.coins,
       fragmentsAwarded: fragmentResult.awarded,
-      fragmentsOverflowed: fragmentResult.fragmentsOverflowed,
-      fallbackCoins: fragmentResult.fallbackCoins,
+      fragmentsPooled: fragmentResult.fragmentsPooled,
       label: label(bundle),
       shortLabel: shortLabel(bundle),
     };
@@ -8507,13 +8538,11 @@ const DailySpin = (() => {
     } else if (prize.type === 'fragments' || prize.type === 'fragment_burst') {
       const result = RewardEconomy.applyBundleLocal({ fragments: Number(prize.value) || 0 }, 'spin');
       prize.fragmentsAwarded = result.fragmentsAwarded || 0;
-      prize.fragmentsOverflowed = result.fragmentsOverflowed || 0;
-      prize.fallbackCoins = result.fallbackCoins || 0;
+      prize.fragmentsPooled = result.fragmentsPooled || 0;
     } else if (prize.type === 'crate') {
       const result = RewardEconomy.applyBundleLocal({ container: String(prize.value) }, 'spin');
       prize.fragmentsAwarded = result.fragmentsAwarded || 0;
-      prize.fragmentsOverflowed = result.fragmentsOverflowed || 0;
-      prize.fallbackCoins = result.fallbackCoins || 0;
+      prize.fragmentsPooled = result.fragmentsPooled || 0;
     } else if (prize.type === 'xp') {
       if (typeof Xp !== 'undefined' && Xp.add) Xp.add(Number(prize.value) || 0);
     }
@@ -8550,16 +8579,17 @@ const DailySpin = (() => {
         labelEl.textContent = _prize._resolvedBoosterName ? `${_prize._resolvedBoosterName}!` : 'New booster!';
       } else if (_prize.type === 'fragments' || _prize.type === 'fragment_burst') {
         iconEl.innerHTML = IMG('/game/ui-icons/fragments.png', '56px');
-        const awarded = Number(_prize.fragmentsAwarded || _prize.value || 0);
-        const fallback = Number(_prize.fallbackCoins || 0);
-        labelEl.innerHTML = fallback > 0 && awarded <= 0
-          ? `<span class="reward-overflow">Overflow ${RewardEconomy.currencyHtml('coins', fallback, 'coins')}</span>`
-          : `${RewardEconomy.currencyHtml('fragments', awarded, 'Focus fragments')}${fallback > 0 ? `<span class="reward-overflow">Overflow ${RewardEconomy.currencyHtml('coins', fallback, 'coins')}</span>` : ''}`;
+        const awarded = Number(_prize.fragmentsAwarded || 0);
+        const pooled = Number(_prize.fragmentsPooled || 0);
+        const total = awarded + pooled || Number(_prize.value || 0);
+        labelEl.innerHTML = awarded <= 0 && pooled > 0
+          ? `${RewardEconomy.currencyHtml('fragments', pooled, 'Focus fragments')} <span class="reward-overflow">→ Pool</span>`
+          : `${RewardEconomy.currencyHtml('fragments', total, 'Focus fragments')}${pooled > 0 ? ` <span class="reward-overflow">${pooled} → Pool</span>` : ''}`;
       } else if (_prize.type === 'crate') {
         iconEl.innerHTML = IMG('/game/ui-icons/starter-pack.png', '56px');
-        const fallback = Number(_prize.fallbackCoins || 0);
-        labelEl.innerHTML = fallback > 0
-          ? `${_escapeHtml(_prize.label || 'Crate')} <span class="reward-overflow">Overflow ${RewardEconomy.currencyHtml('coins', fallback, 'coins')}</span>`
+        const pooled = Number(_prize.fragmentsPooled || 0);
+        labelEl.innerHTML = pooled > 0
+          ? `${_escapeHtml(_prize.label || 'Crate')} <span class="reward-overflow">${pooled} → Pool</span>`
           : _escapeHtml(_prize.label || 'Reward crate!');
       } else if (_prize.type === 'xp') {
         iconEl.innerHTML = IMG('/game/ui-icons/xp.png', '56px');

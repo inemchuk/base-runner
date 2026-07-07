@@ -19,6 +19,8 @@ export interface EconomyShopData {
   focusItemId: string | null;
   fragments: Record<string, number>;
   topUpFragments: Record<string, number>;
+  pooledFragments: number;
+  poolAppliedFragments: Record<string, number>;
 }
 
 export interface CraftMeta {
@@ -54,6 +56,8 @@ const DEFAULT_SHOP: EconomyShopData = {
   focusItemId: null,
   fragments: {},
   topUpFragments: {},
+  pooledFragments: 0,
+  poolAppliedFragments: {},
 };
 
 export function normalizeShopData(input: Partial<EconomyShopData> = {}): EconomyShopData {
@@ -65,6 +69,8 @@ export function normalizeShopData(input: Partial<EconomyShopData> = {}): Economy
   const focusItemId = typeof input.focusItemId === 'string' && getCraftMeta(input.focusItemId)
     ? input.focusItemId
     : null;
+  const pooledFragments = Math.max(0, Math.floor(Number(input.pooledFragments) || 0));
+  const poolAppliedFragments = normalizeNumberRecord(input.poolAppliedFragments);
 
   return {
     owned,
@@ -77,6 +83,8 @@ export function normalizeShopData(input: Partial<EconomyShopData> = {}): Economy
     focusItemId,
     fragments,
     topUpFragments,
+    pooledFragments,
+    poolAppliedFragments,
   };
 }
 

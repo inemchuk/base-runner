@@ -1,18 +1,16 @@
-import { FRAGMENT_FALLBACK_COINS, REWARD_CONTAINERS, type RewardBundle } from './config.ts';
-import { awardFragments, getCraftMeta, ownsItem, type EconomyShopData } from './core.ts';
+import { REWARD_CONTAINERS, type RewardBundle } from './config.ts';
+import { awardFragmentsToShop, type EconomyShopData } from './core.ts';
 
 type BoosterId = 'boost_magnet' | 'boost_double' | 'boost_shield';
 
 export interface ApplyRewardBundleOptions {
-  fallbackCoinsPerFragment?: number;
   random?: () => number;
 }
 
 export interface AppliedRewardSummary {
   coinsDelta: number;
   fragmentsAwarded: number;
-  fragmentsOverflowed: number;
-  fallbackCoins: number;
+  fragmentsPooled: number;
   boostersDelta: number;
   xpDelta: number;
 }
@@ -31,23 +29,16 @@ export function applyRewardBundle(
   bundle: RewardBundle,
   options: ApplyRewardBundleOptions = {},
 ): AppliedRewardBundle {
-  const fallbackCoinsPerFragment = Math.max(0, Math.floor(Number(options.fallbackCoinsPerFragment) || FRAGMENT_FALLBACK_COINS));
   const random = options.random || Math.random;
   const result: AppliedRewardSummary = {
     coinsDelta: 0,
     fragmentsAwarded: 0,
-    fragmentsOverflowed: 0,
-    fallbackCoins: 0,
+    fragmentsPooled: 0,
     boostersDelta: 0,
     xpDelta: 0,
   };
 
-  const nextState = applyBundleRecursive(state, bundle, {
-    fallbackCoinsPerFragment,
-    random,
-    result,
-    depth: 0,
-  });
+  const nextState = applyBundleRecursive(state, bundle, { random, result, depth: 0 });
 
   return {
     state: nextState,
@@ -57,7 +48,6 @@ export function applyRewardBundle(
 }
 
 interface ApplyContext {
-  fallbackCoinsPerFragment: number;
   random: () => number;
   result: AppliedRewardSummary;
   depth: number;
@@ -94,44 +84,10 @@ function applyBundleRecursive(state: EconomyShopData, bundle: RewardBundle | und
 }
 
 function applyFocusFragments(state: EconomyShopData, amount: number, ctx: ApplyContext): EconomyShopData {
-  const target = focusCanReceiveFragments(state, amount);
-  if (!target) {
-    addFallbackCoins(amount, ctx);
-    return state;
-  }
-
-  const awarded = awardFragments(state, target.focusId, target.amount);
-  if (!awarded.ok) {
-    addFallbackCoins(amount, ctx);
-    return state;
-  }
-
-  const fragmentsAwarded = awarded.fragmentsDelta || 0;
-  ctx.result.fragmentsAwarded += fragmentsAwarded;
-
-  const leftover = Math.max(0, amount - fragmentsAwarded);
-  if (leftover) addFallbackCoins(leftover, ctx);
-
-  return awarded.state;
-}
-
-function focusCanReceiveFragments(state: EconomyShopData, amount: number) {
-  const focusId = state.focusItemId;
-  const meta = getCraftMeta(focusId);
-  if (!focusId || !meta || ownsItem(state, focusId, meta.type)) return null;
-
-  const current = state.fragments[focusId] || 0;
-  const missing = Math.max(0, meta.fragments - current);
-  if (missing <= 0) return null;
-
-  return { focusId, amount: Math.min(missing, amount) };
-}
-
-function addFallbackCoins(fragmentCount: number, ctx: ApplyContext) {
-  const fallbackCoins = Math.max(0, fragmentCount) * ctx.fallbackCoinsPerFragment;
-  ctx.result.fragmentsOverflowed += Math.max(0, fragmentCount);
-  ctx.result.coinsDelta += fallbackCoins;
-  ctx.result.fallbackCoins += fallbackCoins;
+  const r = awardFragmentsToShop(state, amount);
+  ctx.result.fragmentsAwarded += r.toFocus;
+  ctx.result.fragmentsPooled += r.toPool;
+  return r.state;
 }
 
 function addRandomBoosters(state: EconomyShopData, amount: number, random: () => number): EconomyShopData {

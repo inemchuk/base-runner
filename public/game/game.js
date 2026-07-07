@@ -6266,6 +6266,14 @@ const Shop = (() => {
     if (typeof Shop !== 'undefined' && Shop.renderFocusStrip) Shop.renderFocusStrip();
   }
 
+  // Deep snapshot of the local economy state in the shape applyServerEconomyData
+  // consumes — lets a caller capture state before an optimistic mutation and
+  // restore it (applyServerEconomyData REPLACES) if the server rejects.
+  function exportEconomyData() {
+    try { return JSON.parse(JSON.stringify(_migrateEconomy(loadShopData()))); }
+    catch { return null; }
+  }
+
   function _setCoinBalanceLocal(balance) {
     if (typeof balance !== 'number' || !Number.isFinite(balance)) return;
     const next = Math.max(0, Math.floor(balance));
@@ -6275,23 +6283,41 @@ const Shop = (() => {
     if (typeof UI !== 'undefined') UI.updateCoins(next);
   }
 
-  async function _runEconomyAction(action, itemId, localFallback) {
+  function _reconcileEconomyResult(result) {
+    if (result && result.shop) applyServerEconomyData(result.shop);
+    if (result && typeof result.coins === 'number') _setCoinBalanceLocal(result.coins);
+  }
+
+  // Optimistic economy action: apply the change locally right away for instant
+  // feedback, then reconcile with the server's authoritative state in the
+  // background. The server stays the source of truth — its response (on success
+  // OR on a rejection that carries state) overwrites the local guess via
+  // applyServerEconomyData (REPLACE) + _setCoinBalanceLocal, so a rejected
+  // action is reverted automatically. Network/offline keeps the local result,
+  // matching the previous fallback behavior.
+  function _runEconomyAction(action, itemId, applyLocal, afterReconcile) {
+    const applied = applyLocal();
+    if (!applied) return false;                 // couldn't apply (can't afford / owned) — nothing to sync
     const actionFn = window.__BASE_ECONOMY_ACTION;
-    if (typeof actionFn !== 'function') return localFallback();
-    try {
-      const result = await actionFn({ action, itemId });
-      if (!result || !result.ok) {
-        if (result && (result.error === 'no_address' || result.error === 'fetch_failed' || result.error === 'action_failed')) {
-          return localFallback();
+    if (typeof actionFn === 'function') {
+      actionFn({ action, itemId }).then((result) => {
+        if (result && result.ok) {
+          _reconcileEconomyResult(result);
+        } else if (result && (result.error === 'no_address' || result.error === 'fetch_failed' || result.error === 'action_failed')) {
+          // server unavailable — keep the optimistic local result (offline)
+        } else if (result && (result.shop || typeof result.coins === 'number')) {
+          // genuine rejection carrying authoritative state — reconcile reverts it
+          _reconcileEconomyResult(result);
         }
-        return false;
-      }
-      if (result.shop) applyServerEconomyData(result.shop);
-      if (typeof result.coins === 'number') _setCoinBalanceLocal(result.coins);
-      return true;
-    } catch {
-      return localFallback();
+        // else: rejection without state (busy/invalid) — keep local; next hydrate reconciles
+        if (typeof afterReconcile === 'function') afterReconcile(result);
+        render();
+      }).catch(() => {
+        // network error — keep optimistic result (offline behavior)
+        if (typeof afterReconcile === 'function') afterReconcile(null);
+      });
     }
+    return true;
   }
 
   function _directBuyAvailable(itemId) {
@@ -6317,13 +6343,19 @@ const Shop = (() => {
     return true;
   }
 
-  async function buyShopItemServerFirst(itemId, price, afterBuy) {
-    let usedLocalFallback = false;
-    const ok = await _runEconomyAction('buyItem', itemId, () => {
-      usedLocalFallback = true;
-      return buyShopItemLocal(itemId, price);
-    });
-    if (ok && typeof afterBuy === 'function') afterBuy(usedLocalFallback);
+  function buyShopItemServerFirst(itemId, price, afterBuy) {
+    const item = _catalogItem(itemId);
+    const ok = _runEconomyAction('buyItem', itemId,
+      () => buyShopItemLocal(itemId, price),
+      () => {
+        // After reconcile: re-assert the post-buy action (e.g. equip) only if the
+        // item survived — a rejected buy is reverted and must not stay equipped.
+        if (typeof afterBuy === 'function' && item && _ownsItemOfType(itemId, item.type)) {
+          afterBuy(true);
+        }
+      });
+    // Optimistic: apply the post-buy action (equip) immediately for instant feedback.
+    if (ok && typeof afterBuy === 'function') afterBuy(true);
     return ok;
   }
 
@@ -7251,6 +7283,7 @@ const Shop = (() => {
     equipSkinLocal,
     applyServerData,
     applyServerEconomyData,
+    exportEconomyData,
     hasBoosted,
     useBooster,
     spendBoosterLocal,
@@ -7836,7 +7869,10 @@ const Quests = (() => {
     _saveData(data);
   }
 
-  // Claim reward for a quest
+  // Claim reward for a quest — optimistic: grant the reward locally right away,
+  // then reconcile with the server. On a genuine server rejection we revert from
+  // the pre-claim snapshot; when the server is unavailable we keep the local
+  // grant (offline behavior, same as before).
   async function claim(questId) {
     const data = _loadData();
     const def = DEFS.find(d => d.id === questId);
@@ -7850,15 +7886,30 @@ const Quests = (() => {
     if (_pendingClaims.has(claimKey)) return;
 
     const reward = def.levels[lvl].reward;
+
+    // Snapshot for revert-on-reject
+    const coinsBefore = (typeof Save !== 'undefined') ? Save.getCoins() : 0;
+    const shopBefore  = (typeof Shop !== 'undefined' && Shop.exportEconomyData) ? Shop.exportEconomyData() : null;
+
+    // Optimistic grant — instant feedback (suppress coin-sync so the server
+    // claim, which is authoritative for coins, doesn't grant on top of it)
     _pendingClaims.add(claimKey);
+    _applyRewardSuppressingCoinSync(() => applyQuestRewardLocalFallback(data, questId, lvl, reward));
+    if (typeof UI !== 'undefined') UI.updateCoins(Save.getCoins());
     render();
 
     try {
       const claimed = await applyQuestRewardServerClaim(questId, lvl);
-      if (!claimed) {
-        applyQuestRewardLocalFallback(data, questId, lvl, reward);
-      } else if (claimed.serverRejected) {
-        console.warn('quest reward claim rejected:', claimed.error || 'unknown');
+      // claimed === null   → server unavailable → keep optimistic grant
+      // claimed.ok         → applyQuestRewardServerClaim already reconciled state
+      if (claimed && claimed.serverRejected) {
+        // Genuine rejection — roll back the optimistic grant
+        if (shopBefore && typeof Shop !== 'undefined' && Shop.applyServerEconomyData) Shop.applyServerEconomyData(shopBefore);
+        if (typeof RewardEconomy !== 'undefined' && RewardEconomy.setCoinsLocal) RewardEconomy.setCoinsLocal(coinsBefore);
+        const d2 = _loadData();
+        if (d2[questId] && Array.isArray(d2[questId].claimed)) d2[questId].claimed[lvl] = false;
+        _saveData(d2);
+        console.warn('quest reward claim rejected — reverted:', claimed.error || 'unknown');
       }
       if (typeof UI !== 'undefined') UI.updateCoins(Save.getCoins());
     } finally {
@@ -8859,23 +8910,37 @@ const Xp = (() => {
     renderProfile();
   }
 
+  // Optimistic: grant the level reward locally right away, then reconcile with
+  // the server. Server success overwrites via absolute setCoins/applyServer (no
+  // double-grant); a genuine rejection reverts from the pre-claim snapshot;
+  // an unavailable server keeps the local grant (offline behavior).
   async function claimReward(level, reward) {
     if (!reward) return { ok: true, noReward: true };
 
+    // Snapshot for revert-on-reject
+    const coinsBefore = (typeof Save !== 'undefined') ? Save.getCoins() : 0;
+    const shopBefore  = (typeof Shop !== 'undefined' && Shop.exportEconomyData) ? Shop.exportEconomyData() : null;
+
+    // Optimistic grant — instant feedback (suppress coin-sync so the server
+    // claim, which is authoritative for coins, doesn't grant on top of it)
+    _applyRewardSuppressingCoinSync(() => _applyReward(reward));
+    if (typeof UI !== 'undefined') UI.updateCoins(Save.getCoins());
+
     const claimFn = window.__BASE_ECONOMY_CLAIM;
-    if (typeof claimFn !== 'function') {
-      _applyReward(reward);
-      return { ok: true, localFallback: true };
-    }
+    if (typeof claimFn !== 'function') return { ok: true, localFallback: true };
 
     try {
       const claimed = await claimFn({ source: 'level', level });
       if (!claimed || claimed.error === 'no_address') {
-        _applyReward(reward);
-        return { ok: true, localFallback: true };
+        return { ok: true, localFallback: true }; // unavailable — keep optimistic grant
       }
       if (!claimed.ok) {
-        console.warn('level reward claim rejected:', claimed.error || 'unknown');
+        // Genuine rejection — roll back the optimistic grant
+        if (shopBefore && typeof Shop !== 'undefined' && Shop.applyServerEconomyData) Shop.applyServerEconomyData(shopBefore);
+        if (typeof RewardEconomy !== 'undefined' && RewardEconomy.setCoinsLocal) RewardEconomy.setCoinsLocal(coinsBefore);
+        if (claimed.levels) applyServerState(claimed.levels);
+        if (typeof UI !== 'undefined') UI.updateCoins(Save.getCoins());
+        console.warn('level reward claim rejected — reverted:', claimed.error || 'unknown');
         return { ok: false, error: claimed.error || 'claim_failed' };
       }
       if (claimed.shop && typeof Shop !== 'undefined' && Shop.applyServerEconomyData) {
@@ -8888,8 +8953,8 @@ const Xp = (() => {
       if (typeof UI !== 'undefined') UI.updateCoins(Save.getCoins());
       return claimed;
     } catch {
-      console.warn('level reward claim failed');
-      return { ok: false, error: 'claim_failed' };
+      // network error — keep optimistic grant (offline behavior)
+      return { ok: true, localFallback: true };
     }
   }
 
@@ -9025,6 +9090,11 @@ const GameState = {
 let currentState    = GameState.MENU;
 let lastTime        = 0;
 let deathTriggered  = false;  // tracks if death anim was started this game
+// Generation token: every loop start bumps it; a running loop stops as soon as
+// it sees a newer generation. Prevents the menu loop and game loop from ever
+// running at once (they share lastTime — two live loops corrupt dt and freeze
+// the background). See initGame / initMenuBackground.
+let _loopGen        = 0;
 
 // ===== ФОНОВАЯ АНИМАЦИЯ МЕНЮ =====
 function initMenuBackground() {
@@ -9038,12 +9108,13 @@ function initMenuBackground() {
   Player.getState().alive  = false;  // player invisible in menu
 
   lastTime = performance.now();
-  requestAnimationFrame(menuLoop);
+  const gen = ++_loopGen;
+  requestAnimationFrame((ts) => menuLoop(ts, gen));
 }
 
 // Menu background loop — only updates world + renders, no player logic
-function menuLoop(timestamp) {
-  if (currentState !== GameState.MENU) return;
+function menuLoop(timestamp, gen) {
+  if (gen !== _loopGen || currentState !== GameState.MENU) return;
 
   const dt = Math.min((timestamp - lastTime) / 1000, 0.05);
   lastTime = timestamp;
@@ -9058,7 +9129,7 @@ function menuLoop(timestamp) {
   Renderer.updateCamera(dt);
   Renderer.draw(dt);
 
-  requestAnimationFrame(menuLoop);
+  requestAnimationFrame((ts) => menuLoop(ts, gen));
 }
 
 // ===== ИНИЦИАЛИЗАЦИЯ ИГРЫ =====
@@ -9141,11 +9212,13 @@ function initGame() {
   UI.updateCoins(Save.getCoins(), 0); // HUD начинается с 0 — показываем монеты текущей сессии
 
   lastTime = performance.now();
-  requestAnimationFrame(gameLoop);
+  const gen = ++_loopGen;
+  requestAnimationFrame((ts) => gameLoop(ts, gen));
 }
 
 // ===== ГЛАВНЫЙ ИГРОВОЙ ЦИКЛ =====
-function gameLoop(timestamp) {
+function gameLoop(timestamp, gen) {
+  if (gen !== _loopGen) return; // superseded by a newer loop (e.g. returned to menu)
   const dt = Math.min((timestamp - lastTime) / 1000, 0.05);
   lastTime = timestamp;
 
@@ -9198,7 +9271,7 @@ function gameLoop(timestamp) {
 
   Renderer.updateCamera(dt);
   Renderer.draw(dt);
-  requestAnimationFrame(gameLoop);
+  requestAnimationFrame((ts) => gameLoop(ts, gen));
 }
 
 // ===== КОНЕЦ ИГРЫ =====
@@ -9318,6 +9391,22 @@ function _queueFromServerLevelUps(levelUps) {
     const level = Math.floor(Number(item && item.level) || 0);
     return { level, reward: Xp.getReward ? Xp.getReward(level) : null };
   }).filter(item => item.level >= 2);
+}
+
+// Apply a reward locally for optimistic feedback WITHOUT pushing coins to the
+// server coin-store. The claim endpoint is authoritative for coins and reads
+// that same store (/api/coins/sync → writeCoins), so letting the optimistic
+// apply sync first would make the endpoint grant the reward on top of the
+// already-credited balance (double-count). Coins reconcile via the claim
+// response instead (setCoinsLocal). The apply fn must be synchronous.
+function _applyRewardSuppressingCoinSync(applyFn) {
+  const _sync = window.__BASE_SYNC_COINS;
+  try {
+    window.__BASE_SYNC_COINS = undefined;
+    applyFn();
+  } finally {
+    window.__BASE_SYNC_COINS = _sync;
+  }
 }
 
 function _claimLevelRewards(queue) {

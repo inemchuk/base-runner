@@ -9,9 +9,12 @@ import {
 } from '@/lib/economy/core.ts';
 import { DAILY_FRAGMENT_CHEST } from '@/lib/economy/config.ts';
 import {
+  acquireEconomyLock,
+  normalizeAddress,
   readCoins,
   readDailyFragmentChestState,
   readShop,
+  releaseEconomyLock,
   writeCoins,
   writeDailyFragmentChestState,
   writeShop,
@@ -35,11 +38,20 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  let lockKey: string | null = null;
   try {
     const body = await req.json();
     const { address, action, itemId } = body;
     if (!address || !action || (action !== 'dailyFragmentChest' && !itemId)) {
       return NextResponse.json({ ok: false, error: 'invalid params' }, { status: 400 });
+    }
+
+    // Serialize concurrent mutations for this wallet so two near-simultaneous
+    // requests can't both read the same balance and double-spend.
+    lockKey = `economy_lock:${normalizeAddress(address as string)}`;
+    if (!(await acquireEconomyLock(lockKey))) {
+      lockKey = null; // lock is held elsewhere; don't release what we didn't take
+      return NextResponse.json({ ok: false, error: 'busy' }, { status: 409 });
     }
 
     const [shop, coins] = await Promise.all([
@@ -194,6 +206,8 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     console.error('economy POST error:', e);
     return NextResponse.json({ ok: false }, { status: 500 });
+  } finally {
+    if (lockKey) await releaseEconomyLock(lockKey);
   }
 }
 

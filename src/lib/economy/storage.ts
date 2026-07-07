@@ -6,7 +6,6 @@ import { normalizeDailyQualityState, type DailyQualityState } from './daily-qual
 const memShop = new Map<string, EconomyShopData>();
 const memCoins = new Map<string, number>();
 const memCoinBest = new Map<string, number>();
-const memScoreBest = new Map<string, number>();
 const memCheckinReward = new Map<string, EconomyCheckinRewardState>();
 const memDailyFragmentChest = new Map<string, EconomyDailyFragmentChestState>();
 const memQuest = new Map<string, QuestState>();
@@ -28,6 +27,7 @@ export interface EconomyDailyFragmentChestState {
 interface RedisLike {
   get<T>(key: string): Promise<T | null>;
   set(key: string, value: unknown, opts?: unknown): Promise<unknown>;
+  del(key: string): Promise<unknown>;
   zscore(key: string, member: string): Promise<number | null>;
   zadd(key: string, value: { score: number; member: string }): Promise<unknown>;
 }
@@ -39,6 +39,47 @@ async function getRedis(): Promise<RedisLike | null> {
     url: process.env.UPSTASH_REDIS_REST_URL,
     token: process.env.UPSTASH_REDIS_REST_TOKEN,
   }) as RedisLike;
+}
+
+const memLocks = new Set<string>();
+
+// Best-effort mutual exclusion for read-modify-write economy actions.
+// Mirrors the SET NX pattern used by the spin route so concurrent requests
+// (double-tap, two tabs) can't both act on the same stale balance snapshot.
+export async function acquireEconomyLock(key: string, ttlSec = 10): Promise<boolean> {
+  const redis = await getRedis();
+  if (redis) {
+    const result = await redis.set(key, '1', { ex: Math.min(ttlSec, 30), nx: true });
+    return result === 'OK';
+  }
+  if (memLocks.has(key)) return false;
+  memLocks.add(key);
+  return true;
+}
+
+export async function releaseEconomyLock(key: string): Promise<void> {
+  const redis = await getRedis();
+  if (redis) await redis.del(key);
+  else memLocks.delete(key);
+}
+
+const memHydrated = new Set<string>();
+
+// One-time legacy migration guard. Once a wallet has hydrated its local save
+// into server storage, later hydrate calls are ignored so a client can't keep
+// ratcheting server state upward with fresh client-supplied numbers.
+export async function hasHydrated(address: string): Promise<boolean> {
+  const addr = normalizeAddress(address);
+  const redis = await getRedis();
+  if (redis) return (await redis.get<number>(`economy_hydrated:${addr}`)) != null;
+  return memHydrated.has(addr);
+}
+
+export async function markHydrated(address: string): Promise<void> {
+  const addr = normalizeAddress(address);
+  const redis = await getRedis();
+  if (redis) await redis.set(`economy_hydrated:${addr}`, 1);
+  else memHydrated.add(addr);
 }
 
 export function normalizeAddress(address: string): string {
@@ -105,23 +146,6 @@ export async function writeCoins(address: string, balance: number): Promise<void
   const currentBest = memCoinBest.get(addr) ?? 0;
   memCoinBest.set(addr, Math.max(normalized, currentBest));
   memCoins.set(addr, normalized);
-}
-
-export async function writeBestScore(address: string, score: number): Promise<void> {
-  const addr = normalizeAddress(address);
-  const normalized = Math.max(0, Math.floor(Number(score) || 0));
-  if (normalized <= 0) return;
-
-  const redis = await getRedis();
-  if (redis) {
-    const currentBest = await redis.zscore('scores', addr);
-    const best = Math.max(normalized, Number(currentBest) || 0);
-    await redis.zadd('scores', { score: best, member: addr });
-    return;
-  }
-
-  const currentBest = memScoreBest.get(addr) ?? 0;
-  memScoreBest.set(addr, Math.max(normalized, currentBest));
 }
 
 export async function readCheckinRewardState(address: string): Promise<EconomyCheckinRewardState> {

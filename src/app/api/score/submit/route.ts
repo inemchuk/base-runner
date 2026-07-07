@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createHmac } from 'crypto';
 import { updateLevelProgressFromRun } from '@/lib/economy/levels.ts';
 import { sanitizeRunCoins, updateQuestProgressFromRun } from '@/lib/economy/quests.ts';
 import { getRatingDef, getRunRating } from '@/lib/economy/rating.ts';
+import {
+  isAntiCheatEnabled,
+  MAX_SESSION_AGE_MS,
+  verifySessionToken,
+} from '@/lib/economy/session-token.ts';
 import {
   readCheckinRewardState,
   readDailyQualityState,
@@ -15,45 +19,18 @@ import {
 import { applyDailyQualityRun } from '@/lib/economy/daily-quality.ts';
 import { trackEconomyEventAfter } from '@/lib/economy/telemetry.ts';
 
-const SECRET              = process.env.ANTI_CHEAT_SECRET ?? 'dev_secret_change_in_prod';
 const MAX_ROWS_PER_SEC    = 5;    // generous upper bound on player speed
-const MAX_SESSION_AGE_MS  = 30 * 60 * 1000; // 30 minutes — longest realistic game
 const HARD_SCORE_CAP      = 9999;
 
 const memStore = new Map<string, number>();
+// Fallback single-use token tracking when Redis is unavailable (dev/edge).
+const usedTokens = new Set<string>();
 
 function isoWeek(d: Date): number {
   const tmp = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
   tmp.setUTCDate(tmp.getUTCDate() + 4 - (tmp.getUTCDay() || 7));
   const yearStart = new Date(Date.UTC(tmp.getUTCFullYear(), 0, 1));
   return Math.ceil((((tmp.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
-}
-
-function verifyToken(token: string, address: string): { ok: true; issuedAt: number } | { ok: false; reason: string } {
-  try {
-    const decoded = Buffer.from(token, 'base64url').toString('utf8');
-    const parts   = decoded.split(':');
-    if (parts.length !== 3) return { ok: false, reason: 'malformed token' };
-
-    const [tokenAddr, issuedAtStr, sig] = parts;
-    const issuedAt = parseInt(issuedAtStr, 10);
-    if (isNaN(issuedAt))          return { ok: false, reason: 'bad timestamp' };
-    if (tokenAddr !== address)    return { ok: false, reason: 'address mismatch' };
-
-    // Verify HMAC
-    const payload  = `${tokenAddr}:${issuedAtStr}`;
-    const expected = createHmac('sha256', SECRET).update(payload).digest('hex');
-    if (sig !== expected)         return { ok: false, reason: 'invalid signature' };
-
-    // Check age
-    const age = Date.now() - issuedAt;
-    if (age < 0)                  return { ok: false, reason: 'token from the future' };
-    if (age > MAX_SESSION_AGE_MS) return { ok: false, reason: 'session expired' };
-
-    return { ok: true, issuedAt };
-  } catch {
-    return { ok: false, reason: 'token parse error' };
-  }
 }
 
 async function getRedis() {
@@ -71,6 +48,7 @@ export async function POST(req: NextRequest) {
     }
 
     const addr = (address as string).toLowerCase();
+    const redis = await getRedis();
 
     // ── Hard cap ────────────────────────────────────────────────────────
     if (score > HARD_SCORE_CAP) {
@@ -80,7 +58,7 @@ export async function POST(req: NextRequest) {
 
     // ── Token validation ────────────────────────────────────────────────
     // In local dev (no secret configured) we skip token check to avoid friction.
-    const isProd = process.env.ANTI_CHEAT_SECRET !== undefined;
+    const isProd = isAntiCheatEnabled();
 
     if (isProd) {
       if (!token) {
@@ -88,7 +66,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: false, error: 'missing_token' }, { status: 422 });
       }
 
-      const result = verifyToken(token, addr);
+      const result = verifySessionToken(token, addr);
       if (!result.ok) {
         console.warn(`[anticheat] token rejected (${result.reason}) for ${addr} score=${score}`);
         return NextResponse.json({ ok: false, error: 'invalid_token' }, { status: 422 });
@@ -101,11 +79,28 @@ export async function POST(req: NextRequest) {
         console.warn(`[anticheat] impossible speed: score=${score} elapsed=${elapsedSec.toFixed(1)}s max=${maxPossible} addr=${addr}`);
         return NextResponse.json({ ok: false, error: 'score_rejected' }, { status: 422 });
       }
+
+      // ── Single-use enforcement ───────────────────────────────────────
+      // Each session token authorizes exactly one credited run. Without this,
+      // a still-valid token could be replayed within its 30-min TTL to farm
+      // quest progress and XP (which now accrue on every accepted submit).
+      const nonceTtl = Math.ceil(MAX_SESSION_AGE_MS / 1000);
+      if (redis) {
+        const fresh = await redis.set(`score_nonce:${token}`, '1', { ex: nonceTtl, nx: true });
+        if (fresh !== 'OK') {
+          console.warn(`[anticheat] token replay rejected for ${addr} score=${score}`);
+          return NextResponse.json({ ok: false, error: 'token_replayed' }, { status: 409 });
+        }
+      } else if (usedTokens.has(token)) {
+        console.warn(`[anticheat] token replay rejected (mem) for ${addr} score=${score}`);
+        return NextResponse.json({ ok: false, error: 'token_replayed' }, { status: 409 });
+      } else {
+        usedTokens.add(token);
+      }
     }
 
     // ── Persist (best score per period) ─────────────────────────────────
     let previousBest = 0;
-    const redis = await getRedis();
     if (redis) {
       const now   = new Date();
       const week  = `scores:week:${now.getUTCFullYear()}-W${isoWeek(now).toString().padStart(2,'0')}`;

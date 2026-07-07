@@ -4,12 +4,14 @@ import { CRAFT_CONFIG } from '@/lib/economy/config.ts';
 import { type EconomyShopData, getCraftMeta, normalizeShopData } from '@/lib/economy/core.ts';
 import { LEVEL_REWARDS, normalizeLevelState, type LevelState } from '@/lib/economy/levels.ts';
 import { normalizeQuestState, QUEST_DEFS, type QuestState } from '@/lib/economy/quests.ts';
+import { isAntiCheatEnabled, verifySessionToken } from '@/lib/economy/session-token.ts';
 import {
+  hasHydrated,
+  markHydrated,
   readCoins,
   readLevelState,
   readQuestState,
   readShop,
-  writeBestScore,
   writeCoins,
   writeLevelState,
   writeQuestState,
@@ -19,31 +21,51 @@ import {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { address, legacy } = body;
+    const { address, legacy, token } = body;
     if (!address || !isAddress(address) || !legacy || typeof legacy !== 'object') {
       return NextResponse.json({ ok: false, error: 'invalid params' }, { status: 400 });
     }
 
-    const [shop, coins, quests, levels] = await Promise.all([
-      readShop(address as string),
-      readCoins(address as string),
-      readQuestState(address as string),
-      readLevelState(address as string),
+    const addr = (address as string).toLowerCase();
+
+    // Require a valid session token in prod (skipped in local dev). This gates
+    // unauthenticated drive-by calls; it does not stop a player self-minting a
+    // token for their own address — full server-authority is deferred.
+    if (isAntiCheatEnabled()) {
+      const verified = token ? verifySessionToken(token, addr) : null;
+      if (!verified || !verified.ok) {
+        return NextResponse.json({ ok: false, error: 'invalid_token' }, { status: 422 });
+      }
+    }
+
+    const [shop, coins, quests, levels, alreadyHydrated] = await Promise.all([
+      readShop(addr),
+      readCoins(addr),
+      readQuestState(addr),
+      readLevelState(addr),
+      hasHydrated(addr),
     ]);
+
+    // Legacy localStorage may only be migrated once per wallet. Later calls are
+    // inert so client-supplied numbers can't be replayed to ratchet state up.
+    if (alreadyHydrated) {
+      return NextResponse.json({ ok: true, alreadyHydrated: true, shop, coins, quests, levels });
+    }
 
     const nextCoins = Math.max(coins, sanitizeNumber(legacy.coins));
     const nextShop = mergeLegacyShop(shop, legacy.shop);
     const nextQuests = mergeLegacyQuests(quests, legacy.quests);
     const nextLevels = mergeLegacyLevels(levels, legacy.levels);
-    const bestScore = sanitizeNumber(legacy.bestScore);
 
+    // Note: legacy.bestScore is deliberately NOT migrated to the leaderboard —
+    // the ranked set must only reflect scores verified through /api/score/submit.
     await Promise.all([
-      writeShop(address as string, nextShop),
-      writeCoins(address as string, nextCoins),
-      writeQuestState(address as string, nextQuests),
-      writeLevelState(address as string, nextLevels),
-      writeBestScore(address as string, bestScore),
+      writeShop(addr, nextShop),
+      writeCoins(addr, nextCoins),
+      writeQuestState(addr, nextQuests),
+      writeLevelState(addr, nextLevels),
     ]);
+    await markHydrated(addr);
 
     return NextResponse.json({
       ok: true,

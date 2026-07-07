@@ -2,6 +2,7 @@
 
 import { useEffect, useCallback } from 'react';
 import { useAccount } from 'wagmi';
+import { getEconomySessionToken } from '@/lib/client/sessionToken';
 
 interface ShopPayload {
   owned:          string[];
@@ -35,10 +36,11 @@ export function useShopSync() {
   const syncShop = useCallback(async (payload: ShopPayload) => {
     if (!address) return;
     try {
+      const token = await getEconomySessionToken(address);
       await fetch('/api/shop', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ address, ...payload }),
+        body:    JSON.stringify({ address, token, ...payload }),
       });
     } catch (err) {
       console.error('shop sync error:', err);

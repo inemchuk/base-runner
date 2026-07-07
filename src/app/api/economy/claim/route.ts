@@ -9,11 +9,14 @@ import { claimQuestReward } from '@/lib/economy/quests.ts';
 import { applyRewardBundle } from '@/lib/economy/rewards.ts';
 import { trackEconomyEventAfter, trackRewardBundleTelemetryAfter } from '@/lib/economy/telemetry.ts';
 import {
+  acquireEconomyLock,
+  normalizeAddress,
   readCheckinRewardState,
   readCoins,
   readLevelState,
   readQuestState,
   readShop,
+  releaseEconomyLock,
   writeCheckinRewardState,
   writeCoins,
   writeLevelState,
@@ -41,12 +44,21 @@ const EMPTY_RESULT = {
 };
 
 export async function POST(req: NextRequest) {
+  let lockKey: string | null = null;
   try {
     const body = await req.json();
     const { address, source } = body;
 
     if (!address || !isAddress(address) || (source !== 'checkin' && source !== 'quest' && source !== 'level')) {
       return NextResponse.json({ ok: false, error: 'invalid params' }, { status: 400 });
+    }
+
+    // Serialize reward claims per wallet so the same level/quest/checkin reward
+    // can't be granted twice by two concurrent requests reading stale state.
+    lockKey = `economy_lock:${normalizeAddress(address as string)}`;
+    if (!(await acquireEconomyLock(lockKey))) {
+      lockKey = null; // lock is held elsewhere; don't release what we didn't take
+      return NextResponse.json({ ok: false, error: 'busy' }, { status: 409 });
     }
 
     if (source === 'level') {
@@ -227,5 +239,7 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     console.error('economy claim error:', e);
     return NextResponse.json({ ok: false }, { status: 500 });
+  } finally {
+    if (lockKey) await releaseEconomyLock(lockKey);
   }
 }

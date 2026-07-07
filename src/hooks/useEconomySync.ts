@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 import { useAccount } from 'wagmi';
+import { getEconomySessionToken } from '@/lib/client/sessionToken';
 
 type EconomyAction = {
   action: 'setFocus' | 'topUp' | 'craft' | 'dailyFragmentChest' | 'buyItem' | 'buyBoosterPack';
@@ -72,10 +73,11 @@ export function useEconomySync() {
     if (!address) return { ok: false, error: 'no_address' };
     if (hydratedAddressRef.current === address) return { ok: true };
     try {
+      const token = await getEconomySessionToken(address);
       const res = await fetch('/api/economy/hydrate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address, legacy: readLegacyEconomySnapshot() }),
+        body: JSON.stringify({ address, token, legacy: readLegacyEconomySnapshot() }),
       });
       const data = await res.json() as EconomyResponse;
       if (data.ok) {

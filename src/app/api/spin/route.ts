@@ -3,13 +3,12 @@ import { randomUUID } from 'crypto';
 import { spinCost } from '@/config/spin-contract';
 import {
   CRAFT_CONFIG,
-  FRAGMENT_FALLBACK_COINS,
   REWARD_CONTAINERS,
   type CraftableType,
   type EconomyTier,
   type RewardBundle,
 } from '@/lib/economy/config.ts';
-import { awardFragments, getCraftMeta, grantItem, ownsItem, type EconomyShopData } from '@/lib/economy/core.ts';
+import { awardFragmentsToShop, getCraftMeta, grantItem, ownsItem, type EconomyShopData } from '@/lib/economy/core.ts';
 import { addXpToLevelState, type LevelReward, type LevelState } from '@/lib/economy/levels.ts';
 import { readCoins, readLevelState, readShop, writeCoins, writeLevelState, writeShop } from '@/lib/economy/storage.ts';
 import { trackEconomyEventAfter, trackRewardBundleTelemetryAfter } from '@/lib/economy/telemetry.ts';
@@ -40,8 +39,7 @@ type SpinPrize = {
 type AwardedPrize = Omit<SpinPrize, 'weight'> & {
   serverApplied: true;
   fragmentsAwarded?: number;
-  fragmentsOverflowed?: number;
-  fallbackCoins?: number;
+  fragmentsPooled?: number;
   itemType?: CraftableType;
   serverLevels?: LevelState;
   levelUps?: Array<{ level: number; reward: LevelReward | null }>;
@@ -192,76 +190,32 @@ function addRandomBoosters(shop: EconomyShopData, amount: number): EconomyShopDa
   return next;
 }
 
-function focusCanReceiveFragments(shop: EconomyShopData, amount: number) {
-  const focusId = shop.focusItemId;
-  const meta = getCraftMeta(focusId);
-  if (!focusId || !meta || ownsItem(shop, focusId, meta.type)) return null;
-  const current = shop.fragments[focusId] || 0;
-  const missing = Math.max(0, meta.fragments - current);
-  if (missing <= 0) return null;
-  return { focusId, amount: Math.min(missing, amount) };
+function applyFocusFragments(shop: EconomyShopData, amount: number) {
+  const r = awardFragmentsToShop(shop, amount);
+  return { shop: r.state, fragmentsAwarded: r.toFocus, fragmentsPooled: r.toPool };
 }
 
-function applyFocusFragments(
-  shop: EconomyShopData,
-  amount: number,
-  fallbackCoinsPerFragment: number,
-) {
-  const wholeAmount = Math.max(0, Math.floor(amount || 0));
-  if (wholeAmount <= 0) return { shop, coinsDelta: 0, fragmentsAwarded: 0, fragmentsOverflowed: 0, fallbackCoins: 0 };
-
-  const target = focusCanReceiveFragments(shop, wholeAmount);
-  if (!target) {
-    const fallbackCoins = wholeAmount * fallbackCoinsPerFragment;
-    return { shop, coinsDelta: fallbackCoins, fragmentsAwarded: 0, fragmentsOverflowed: wholeAmount, fallbackCoins };
-  }
-
-  const result = awardFragments(shop, target.focusId, target.amount);
-  if (!result.ok) {
-    const fallbackCoins = wholeAmount * fallbackCoinsPerFragment;
-    return { shop, coinsDelta: fallbackCoins, fragmentsAwarded: 0, fragmentsOverflowed: wholeAmount, fallbackCoins };
-  }
-
-  const fragmentsAwarded = result.fragmentsDelta || 0;
-  const leftover = Math.max(0, wholeAmount - fragmentsAwarded);
-  const fallbackCoins = leftover * fallbackCoinsPerFragment;
-  return {
-    shop: result.state,
-    coinsDelta: fallbackCoins,
-    fragmentsAwarded,
-    fragmentsOverflowed: leftover,
-    fallbackCoins,
-  };
-}
-
-function applyContainer(
-  shop: EconomyShopData,
-  containerId: string,
-  fallbackCoinsPerFragment: number,
-) {
+function applyContainer(shop: EconomyShopData, containerId: string) {
   const bundle = REWARD_CONTAINERS[containerId as keyof typeof REWARD_CONTAINERS];
-  if (!bundle) return { shop, coinsDelta: 0, fragmentsAwarded: 0, fragmentsOverflowed: 0, fallbackCoins: 0 };
+  if (!bundle) return { shop, coinsDelta: 0, fragmentsAwarded: 0, fragmentsPooled: 0 };
 
   let nextShop = shop;
-  let coinsDelta = 'coins' in bundle ? bundle.coins : 0;
+  const coinsDelta = 'coins' in bundle ? bundle.coins : 0;
   let fragmentsAwarded = 0;
-  let fragmentsOverflowed = 0;
-  let fallbackCoins = 0;
+  let fragmentsPooled = 0;
 
   const fragments = 'fragments' in bundle ? bundle.fragments : 0;
   if (fragments) {
-    const result = applyFocusFragments(nextShop, fragments, fallbackCoinsPerFragment);
+    const result = applyFocusFragments(nextShop, fragments);
     nextShop = result.shop;
-    coinsDelta += result.coinsDelta;
     fragmentsAwarded += result.fragmentsAwarded;
-    fragmentsOverflowed += result.fragmentsOverflowed;
-    fallbackCoins += result.fallbackCoins;
+    fragmentsPooled += result.fragmentsPooled;
   }
 
   const boosters = 'boosters' in bundle ? bundle.boosters : 0;
   if (boosters) nextShop = addRandomBoosters(nextShop, boosters);
 
-  return { shop: nextShop, coinsDelta, fragmentsAwarded, fragmentsOverflowed, fallbackCoins };
+  return { shop: nextShop, coinsDelta, fragmentsAwarded, fragmentsPooled };
 }
 
 function pickDirectCosmetic(shop: EconomyShopData): AwardedPrize | null {
@@ -316,24 +270,21 @@ async function applySpinPrize(
   } else if (prize.type === 'booster') {
     shop = addBooster(shop, String(prize.value), prize.amount || 1);
   } else if (prize.type === 'fragments' || prize.type === 'fragment_burst') {
-    const result = applyFocusFragments(shop, Number(prize.value) || 0, FRAGMENT_FALLBACK_COINS);
+    const result = applyFocusFragments(shop, Number(prize.value) || 0);
     shop = result.shop;
-    coins += result.coinsDelta;
     awarded = {
       ...awarded,
       fragmentsAwarded: result.fragmentsAwarded,
-      fragmentsOverflowed: result.fragmentsOverflowed,
-      fallbackCoins: result.fallbackCoins,
+      fragmentsPooled: result.fragmentsPooled,
     };
   } else if (prize.type === 'crate') {
-    const result = applyContainer(shop, String(prize.value), FRAGMENT_FALLBACK_COINS);
+    const result = applyContainer(shop, String(prize.value));
     shop = result.shop;
     coins += result.coinsDelta;
     awarded = {
       ...awarded,
       fragmentsAwarded: result.fragmentsAwarded,
-      fragmentsOverflowed: result.fragmentsOverflowed,
-      fallbackCoins: result.fallbackCoins,
+      fragmentsPooled: result.fragmentsPooled,
     };
   } else if (prize.type === 'direct_cosmetic') {
     const cosmetic = pickDirectCosmetic(shop);
@@ -349,7 +300,6 @@ async function applySpinPrize(
         label: '100 Coins',
         rarity: 'rare',
         serverApplied: true,
-        fallbackCoins: 100,
       };
     }
   }
@@ -477,8 +427,7 @@ export async function POST(req: NextRequest) {
         {
           coinsDelta: applied.prize.type === 'coins' ? Number(applied.prize.value) || 0 : 0,
           fragmentsAwarded: applied.prize.fragmentsAwarded || 0,
-          fragmentsOverflowed: applied.prize.fragmentsOverflowed || 0,
-          fallbackCoins: applied.prize.fallbackCoins || 0,
+          fragmentsPooled: applied.prize.fragmentsPooled || 0,
           boostersDelta: applied.prize.type === 'booster' ? applied.prize.amount || 1 : 0,
           xpDelta: applied.prize.type === 'xp' ? Number(applied.prize.value) || 0 : 0,
         },

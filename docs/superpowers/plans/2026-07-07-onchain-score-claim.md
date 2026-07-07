@@ -10,7 +10,7 @@
 
 **Note on testing:** This repo has no unit-test runner for React hooks or `game.js` (only `node scripts/verify-*.mjs` and lint/build). Verification here is `npm run lint`, `npm run build`, and a preview smoke test — matching how the rest of the frontend is validated. There is no jest/vitest to add TDD tests to.
 
-**Deployed contract:** `BaseRunnerScoreClaim` is already deployed & Sourcify-verified on Base. Its address is provided by the user; use it in Task 1. If not yet supplied, use the placeholder `0x0000000000000000000000000000000000000000` and flag it — the hook must no-op safely on the zero address.
+**Deployed contract:** `BaseRunnerScoreClaim` is deployed & Sourcify-verified on Base at `0x2874FF67fEA4E9fE3dfa2bcD0010eE577D63B7e2`. Use this address in Task 1. (The hook still no-ops on the zero address as a defensive guard.)
 
 ---
 
@@ -21,11 +21,11 @@
 
 - [ ] **Step 1: Create the config module**
 
-Model it on `src/config/checkin-contract.ts`. Replace `<DEPLOYED_ADDRESS>` with the real Base address from the user (checksum-cased, as returned by Remix/Rabby).
+Model it on `src/config/checkin-contract.ts`.
 
 ```ts
 // Contract address — BaseRunnerScoreClaim, deployed on Base mainnet.
-export const SCORECLAIM_ADDRESS = '<DEPLOYED_ADDRESS>' as const;
+export const SCORECLAIM_ADDRESS = '0x2874FF67fEA4E9fE3dfa2bcD0010eE577D63B7e2' as const;
 
 export const SCORECLAIM_ABI = [
   {

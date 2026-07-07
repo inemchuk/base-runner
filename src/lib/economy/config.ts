@@ -6,6 +6,7 @@ export interface TierConfig {
   craftFee: number;
   topUpCost: number;
   topUpCapPct: number;
+  poolCapPct: number;
   directPriceRange: { min: number; max: number } | null;
 }
 
@@ -57,6 +58,7 @@ export const ECONOMY_TIERS = {
     craftFee: 40,
     topUpCost: 20,
     topUpCapPct: 0.2,
+    poolCapPct: 1,
     directPriceRange: { min: 150, max: 250 },
   },
   rare: {
@@ -64,6 +66,7 @@ export const ECONOMY_TIERS = {
     craftFee: 100,
     topUpCost: 35,
     topUpCapPct: 0.2,
+    poolCapPct: 1,
     directPriceRange: { min: 750, max: 900 },
   },
   epic: {
@@ -71,6 +74,7 @@ export const ECONOMY_TIERS = {
     craftFee: 220,
     topUpCost: 60,
     topUpCapPct: 0.2,
+    poolCapPct: 1,
     directPriceRange: { min: 1200, max: 1600 },
   },
   legendary: {
@@ -78,6 +82,7 @@ export const ECONOMY_TIERS = {
     craftFee: 500,
     topUpCost: 160,
     topUpCapPct: 0,
+    poolCapPct: 0.5,
     directPriceRange: null,
   },
 } as const satisfies Record<EconomyTier, TierConfig>;

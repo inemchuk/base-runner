@@ -62,7 +62,7 @@ export async function GET() {
         url: process.env.UPSTASH_REDIS_REST_URL,
         token: process.env.UPSTASH_REDIS_REST_TOKEN,
       });
-      const result = await redis.zrange('coin_lb', 0, 19, { rev: true, withScores: true }) as (string | number)[];
+      const result = await redis.zrange('coin_lb', 0, 99, { rev: true, withScores: true }) as (string | number)[];
       for (let i = 0; i < result.length; i += 2) {
         raw.push({ address: result[i] as string, balance: result[i + 1] as number });
       }

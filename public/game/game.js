@@ -497,7 +497,7 @@ const Sound = (() => {
   function playTone({ freq = 440, type = 'sine', duration = 0.1,
                       vol = 0.3, attack = 0.005, decay = 0.05,
                       freqEnd = null, detune = 0 } = {}) {
-    if (muted) return;
+    if (muted || sfxVol <= 0) return;
     try {
       const c   = getCtx();
       const osc = c.createOscillator();
@@ -524,7 +524,7 @@ const Sound = (() => {
 
   function playNoise({ duration = 0.1, vol = 0.2, attack = 0.002,
                        lowFreq = 200, highFreq = 800 } = {}) {
-    if (muted) return;
+    if (muted || sfxVol <= 0) return;
     try {
       const c      = getCtx();
       const buf    = c.createBuffer(1, c.sampleRate * duration, c.sampleRate);
@@ -633,6 +633,10 @@ const Music = (() => {
   function _load() {
     const saved = parseFloat(localStorage.getItem('baserunner_musicvol'));
     if (!isNaN(saved)) _vol = Math.max(0, Math.min(1, saved));
+    // Restore the on/off state from the persisted volume. Without this, _enabled
+    // defaults to true every reload, so a player who turned music off (vol 0)
+    // gets it re-armed on the next visit.
+    _enabled = _vol > 0;
   }
 
   function _next() {
@@ -658,6 +662,7 @@ const Music = (() => {
   }
 
   function init() {
+    if (_audio) return; // идемпотентно: не пересоздаём элемент (иначе старый трек играет параллельно)
     _load();
     _audio = new Audio();
     _audio.crossOrigin = 'anonymous'; // required for createMediaElementSource
@@ -671,7 +676,7 @@ const Music = (() => {
 
   function play() {
     if (!_audio) init();
-    if (!_enabled) return;
+    if (!_enabled || _vol <= 0) return; // music is off — don't start or resume the context
     if (_audio.paused) {
       if (!_audio.src || _audio.src === window.location.href) _audio.src = _next();
       // Init Web Audio on first real play (needs user gesture — always true here)
@@ -3807,45 +3812,37 @@ const Renderer = (() => {
       }
 
       // Siren lights — pixel-perfect over the lightbar on the sprite.
-      // On the 96×46 sprite (facing right):
-      //   Blue light: x=48–53, y=13–18  → top siren square
-      //   Red  light: x=48–53, y=27–32  → bottom siren square
-      // When car faces LEFT (speed<0), sprite is flipped: mirror x as (95-x)
+      // Top-down police sprite is 192×92; the roof lightbar (default facing) is:
+      //   Red  light: x=77–85, y=24–40  → top half of the bar
+      //   Blue light: x=77–85, y=50–66  → bottom half of the bar
+      // When car faces LEFT (speed<0) the sprite is flipped: mirror native x.
       if (isSiren) {
-        const blink    = Math.sin(sirenPhase * Math.PI * 6) > 0;
-        const sx = car.width  / 96;   // x scale factor
-        const sy = car.height / 46;   // y scale factor
+        const blink = Math.sin(sirenPhase * Math.PI * 6) > 0;
+        const NW = 192, NH = 92;             // native sprite dimensions
+        const sx = car.width  / NW;          // native→drawn x scale
+        const sy = car.height / NH;          // native→drawn y scale
 
-        // Light block dimensions (6px wide, 6px tall in sprite space)
-        const lw = 6 * sx;
-        const lh = 6 * sy;
+        // Measured lightbar rects in native sprite pixels (default facing right)
+        const red  = { x: 77, y: 24, w: 8, h: 16 };
+        const blue = { x: 77, y: 50, w: 8, h: 16 };
 
-        // Sprite coords for lights (facing right)
-        const lightSX = 48 * sx;    // x in drawn coords
-        const blueTopY = 13 * sy;
-        const redTopY  = 27 * sy;
+        const facingRight = car.speed > 0;
+        const nativeX = (r) => facingRight ? r.x : (NW - r.x - r.w);
+        const drawLight = (r, color) => {
+          ctx.fillStyle = color;
+          ctx.fillRect(x + nativeX(r) * sx, y + r.y * sy, r.w * sx, r.h * sy);
+        };
 
-        let lx;
-        if (car.speed < 0) {
-          // Flipped: mirror x = (96 - 48 - 6) * sx = 42 * sx
-          lx = x + 42 * sx;
-        } else {
-          lx = x + lightSX;
-        }
+        const redAlpha  = blink ? 0.95 : 0.12;
+        const blueAlpha = blink ? 0.12 : 0.95;
 
-        const blueAlpha = blink ? 0.95 : 0.12;
-        const redAlpha  = blink ? 0.12 : 0.95;
-
-        ctx.fillStyle = `rgba(20,100,255,${blueAlpha})`;
-        ctx.fillRect(lx, y + blueTopY, lw, lh);
-
-        ctx.fillStyle = `rgba(255,20,20,${redAlpha})`;
-        ctx.fillRect(lx, y + redTopY, lw, lh);
+        drawLight(red,  `rgba(255,20,20,${redAlpha})`);
+        drawLight(blue, `rgba(20,100,255,${blueAlpha})`);
 
         // Soft glow matching active colour
         ctx.fillStyle = blink
-          ? 'rgba(20,100,255,0.06)'
-          : 'rgba(255,20,20,0.06)';
+          ? 'rgba(255,20,20,0.06)'
+          : 'rgba(20,100,255,0.06)';
         ctx.fillRect(x, y, car.width, car.height);
       }
     }
@@ -9348,10 +9345,17 @@ async function onGameOver() {
   }));
   const scoreSubmitPromise = _submitScoreToServer(score, _sessionCoins);
   const localXp = _calculateLocalRunXp(score, isNewRecord);
-  let xpEarned = localXp.xpEarned;
-  let xpBreakdown = localXp.xpBreakdown;
   const localRating = _getLocalRunRating(score);
-  let runRating = { id: localRating.id, label: localRating.label };
+  const localRatingObj = { id: localRating.id, label: localRating.label };
+
+  // Show the game-over screen immediately with local estimates. We must NOT
+  // block the UI on the server round-trip — on a slow link that stalls the
+  // screen (and the loadout after it) for several seconds. Authoritative XP,
+  // levels, quests and rating are reconciled in the background below.
+  setTimeout(() => {
+    UI.showGameOver(score, best, localXp.xpEarned, localXp.xpBreakdown, localRatingObj);
+  }, 600);
+
   const submitResult = await scoreSubmitPromise;
 
   // Reconcile locally-bumped quest progress with the server's authoritative
@@ -9362,28 +9366,25 @@ async function onGameOver() {
 
   if (submitResult && submitResult.ok && submitResult.levels && typeof Xp !== 'undefined') {
     Xp.applyServerState && Xp.applyServerState(submitResult.levels);
-    if (submitResult.xp && typeof submitResult.xp.earned === 'number') {
-      xpEarned = submitResult.xp.earned;
-    }
-    if (submitResult.xp && submitResult.xp.breakdown) {
-      xpBreakdown = submitResult.xp.breakdown;
-    }
-    if (submitResult.rating && submitResult.rating.id) {
-      runRating = submitResult.rating;
-    }
     _levelUpQueue = _queueFromServerLevelUps(submitResult.levelUps);
     _claimLevelRewards(_levelUpQueue);
   } else if (!submitResult || submitResult.error === 'no_address') {
-    _levelUpQueue = typeof Xp !== 'undefined' ? Xp.add(xpEarned) : [];
+    _levelUpQueue = typeof Xp !== 'undefined' ? Xp.add(localXp.xpEarned) : [];
   } else {
     _levelUpQueue = [];
     console.warn('server XP update rejected:', submitResult.error || 'unknown');
   }
 
-  setTimeout(() => {
-    UI.showGameOver(score, best, xpEarned, xpBreakdown, runRating);
-    if (_levelUpQueue.length > 0) setTimeout(_showNextLevelUp, 900);
-  }, 600);
+  // Refresh the game-over card with authoritative server values if the player
+  // is still looking at it (server XP/rating may differ from the estimate).
+  if (currentState === GameState.GAMEOVER && submitResult && submitResult.ok) {
+    const srvXp = (submitResult.xp && typeof submitResult.xp.earned === 'number') ? submitResult.xp.earned : localXp.xpEarned;
+    const srvBreakdown = (submitResult.xp && submitResult.xp.breakdown) ? submitResult.xp.breakdown : localXp.xpBreakdown;
+    const srvRating = (submitResult.rating && submitResult.rating.id) ? submitResult.rating : localRatingObj;
+    UI.showGameOver(score, best, srvXp, srvBreakdown, srvRating);
+  }
+
+  if (_levelUpQueue.length > 0) setTimeout(_showNextLevelUp, 900);
 }
 
 // ===================================================
@@ -9442,16 +9443,16 @@ const Input = (() => {
     if (!_isCanvas(e.target)) return;
     e.preventDefault();
 
+    // Один свайп-жест = одно движение. Если уже сработал — ждём отрыва пальца,
+    // иначе резкий свайп вбок пересекает порог несколько раз и даёт 2-3 прыжка.
+    if (touchMoved) return;
+
     const dx = e.touches[0].clientX - touchStartX;
     const dy = e.touches[0].clientY - touchStartY;
 
-    // Каждый раз при превышении порога — свайп + новая точка отсчёта,
-    // чтобы можно было "рулить" не отрывая палец
     if (Math.abs(dx) > SWIPE_MIN || Math.abs(dy) > SWIPE_MIN) {
       touchMoved = true;
       handleSwipe(dx, dy);
-      touchStartX = e.touches[0].clientX;
-      touchStartY = e.touches[0].clientY;
     }
   }, { passive: false });
 
@@ -9738,6 +9739,8 @@ function _requestSessionToken() {
 function _exposeGameBridges() {
   window.Save = Save;
   window.Shop = Shop;
+  window.Music = Music;
+  window.Sound = Sound;
   // Debug/verification handles (client is trust-light anyway; used by preview checks)
   window.__GAME_DBG = { Renderer, World, Player, Loadout };
   window.Quests = Quests;
@@ -9747,6 +9750,12 @@ function _exposeGameBridges() {
 
 function _initUI() {
   _exposeGameBridges();
+
+  // Load audio preferences up front so the menu, settings sliders, and SFX
+  // playback reflect saved state immediately. Sound.init otherwise only runs at
+  // game start, leaving muted/volume at defaults on the menu.
+  if (typeof Sound !== 'undefined') Sound.init();
+  if (typeof Music !== 'undefined') Music.init();
 
   // Кнопки меню
   _bind('btn-start',   'click', () => Loadout.show());
@@ -9841,6 +9850,21 @@ function _initUI() {
       if (vibToggle.checked) Vibrate.tap();
     });
   }
+
+  // Browsers block audio autoplay until the first user gesture, so music queued
+  // on the initial menu render can stay silent. Kick it off (once) on the first
+  // interaction — unless we're mid-run, where music is intentionally paused.
+  const _armMusicOnGesture = () => {
+    if (typeof Music !== 'undefined' && Music.isEnabled() && currentState !== GameState.PLAYING) {
+      Music.play();
+    }
+    window.removeEventListener('pointerdown', _armMusicOnGesture);
+    window.removeEventListener('touchstart', _armMusicOnGesture);
+    window.removeEventListener('keydown', _armMusicOnGesture);
+  };
+  window.addEventListener('pointerdown', _armMusicOnGesture);
+  window.addEventListener('touchstart', _armMusicOnGesture);
+  window.addEventListener('keydown', _armMusicOnGesture);
 
   // Кнопки game over
   _bind('btn-restart', 'click', () => Loadout.show());
@@ -9958,9 +9982,24 @@ function _initUI() {
     }
   }
 
+  // The server verifies the check-in reward against on-chain getState and
+  // returns `not_checked_in_onchain` (409) if its RPC node hasn't yet seen the
+  // confirmed tx. That lag is transient — retry a few times so the reward lands
+  // as soon as the chain propagates instead of being dropped until next visit.
+  async function claimCheckinWithRetry(maxAttempts = 6, delayMs = 2500) {
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const claimed = await applyCheckinRewardServerClaim();
+      if (!claimed) return null;                     // no server bridge → local fallback
+      if (!claimed.serverRejected) return claimed;   // success / alreadyClaimed
+      if (claimed.error !== 'not_checked_in_onchain') return claimed; // real rejection
+      if (attempt < maxAttempts - 1) await new Promise(r => setTimeout(r, delayMs));
+    }
+    return { serverRejected: true, error: 'not_checked_in_onchain' };
+  }
+
   // Listen for on-chain check-in confirmation from React
   window.addEventListener('base-checkin-confirmed', async () => {
-    const claimed = await applyCheckinRewardServerClaim();
+    const claimed = await claimCheckinWithRetry();
     if (!claimed) applyCheckinRewardLocalFallback();
     else if (claimed.serverRejected) {
       console.warn('check-in reward claim rejected:', claimed.error || 'unknown');

@@ -50,8 +50,6 @@ export const DAILY_FRAGMENT_CHEST = {
   limitPerDay: 1,
 } as const;
 
-export const FRAGMENT_FALLBACK_COINS = 10;
-
 export const ECONOMY_TIERS = {
   common: {
     fragments: 10,

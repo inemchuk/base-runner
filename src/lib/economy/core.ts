@@ -130,6 +130,38 @@ export function awardFragments(state: EconomyShopData, itemId: string, amount: n
   }, 0, next - current);
 }
 
+export interface AwardFragmentsResult {
+  state: EconomyShopData;
+  toFocus: number;
+  toPool: number;
+}
+
+// Award loose fragments: fill the active (unowned, not-full) focus item first,
+// overflow into the untyped pool. Never converts to coins.
+export function awardFragmentsToShop(state: EconomyShopData, amount: number): AwardFragmentsResult {
+  const normalized = normalizeShopData(state);
+  const add = Math.max(0, Math.floor(Number(amount) || 0));
+  if (add <= 0) return { state: normalized, toFocus: 0, toPool: 0 };
+
+  let toFocus = 0;
+  const focusId = normalized.focusItemId;
+  const meta = getCraftMeta(focusId);
+  if (focusId && meta && !ownsItem(normalized, focusId, meta.type)) {
+    const current = normalized.fragments[focusId] || 0;
+    toFocus = Math.min(Math.max(0, meta.fragments - current), add);
+  }
+
+  const toPool = add - toFocus;
+  const next: EconomyShopData = {
+    ...normalized,
+    fragments: toFocus > 0 && focusId
+      ? { ...normalized.fragments, [focusId]: (normalized.fragments[focusId] || 0) + toFocus }
+      : normalized.fragments,
+    pooledFragments: normalized.pooledFragments + toPool,
+  };
+  return { state: next, toFocus, toPool };
+}
+
 export function topUpFragments(state: EconomyShopData, itemId: string, coins: number): EconomyMutationResult {
   const normalized = normalizeShopData(state);
   const meta = getCraftMeta(itemId);

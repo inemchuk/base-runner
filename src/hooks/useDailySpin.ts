@@ -19,8 +19,7 @@ export interface SpinPrize {
   rarity?: string;
   serverApplied?: boolean;
   fragmentsAwarded?: number;
-  fragmentsOverflowed?: number;
-  fallbackCoins?: number;
+  fragmentsPooled?: number;
   serverShop?: unknown;
   serverCoins?: number;
 }

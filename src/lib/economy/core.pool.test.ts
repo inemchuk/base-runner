@@ -57,3 +57,43 @@ test('awardFragmentsToShop never touches coins and ignores non-positive amounts'
   assert.equal(r.toPool, 0);
   assert.equal(r.state.pooledFragments, 0);
 });
+
+import { setFocus, craftItem } from './core.ts';
+
+test('setFocus drains the pool up to 100% for a rare item', () => {
+  // skin_1 rare needs 20; pool has 25.
+  const base = normalizeShopData({ pooledFragments: 25 });
+  const r = setFocus(base, 'skin_1');
+  assert.equal(r.ok, true);
+  assert.equal(r.state.fragments.skin_1, 20);
+  assert.equal(r.state.pooledFragments, 5);
+  assert.equal(r.state.poolAppliedFragments.skin_1, 20);
+});
+
+test('setFocus caps the pool drain at 50% for a legendary item', () => {
+  // skin_8 legendary needs 60, poolCapPct 0.5 -> max 30 from pool.
+  const base = normalizeShopData({ pooledFragments: 100 });
+  const r = setFocus(base, 'skin_8');
+  assert.equal(r.ok, true);
+  assert.equal(r.state.fragments.skin_8, 30);
+  assert.equal(r.state.pooledFragments, 70);
+  assert.equal(r.state.poolAppliedFragments.skin_8, 30);
+});
+
+test('legendary pool cap is cumulative across re-focus', () => {
+  // Focus legendary (drain 30), switch away, focus again: no extra drain.
+  const base = normalizeShopData({ pooledFragments: 100 });
+  const first = setFocus(base, 'skin_8');
+  const away = setFocus(first.state, 'skin_9'); // another legendary, drains its own 30
+  const again = setFocus(away.state, 'skin_8');
+  assert.equal(again.state.fragments.skin_8, 30);      // unchanged
+  assert.equal(again.state.poolAppliedFragments.skin_8, 30);
+});
+
+test('craftItem clears pool accounting for the crafted item', () => {
+  const focused = setFocus(normalizeShopData({ pooledFragments: 25 }), 'skin_1');
+  const crafted = craftItem(focused.state, 'skin_1', 1000);
+  assert.equal(crafted.ok, true);
+  assert.equal(crafted.state.fragments.skin_1 || 0, 0);
+  assert.equal(crafted.state.poolAppliedFragments.skin_1 || 0, 0);
+});

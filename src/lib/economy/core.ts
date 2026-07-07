@@ -33,6 +33,7 @@ export interface CraftMeta {
   craftFee: number;
   topUpCost: number;
   topUpCapPct: number;
+  poolCapPct: number;
   directPriceRange: { min: number; max: number } | null;
 }
 
@@ -103,6 +104,7 @@ export function getCraftMeta(itemId: string | null | undefined): CraftMeta | nul
     craftFee: tier.craftFee,
     topUpCost: tier.topUpCost,
     topUpCapPct: tier.topUpCapPct,
+    poolCapPct: tier.poolCapPct,
     directPriceRange: tier.directPriceRange,
   };
 }
@@ -112,7 +114,26 @@ export function setFocus(state: EconomyShopData, itemId: string): EconomyMutatio
   const meta = getCraftMeta(itemId);
   if (!meta) return fail(normalized, 'invalid_item');
   if (ownsItem(normalized, itemId, meta.type)) return fail(normalized, 'already_owned');
-  return ok({ ...normalized, focusItemId: itemId }, 0);
+
+  const withFocus: EconomyShopData = { ...normalized, focusItemId: itemId };
+
+  // Auto-drain the pool into the item, capped per tier so legendary items
+  // can't be trivially completed from banked fragments. The cap is cumulative
+  // via poolAppliedFragments so toggling focus can't bypass it.
+  const current = withFocus.fragments[itemId] || 0;
+  const capTotal = Math.floor(meta.fragments * meta.poolCapPct);
+  const alreadyPooled = withFocus.poolAppliedFragments[itemId] || 0;
+  const allowedFromPool = Math.max(0, capTotal - alreadyPooled);
+  const drain = Math.min(withFocus.pooledFragments, meta.fragments - current, allowedFromPool);
+
+  if (drain <= 0) return ok(withFocus, 0);
+
+  return ok({
+    ...withFocus,
+    fragments: { ...withFocus.fragments, [itemId]: current + drain },
+    pooledFragments: withFocus.pooledFragments - drain,
+    poolAppliedFragments: { ...withFocus.poolAppliedFragments, [itemId]: alreadyPooled + drain },
+  }, 0);
 }
 
 export function awardFragments(state: EconomyShopData, itemId: string, amount: number): EconomyMutationResult {
@@ -202,6 +223,7 @@ export function craftItem(state: EconomyShopData, itemId: string, coins: number)
     focusItemId: next.focusItemId === itemId ? null : next.focusItemId,
     fragments: { ...next.fragments, [itemId]: 0 },
     topUpFragments: { ...next.topUpFragments, [itemId]: 0 },
+    poolAppliedFragments: { ...next.poolAppliedFragments, [itemId]: 0 },
   }, -meta.craftFee, -meta.fragments);
 }
 

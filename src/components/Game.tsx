@@ -10,6 +10,7 @@ import { useShopSync } from '@/hooks/useShopSync';
 import { useQuestSync } from '@/hooks/useQuestSync';
 import { useDailySpin } from '@/hooks/useDailySpin';
 import { useNftMint } from '@/hooks/useNftMint';
+import { useScoreClaim } from '@/hooks/useScoreClaim';
 import { useEconomySync } from '@/hooks/useEconomySync';
 
 type GameWindow = Window & {
@@ -29,6 +30,7 @@ export default function Game() {
   useQuestSync();
   useDailySpin();
   useNftMint();
+  useScoreClaim();
   useEconomySync();
 
   useEffect(() => {
@@ -400,6 +402,7 @@ export default function Game() {
           <span id="go-xp-bonus" className="go-xp-bonus" style={{display:'none'}}></span>
         </div>
         <p id="go-quest-notify" className="quest-notify" style={{display:'none'}}><img className="quest-notify-icon ui-icon" src="/game/ui-icons/quests.png" alt="" aria-hidden="true" />Quest complete! Tap to claim</p>
+        <button className="btn btn-claim-score" id="btn-claim-score" style={{display:'none'}}>CLAIM ONCHAIN</button>
         <button className="btn btn-restart" id="btn-restart">↺ PLAY AGAIN</button>
         <button className="btn btn-back" id="btn-go-menu">← MENU</button>
       </div>

@@ -5640,6 +5640,20 @@ const UI = (() => {
       questNotify.style.display = Quests.hasClaimable() ? 'inline-flex' : 'none';
     }
 
+    // Onchain score-claim button — visible only with a connected wallet & real score
+    const claimScoreBtn = document.getElementById('btn-claim-score');
+    if (claimScoreBtn) {
+      const canClaim = Boolean(window.__BASE_WALLET) && score > 0;
+      claimScoreBtn.style.display = canClaim ? '' : 'none';
+      if (canClaim) {
+        claimScoreBtn.dataset.score = String(score);
+        claimScoreBtn.dataset.claimed = '';
+        claimScoreBtn.disabled = false;
+        claimScoreBtn.style.opacity = '1';
+        claimScoreBtn.textContent = 'CLAIM ONCHAIN';
+      }
+    }
+
     show('gameover');
   }
 
@@ -9993,6 +10007,32 @@ function _initUI() {
     initMenuBackground(); // restart menu RAF loop (it exited when state left MENU)
   });
   // Coins are auto-synced at game over, no claim button needed
+
+  // Onchain score claim (game over) — fires a paymaster tx via the React bridge
+  _bind('btn-claim-score', 'click', () => {
+    const btn = document.getElementById('btn-claim-score');
+    if (!btn || btn.disabled || btn.dataset.claimed === '1') return;
+    const score = parseInt(btn.dataset.score || '0', 10);
+    if (!score || typeof window.__BASE_CLAIM_SCORE !== 'function') return;
+    btn.disabled = true;
+    btn.style.opacity = '0.5';
+    btn.textContent = 'CLAIMING...';
+    Promise.resolve(window.__BASE_CLAIM_SCORE(score)).catch(() => {
+      // send failed to even start — revert to idle so the player can retry
+      if (btn.dataset.claimed === '1') return;
+      btn.disabled = false;
+      btn.style.opacity = '1';
+      btn.textContent = 'CLAIM ONCHAIN';
+    });
+  });
+  window.addEventListener('base-score-claimed', () => {
+    const btn = document.getElementById('btn-claim-score');
+    if (!btn) return;
+    btn.dataset.claimed = '1';
+    btn.disabled = true;
+    btn.style.opacity = '1';
+    btn.textContent = 'CLAIMED';
+  });
 
   // Continue screen
   _bind('btn-do-continue', 'click', () => {

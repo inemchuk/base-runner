@@ -263,7 +263,7 @@ In `#screen-gameover`, insert the claim button between the quest-notify `<p>` (c
 
 ```tsx
         <p id="go-quest-notify" className="quest-notify" style={{display:'none'}}><img className="quest-notify-icon ui-icon" src="/game/ui-icons/quests.png" alt="" aria-hidden="true" />Quest complete! Tap to claim</p>
-        <button className="btn btn-claim-score" id="btn-claim-score" style={{display:'none'}}>⛓ CLAIM ONCHAIN</button>
+        <button className="btn btn-claim-score" id="btn-claim-score" style={{display:'none'}}>CLAIM ONCHAIN</button>
         <button className="btn btn-restart" id="btn-restart">↺ PLAY AGAIN</button>
 ```
 
@@ -303,7 +303,7 @@ Insert just before the final `show('gameover');` line (currently line 5644):
         claimScoreBtn.dataset.claimed = '';
         claimScoreBtn.disabled = false;
         claimScoreBtn.style.opacity = '1';
-        claimScoreBtn.textContent = '⛓ CLAIM ONCHAIN';
+        claimScoreBtn.textContent = 'CLAIM ONCHAIN';
       }
     }
 
@@ -323,13 +323,13 @@ Next to the existing `_bind('btn-restart', ...)` (line 9959), add:
     if (!score || typeof window.__BASE_CLAIM_SCORE !== 'function') return;
     btn.disabled = true;
     btn.style.opacity = '0.5';
-    btn.textContent = '⏳ CLAIMING…';
+    btn.textContent = 'CLAIMING...';
     Promise.resolve(window.__BASE_CLAIM_SCORE(score)).catch(() => {
       // send failed to even start — revert to idle so the player can retry
       if (btn.dataset.claimed === '1') return;
       btn.disabled = false;
       btn.style.opacity = '1';
-      btn.textContent = '⛓ CLAIM ONCHAIN';
+      btn.textContent = 'CLAIM ONCHAIN';
     });
   });
 ```
@@ -345,7 +345,7 @@ Near the other global listeners (e.g. after the `base-leaderboard-loaded` listen
     btn.dataset.claimed = '1';
     btn.disabled = true;
     btn.style.opacity = '1';
-    btn.textContent = '✓ CLAIMED';
+    btn.textContent = 'CLAIMED';
   });
 ```
 
@@ -361,29 +361,23 @@ git commit -m "feat(onchain): wire game-over score-claim button"
 ### Task 5: Style the button
 
 **Files:**
-- Modify: `src/app/globals.css`
+- Modify: `src/app/globals.css` (near `.btn-submit-score`, ~line 424)
 
-- [ ] **Step 1: Find the existing game-over button styles**
+The game already has a blue onchain-style action button — `.btn-submit-score` (line 424) — built from the design-system CSS variables. Give `.btn-claim-score` the same treatment so it matches the game's buttons exactly (no bespoke colors, no emoji — the `.btn` base already applies `text-transform: uppercase` and the shared shape).
 
-Run: `grep -n "btn-restart\|btn-back\|\.btn " src/app/globals.css`
-Expected: locate the `.btn`, `.btn-restart`, `.btn-back` rules that style the game-over buttons.
+- [ ] **Step 1: Add the `.btn-claim-score` rule**
 
-- [ ] **Step 2: Add a `.btn-claim-score` rule**
-
-Match the visual weight of the other game-over buttons but give it an onchain accent (Base blue). Place it near the `.btn-restart` rule found in Step 1:
+Insert immediately after the existing `.btn-submit-score { … }` block (ends ~line 429):
 
 ```css
-.btn-claim-score {
-  background: #0052ff;
-  color: #fff;
-  border-color: #0052ff;
-}
-.btn-claim-score:disabled {
-  cursor: default;
-}
+    .btn-claim-score {
+      background: var(--button-blue);
+      color:#fff;
+      border-color: rgba(136,170,255,0.34);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), 0 8px 22px rgba(0,82,255,0.24);
+    }
+    .btn-claim-score:disabled { cursor: default; }
 ```
-
-(If the existing `.btn` rules use different color/border conventions, follow those — the goal is a Base-blue claim button consistent with the surrounding buttons.)
 
 - [ ] **Step 3: Commit**
 

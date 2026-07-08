@@ -2688,7 +2688,17 @@ const Renderer = (() => {
   let playerImg = null;
   let playerImgSrc = '';
   let pendingPlayerImgSrc = '';
+  let playerFrameSet = null;
+  let playerFrameSetSrc = '';
   let coinImg   = null;
+
+  const PLAYER_SPRITE_SETS = {
+    '/game/chars/cryptokid.png': {
+      idle:  '/game/chars/cryptokid-smooth-preview/idle.png',
+      walkA: '/game/chars/cryptokid-smooth-preview/walk-a.png',
+      walkB: '/game/chars/cryptokid-smooth-preview/walk-b.png',
+    },
+  };
 
   // ── Procedural grass tile (offscreen canvas, built once at init) ──
   const _GRASS_PATTERNS = {};
@@ -2835,6 +2845,7 @@ const Renderer = (() => {
   }
 
   function loadPlayerSprite(src = getEquippedPlayerSpriteSrc()) {
+    loadPlayerFrameSet(src);
     if (playerImg && playerImgSrc === src) return;
     if (pendingPlayerImgSrc === src) return;
 
@@ -2853,6 +2864,38 @@ const Renderer = (() => {
       }
     };
     img.src = src;
+  }
+
+  function loadPlayerFrameSet(src) {
+    if (playerFrameSetSrc === src) return;
+    playerFrameSetSrc = src;
+    playerFrameSet = null;
+
+    const def = PLAYER_SPRITE_SETS[src];
+    if (!def) return;
+
+    const frames = { ready: false, idle: null, walkA: null, walkB: null };
+    const entries = Object.entries(def);
+    let loaded = 0;
+
+    entries.forEach(([key, frameSrc]) => {
+      const img = new Image();
+      img.onload = () => {
+        loaded += 1;
+        if (loaded === entries.length) frames.ready = true;
+      };
+      img.onerror = () => { frames.ready = false; };
+      img.src = frameSrc;
+      frames[key] = img;
+    });
+
+    playerFrameSet = frames;
+  }
+
+  function getPlayerFrameImage(ps, walkPhase) {
+    if (!playerFrameSet || !playerFrameSet.ready) return playerImg;
+    if (!ps.jumping) return playerFrameSet.idle || playerImg;
+    return (Math.sin(walkPhase) >= 0 ? playerFrameSet.walkA : playerFrameSet.walkB) || playerFrameSet.idle || playerImg;
   }
 
   function reloadPlayerSprite() {
@@ -5240,7 +5283,7 @@ const Renderer = (() => {
       ctx.globalAlpha = blinkAlpha;
       ctx.translate(x, baseY + bobY + idleBobY);
       ctx.scale(flip * sqX, sqY);
-      ctx.drawImage(playerImg, -size / 2, -size * 0.72, size, size);
+      ctx.drawImage(getPlayerFrameImage(ps, walkPhase), -size / 2, -size * 0.72, size, size);
       ctx.restore();
       ctx.globalAlpha = 1;
       return;

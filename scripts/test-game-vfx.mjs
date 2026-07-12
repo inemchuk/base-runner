@@ -111,4 +111,20 @@ assert.match(gameRuntime, /function drawSecondChanceScreen\(W, H\)/);
 assert.match(gameRuntime, /secondChanceFx/);
 assert.doesNotMatch(gameRuntime, /ctx\.font\s*=\s*`bold \$\{Math\.round\(CELL.*Arial/);
 
+assert.match(gameRuntime, /function triggerDeath\(x, y, type, direction = 0\)/);
+assert.match(gameRuntime, /function drawPhysicalDeath\(t\)/);
+assert.match(gameRuntime, /row\.type === 'train'\s*\? 'train'/);
+assert.doesNotMatch(gameRuntime, /fillText\('⚠'/);
+assert.match(gameRuntime, /shakeDirectionX/);
+assert.match(gameRuntime, /shakeDuration/);
+assert.match(gameRuntime, /deathSurfaceId/);
+assert.match(gameRuntime, /const deathFxPool = GameVfx\.createPool\(40\)/);
+assert.match(gameRuntime, /const isImpactCause = type === 'car' \|\| type === 'train'/);
+assert.doesNotMatch(gameRuntime, /Renderer\.triggerShake\(16, 0\.55\)/);
+
+const deathDispatchStart = gameRuntime.indexOf('function drawDeathAnimation');
+const deathDispatchEnd = gameRuntime.indexOf('function drawDeathComic', deathDispatchStart);
+const deathDispatch = gameRuntime.slice(deathDispatchStart, deathDispatchEnd);
+assert.ok(deathDispatch.indexOf('drawPhysicalDeath') < deathDispatch.indexOf('drawDeathComic'));
+
 console.log('game VFX assertions passed');

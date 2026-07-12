@@ -2540,12 +2540,18 @@ const Renderer = (() => {
   let deathX         = 0;
   let deathY         = 0;
   let deathType      = 'car';
-  let deathParticles = [];
+  let deathDirection = 0;
+  let deathSurfaceId = 'neutral';
+  const deathFxPool = GameVfx.createPool(40);
+  const deathParticles = deathFxPool.items;
 
   // ── Screen shake ─────────────────────────────────────────
-  let shakeTimer = 0;    // seconds remaining
-  let shakePeak  = 0;    // peak magnitude in screen pixels
-  const SHAKE_DUR = 0.38;
+  let shakeTimer = 0;
+  let shakeDuration = 0;
+  let shakePeak = 0;
+  let shakeDirectionX = 0;
+  let shakeDirectionY = 0.2;
+  let shakePhase = 0;
 
   // ── Squash & stretch ──────────────────────────────────────
   let squashTimer  = 0;      // post-landing spring countdown
@@ -2557,36 +2563,55 @@ const Renderer = (() => {
   let _ringState  = null;    // { x, y, timer } — null when inactive
   const RING_DUR  = 0.30;    // ring persists this long after jump starts
 
-  function triggerDeath(x, y, type) {
-    deathActive    = true;
-    deathTimer     = 0;
-    deathX         = x;
-    deathY         = y;
-    deathType      = type || 'car';
-    deathParticles = buildParticles(x, y, type);
-    // Screen shake — car hit is punchy, water is soft (drowning)
-    shakeTimer = SHAKE_DUR;
-    shakePeak  = type === 'water' ? 5 : 11;
+  function triggerDeath(x, y, type, direction = 0) {
+    deathActive = true;
+    deathTimer = 0;
+    deathX = x;
+    deathY = y;
+    deathType = type || 'car';
+    deathDirection = Math.max(-1, Math.min(1, direction));
+    deathSurfaceId = _surfaceForRow(World.getRow(Player.getState().row)).id;
+    deathFxPool.clear();
+    for (const particle of buildParticles(x, y, deathType)) {
+      deathFxPool.spawn(particle, 'impact');
+    }
+    const magnitude = deathType === 'train' ? 14 : deathType === 'water' ? 2 : 9;
+    const duration = deathType === 'train' ? 0.52 : deathType === 'water' ? 0.18 : 0.34;
+    triggerShake(magnitude, duration, deathDirection, deathType === 'water' ? 0.05 : 0.22);
   }
 
-  // Boost shake from an external caller (e.g. train)
-  function triggerShake(mag, dur) {
-    shakePeak  = Math.max(shakePeak, mag || 8);
-    shakeTimer = Math.max(shakeTimer, dur || SHAKE_DUR);
+  function triggerShake(magnitude, duration, directionX = 0, directionY = 0.2) {
+    const nextPeak = magnitude || 8;
+    const nextDuration = duration || 0.38;
+    if (shakeTimer <= 0) {
+      shakePeak = nextPeak;
+      shakeDuration = nextDuration;
+    } else {
+      shakePeak = Math.max(shakePeak, nextPeak);
+      shakeDuration = Math.max(shakeDuration, nextDuration);
+    }
+    shakeTimer = Math.max(shakeTimer, nextDuration);
+    shakeDirectionX = Math.max(-1, Math.min(1, directionX));
+    shakeDirectionY = Math.max(-1, Math.min(1, directionY));
+    shakePhase = 0;
   }
 
   function buildParticles(x, y, type) {
     const pack = (typeof Shop !== 'undefined') ? Shop.getEquippedDeath() : 'default';
     const parts = [];
+    const isImpactCause = type === 'car' || type === 'train';
+    const impactColors = type === 'train'
+      ? ['#FFD8A0', '#B9C0C8', '#8E969F', '#FFF2CC']
+      : ['#FFC56B', '#E89A45', '#8E8174', '#FFF0C8'];
 
     if (pack === 'death_pixel') {
       // Pixel pack: square particles
-      const count = type === 'car' ? 20 : 14;
+      const count = isImpactCause ? 20 : 14;
       for (let i = 0; i < count; i++) {
         const angle = (Math.PI * 2 * i / count) + Math.random() * 0.3;
         const speed = 40 + Math.random() * 100;
-        const colors = type === 'car'
-          ? ['#FF0000','#FF4400','#FFAA00','#FFFFFF','#FF6600']
+        const colors = isImpactCause
+          ? (type === 'train' ? impactColors : ['#FF0000','#FF4400','#FFAA00','#FFFFFF','#FF6600'])
           : ['#00AAFF','#0066FF','#88DDFF','#FFFFFF','#0088CC'];
         parts.push({
           x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 30,
@@ -2596,12 +2621,12 @@ const Renderer = (() => {
       }
     } else if (pack === 'death_dramatic') {
       // Dramatic: fewer but bigger, slower particles
-      const count = type === 'car' ? 8 : 6;
+      const count = isImpactCause ? 8 : 6;
       for (let i = 0; i < count; i++) {
         const angle = (Math.PI * 2 * i / count) + Math.random() * 0.5;
         const speed = 30 + Math.random() * 50;
-        const colors = type === 'car'
-          ? ['#FFD700','#FFA500','#FF4500','#fff','#FFEC8B']
+        const colors = isImpactCause
+          ? (type === 'train' ? impactColors : ['#FFD700','#FFA500','#FF4500','#fff','#FFEC8B'])
           : ['#E0F7FA','#80DEEA','#4DD0E1','#fff','#B2EBF2'];
         parts.push({
           x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 40,
@@ -2611,33 +2636,33 @@ const Renderer = (() => {
       }
     } else if (pack === 'death_comic') {
       // Comic: bouncy, cartoonish
-      const count = type === 'car' ? 16 : 12;
+      const count = isImpactCause ? 16 : 12;
       for (let i = 0; i < count; i++) {
         const angle = (Math.PI * 2 * i / count) + Math.random() * 0.6;
         const speed = 60 + Math.random() * 90;
-        const colors = type === 'car'
-          ? ['#FF1744','#FFEA00','#FF9100','#FFFFFF','#F50057']
+        const colors = isImpactCause
+          ? (type === 'train' ? impactColors : ['#FF1744','#FFEA00','#FF9100','#FFFFFF','#F50057'])
           : ['#40C4FF','#00E5FF','#18FFFF','#FFFFFF','#84FFFF'];
         parts.push({
-          x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - (type === 'car' ? 50 : 80),
+          x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - (isImpactCause ? 50 : 80),
           size: 5 + Math.random() * 8, color: colors[Math.floor(Math.random() * colors.length)],
-          gravity: type === 'car' ? 250 : 120, life: 0.7 + Math.random() * 0.3, square: false,
+          gravity: isImpactCause ? 250 : 120, life: 0.7 + Math.random() * 0.3, square: false,
         });
       }
     } else {
       // Default
-      const count = type === 'car' ? 14 : 10;
+      const count = isImpactCause ? 14 : 10;
       for (let i = 0; i < count; i++) {
         const angle  = (Math.PI * 2 * i / count) + Math.random() * 0.4;
         const speed  = 55 + Math.random() * 80;
         const size   = 4 + Math.random() * 7;
-        const colors = type === 'car'
-          ? ['#FF6F00','#FF3D00','#FFD600','#FF8F00','#fff']
+        const colors = isImpactCause
+          ? impactColors
           : ['#64B5F6','#90CAF9','#fff','#B3E5FC','#E1F5FE'];
         parts.push({
-          x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - (type === 'car' ? 20 : 60),
+          x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - (isImpactCause ? 20 : 60),
           size, color: colors[Math.floor(Math.random() * colors.length)],
-          gravity: type === 'car' ? 180 : 90, life: 0.6 + Math.random() * 0.4,
+          gravity: isImpactCause ? 180 : 90, life: 0.6 + Math.random() * 0.4,
         });
       }
     }
@@ -3469,13 +3494,15 @@ const Renderer = (() => {
       _ringState.timer -= dt_approx;
       if (_ringState.timer <= 0) _ringState = null;
     }
-    // Quadratic decay: maximum impulse at impact, fades quickly
-    let shakeX = 0, shakeY = 0;
-    if (shakeTimer > 0) {
-      const t   = shakeTimer / SHAKE_DUR;          // 1→0
-      const mag = shakePeak * t * t;               // quadratic: hits hard, fades fast
-      shakeX = (Math.random() * 2 - 1) * mag;
-      shakeY = (Math.random() * 2 - 1) * mag;
+    // Directional, deterministic impulse: readable without random camera jitter.
+    let shakeX = 0;
+    let shakeY = 0;
+    if (shakeTimer > 0 && shakeDuration > 0) {
+      shakePhase += dt_approx * 52;
+      const envelope = Math.pow(shakeTimer / shakeDuration, 2);
+      const impulse = Math.sin(shakePhase) * shakePeak * envelope;
+      shakeX = impulse * (shakeDirectionX || 0.35);
+      shakeY = impulse * shakeDirectionY;
     }
 
     // Smoothly advance nightRatio toward target (0.005/frame @60fps = 0.3/s)
@@ -5039,19 +5066,29 @@ const Renderer = (() => {
     ctx.fillRect(0, y + CELL * 0.22, W, 4);
     ctx.fillRect(0, y + CELL * 0.72, W, 4);
 
-    // Warning flash — blink red/yellow before train arrives
+    // Track-side signals preserve the rail silhouette and show entry direction.
     if (row.warning) {
       const blink = Math.sin(row.warningTimer * Math.PI * 8) > 0;
       if (blink) {
-        ctx.fillStyle = 'rgba(255, 60, 0, 0.35)';
-        ctx.fillRect(0, y, W, CELL);
-        // Warning triangles on both sides
-        ctx.fillStyle = '#FF3D00';
-        ctx.font = 'bold ' + Math.round(CELL * 0.55) + 'px Arial';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('⚠', CELL * 0.5, y + CELL * 0.5);
-        ctx.fillText('⚠', W - CELL * 0.5, y + CELL * 0.5);
+        const entryX = row.dir > 0 ? CELL * 0.38 : W - CELL * 0.38;
+        ctx.fillStyle = 'rgba(255,45,30,0.18)';
+        ctx.fillRect(0, y + CELL * 0.16, W, CELL * 0.08);
+        ctx.fillRect(0, y + CELL * 0.70, W, CELL * 0.08);
+        ctx.fillStyle = '#FF493D';
+        ctx.beginPath();
+        ctx.arc(entryX, y + CELL * 0.28, CELL * 0.085, 0, Math.PI * 2);
+        ctx.arc(entryX, y + CELL * 0.72, CELL * 0.085, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,210,170,0.9)';
+        ctx.lineWidth = 2;
+        for (let i = 0; i < 3; i++) {
+          const x = entryX + row.dir * CELL * (0.18 + i * 0.12);
+          ctx.beginPath();
+          ctx.moveTo(x - row.dir * CELL * 0.06, y + CELL * 0.40);
+          ctx.lineTo(x, y + CELL * 0.50);
+          ctx.lineTo(x - row.dir * CELL * 0.06, y + CELL * 0.60);
+          ctx.stroke();
+        }
       }
     }
 
@@ -5171,77 +5208,49 @@ const Renderer = (() => {
 
   // ── Death Animation ──────────────────────────────────────
   function drawDeathAnimation(dt) {
-    const pack = (typeof Shop !== 'undefined' && Shop.getEquippedDeath) ? Shop.getEquippedDeath() : 'default';
-    if (pack === 'death_comic')    drawDeathComic(dt);
-    else if (pack === 'death_pixel')    drawDeathPixel(dt);
+    const t = deathTimer / DEATH_DUR;
+    drawPhysicalDeath(t);
+    const pack = typeof Shop !== 'undefined' && Shop.getEquippedDeath
+      ? Shop.getEquippedDeath()
+      : 'default';
+    if (pack === 'death_comic') drawDeathComic(dt);
+    else if (pack === 'death_pixel') drawDeathPixel(dt);
     else if (pack === 'death_dramatic') drawDeathDramatic(dt);
-    else                                drawDeathDefault(dt);
   }
 
-  function drawDeathDefault(dt) {
-    const t = deathTimer / DEATH_DUR;
-
-    // Flash — bright white/orange circle that fades fast
-    if (t < 0.35) {
-      const flashT = t / 0.35;
-      const alpha  = (1 - flashT) * (deathType === 'car' ? 0.85 : 0.65);
-      const radius = CELL * (0.4 + flashT * 1.2);
-      const color  = deathType === 'car' ? '255,140,0' : '100,200,255';
-      const grd = ctx.createRadialGradient(deathX, deathY, 0, deathX, deathY, radius);
-      grd.addColorStop(0,   `rgba(255,255,255,${alpha})`);
-      grd.addColorStop(0.4, `rgba(${color},${alpha * 0.7})`);
-      grd.addColorStop(1,   `rgba(${color},0)`);
-      ctx.fillStyle = grd;
-      ctx.beginPath();
-      ctx.arc(deathX, deathY, radius, 0, Math.PI * 2);
-      ctx.fill();
+  function drawPhysicalDeath(t) {
+    if (deathType === 'water') {
+      for (let i = 0; i < 3; i++) {
+        const rt = Math.max(0, t - i * 0.14);
+        if (rt === 0) continue;
+        ctx.strokeStyle = `rgba(180,228,255,${Math.max(0, 0.55 - rt * 0.65)})`;
+        ctx.lineWidth = Math.max(0.8, 2.4 * (1 - rt));
+        ctx.beginPath();
+        ctx.ellipse(deathX, deathY, CELL * (0.2 + rt), CELL * (0.07 + rt * 0.34), 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      return;
     }
 
-    // Ring shockwave
-    if (t < 0.5) {
-      const ringT  = t / 0.5;
-      const radius = CELL * (0.3 + ringT * 1.8);
-      const alpha  = (1 - ringT) * 0.7;
-      ctx.strokeStyle = deathType === 'car'
-        ? `rgba(255,180,0,${alpha})`
-        : `rgba(150,220,255,${alpha})`;
-      ctx.lineWidth = 3 * (1 - ringT) + 1;
+    const train = deathType === 'train';
+    const count = train ? 10 : 6;
+    const surface = GameVfx.getSurface(deathSurfaceId);
+    ctx.fillStyle = train ? '#FFD8A0' : surface.mark;
+    for (let i = 0; i < count; i++) {
+      const angle = i * 2.399 + deathDirection * 0.45;
+      const distance = CELL * t * (train ? 1.15 : 0.72);
+      ctx.globalAlpha = Math.max(0, 1 - t * 1.25);
       ctx.beginPath();
-      ctx.arc(deathX, deathY, radius, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-
-    // Particles
-    for (const p of deathParticles) {
-      const age   = deathTimer / p.life;
-      if (age > 1) continue;
-      const alpha = Math.max(0, 1 - age * age);
-      const px    = p.x + p.vx * deathTimer;
-      const py    = p.y + p.vy * deathTimer + 0.5 * p.gravity * deathTimer * deathTimer;
-      const size  = p.size * (1 - age * 0.5);
-      ctx.globalAlpha = alpha;
-      ctx.fillStyle   = p.color;
-      ctx.beginPath();
-      ctx.arc(px, py, size / 2, 0, Math.PI * 2);
+      ctx.arc(
+        deathX + Math.cos(angle) * distance + deathDirection * distance * 0.45,
+        deathY + Math.sin(angle) * distance * 0.45,
+        CELL * 0.025,
+        0,
+        Math.PI * 2,
+      );
       ctx.fill();
     }
     ctx.globalAlpha = 1;
-
-    // Water ripples
-    if (deathType === 'water' && t < 0.7) {
-      for (let i = 0; i < 3; i++) {
-        const delay = i * 0.2;
-        const rt    = Math.max(0, (t - delay) / (0.7 - delay));
-        if (rt <= 0) continue;
-        const r = CELL * (0.2 + rt * 0.9);
-        const a = (1 - rt) * 0.5;
-        ctx.strokeStyle = `rgba(150,220,255,${a})`;
-        ctx.lineWidth   = 2;
-        ctx.beginPath();
-        ctx.ellipse(deathX, deathY, r, r * 0.35, 0, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-    }
   }
 
   function drawDeathComic(dt) {
@@ -5251,7 +5260,7 @@ const Renderer = (() => {
     if (t < 0.3) {
       const ft = t / 0.3;
       const alpha = (1 - ft) * 0.9;
-      if (deathType === 'car') {
+      if (deathType !== 'water') {
         // Yellow star-burst flash
         ctx.save();
         ctx.translate(deathX, deathY);
@@ -5303,7 +5312,7 @@ const Renderer = (() => {
     ctx.globalAlpha = 1;
 
     // Comic stars fly off (car death) — 4 spinning ★ symbols
-    if (deathType === 'car' && t < 0.85) {
+    if (deathType !== 'water' && t < 0.85) {
       const starOffsets = [[1.2, -1.0], [-1.3, -0.8], [0.7, 1.1], [-0.9, 1.2]];
       starOffsets.forEach(([ox, oy], i) => {
         const delay = i * 0.08;
@@ -5356,7 +5365,7 @@ const Renderer = (() => {
   function drawDeathPixel(dt) {
     const t = deathTimer / DEATH_DUR;
 
-    if (deathType === 'car') {
+    if (deathType !== 'water') {
       // Pixelated flash grid
       if (t < 0.25) {
         const ft = t / 0.25;
@@ -5449,7 +5458,7 @@ const Renderer = (() => {
   function drawDeathDramatic(dt) {
     const t = deathTimer / DEATH_DUR;
 
-    if (deathType === 'car') {
+    if (deathType !== 'water') {
       // Spin-away: large arc flash then body spins up and away
       if (t < 0.4) {
         const ft = t / 0.4;
@@ -5968,7 +5977,12 @@ const Renderer = (() => {
     ctx.closePath();
   }
 
-  function stopDeath() { deathActive = false; deathTimer = 0; deathParticles = []; trails.length = 0; }
+  function stopDeath() {
+    deathActive = false;
+    deathTimer = 0;
+    deathFxPool.clear();
+    trails.length = 0;
+  }
   function resetWeather() { _lastWeatherScore = -1; weatherState = 0; pendingWeather = null; weatherRatio = 0; lightningFlash = 0; lightningTimer = 4; }
   // Debug: force a specific weather state (0=clear,1=rain,2=fog,3=storm,4=windy)
   function _dbgWeather(state) { pendingWeather = null; weatherState = state; weatherRatio = 0; if (state===3) { rainInitDone=false; initRain(STORM_RAIN_COUNT); } else if (state===1) { rainInitDone=false; initRain(RAIN_COUNT); } }
@@ -9975,15 +9989,19 @@ function gameLoop(timestamp, gen) {
         deathTriggered = true;
         const ps = Player.getState();
         const row = World.getRow(ps.row);
-        const type = row && row.type === 'water' ? 'water' : 'car';
+        const type = row && row.type === 'water'
+          ? 'water'
+          : row && row.type === 'train'
+            ? 'train'
+            : 'car';
+        const direction = row && Number.isFinite(row.dir) ? row.dir : 0;
         _markDeathCause(row);
-        Renderer.triggerDeath(ps.visualX, ps.visualY, type);
+        Renderer.triggerDeath(ps.visualX, ps.visualY, type, direction);
         // Вибрация при смерти
         if (type === 'water') Vibrate.water();
         else                  Vibrate.death();
         if (row && row.type === 'train') {
           navigator.vibrate && navigator.vibrate([80, 30, 120]);
-          Renderer.triggerShake(16, 0.55); // trains hit harder
         }
         // Death sounds
         if (typeof Sound !== 'undefined') {

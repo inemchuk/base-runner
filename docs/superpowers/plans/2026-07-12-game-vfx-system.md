@@ -42,7 +42,7 @@
 
 - [x] Phase 1 — Foundation and materials: Tasks 1-3. Commit: `0e314fa`
 - [x] Phase 2 — Physical interactions: Task 4. Commit: `b26b182`
-- [ ] Phase 3 — Weather and lighting: Task 5. Commit: `not-started`
+- [x] Phase 3 — Weather and lighting: Task 5. Commit: `aa42a30`
 - [ ] Phase 4 — Gameplay and cosmetics: Tasks 6-8. Commit: `not-started`
 - [ ] Phase 5 — Performance and verification: Task 9. Commit: `not-started`
 

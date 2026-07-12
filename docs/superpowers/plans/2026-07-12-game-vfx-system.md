@@ -43,7 +43,7 @@
 - [x] Phase 1 — Foundation and materials: Tasks 1-3. Commit: `0e314fa`
 - [x] Phase 2 — Physical interactions: Task 4. Commit: `b26b182`
 - [x] Phase 3 — Weather and lighting: Task 5. Commit: `aa42a30`
-- [ ] Phase 4 — Gameplay and cosmetics: Tasks 6-8. Commit: `not-started`
+- [ ] Phase 4 — Gameplay and cosmetics: Tasks 6-8. Progress: Task 6 `2edd11d`, Task 7 `ecaa6a3`, Task 8 pending.
 - [ ] Phase 5 — Performance and verification: Task 9. Commit: `not-started`
 
 ---
@@ -1286,7 +1286,7 @@ git commit -m "feat(game): polish reward and booster feedback"
 - Changes: `triggerShake(magnitude, duration, directionX = 0, directionY = 0.2)`.
 - Produces: `drawPhysicalDeath(t)` before optional cosmetic overlay.
 
-- [ ] **Step 1: Add failing hazard assertions**
+- [x] **Step 1: Add failing hazard assertions**
 
 Append:
 
@@ -1303,13 +1303,13 @@ assert.match(gameRuntime, /const isImpactCause = type === 'car' \|\| type === 't
 assert.doesNotMatch(gameRuntime, /Renderer\.triggerShake\(16, 0\.55\)/);
 ```
 
-- [ ] **Step 2: Verify failure**
+- [x] **Step 2: Verify failure**
 
 Run `node scripts/test-game-vfx.mjs`.
 
 Expected: FAIL on the four-argument `triggerDeath`.
 
-- [ ] **Step 3: Make shake deterministic and directional**
+- [x] **Step 3: Make shake deterministic and directional**
 
 Replace the shake state and update logic with:
 
@@ -1345,7 +1345,7 @@ During `draw(dt)`, calculate:
     }
 ```
 
-- [ ] **Step 4: Preserve car, train, and water as distinct visual causes**
+- [x] **Step 4: Preserve car, train, and water as distinct visual causes**
 
 Change death dispatch in the main loop to:
 
@@ -1406,7 +1406,7 @@ Also change `stopDeath` in this task, not later, because `deathParticles` is now
   }
 ```
 
-- [ ] **Step 5: Draw physical death before cosmetics**
+- [x] **Step 5: Draw physical death before cosmetics**
 
 Add `drawPhysicalDeath(t)` that renders:
 
@@ -1458,7 +1458,7 @@ Replace the dispatch with this order. The default pack uses only the physical ev
 
 Delete `drawDeathDefault` after moving any generic cleanup it owns into `drawPhysicalDeath`. Remove the orange radial explosion and shockwave for cars. In Task 8, trim comic/pixel/dramatic functions to their cosmetic accents so they do not repeat the physical ripple or collision burst.
 
-- [ ] **Step 6: Replace the train emoji warning**
+- [x] **Step 6: Replace the train emoji warning**
 
 In `drawTrainRow`, replace the full-row warning fill and `⚠` glyphs with two signal lamps and entry-side chevrons:
 
@@ -1486,7 +1486,7 @@ In `drawTrainRow`, replace the full-row warning fill and `⚠` glyphs with two s
       }
 ```
 
-- [ ] **Step 7: Verify and commit Task 7**
+- [x] **Step 7: Verify and commit Task 7** — completed in `ecaa6a3`.
 
 ```bash
 node scripts/test-game-vfx.mjs

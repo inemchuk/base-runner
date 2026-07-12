@@ -3461,6 +3461,10 @@ const Renderer = (() => {
       drawMoon(W, H, skyColor);
     }
 
+    // Distant precipitation belongs behind the playfield, so cars, props and
+    // the player retain readable silhouettes even during a storm.
+    drawWeatherFar(W, H);
+
     const worldW = COLS * CELL;
     // Dynamic zoom: close-up early game, pulls back to full field by score 300
     const scale = getViewScale();
@@ -3476,9 +3480,6 @@ const Renderer = (() => {
     drawPhysicalTrails();
     drawTrails();
     drawPlayer();
-    drawShieldBursts(dt_approx);
-    drawCoinEffects(dt_approx);
-    drawScoreEffects(dt_approx);
     // Draw death particles in world space (before restore)
     if (deathActive) {
       drawDeathAnimation(dt_approx);
@@ -3492,19 +3493,84 @@ const Renderer = (() => {
       ctx.fillRect(0, 0, W, H);
     }
 
-    // Weather overlays (screen space — after world restore)
-    if (weatherRatio > 0.01) {
-      if (weatherState === 1) {
-        drawRain(W, H, false);
-      } else if (weatherState === 2) {
-        drawFog(W, H);
-      } else if (weatherState === 3) {
-        drawRain(W, H, true);
-        drawLightning(W, H);
-      } else if (weatherState === 4) {
-        drawWind(W, H);
+    // Emissive effects must be composited after the night veil — otherwise
+    // headlights, coins and shields get dimmed exactly when they matter most.
+    ctx.save();
+    _applyWorldTransform(W);
+    drawWorldEmissive();
+    ctx.restore();
+
+    // Close precipitation, fog and lightning are intentionally foreground
+    // effects. This completes the depth stack without a second world pass.
+    drawWeatherNear(W, H);
+  }
+
+  function drawWeatherFar(W, H) {
+    if (weatherRatio <= 0.01 || weatherState === 2) return;
+    if (weatherState !== 1 && weatherState !== 3) return;
+    drawPrecipitationLayer(W, H, 'far');
+  }
+
+  function drawWeatherNear(W, H) {
+    if (weatherRatio <= 0.01) return;
+    if (weatherState === 2) drawFog(W, H);
+    else if (weatherState === 1) drawPrecipitationLayer(W, H, 'near');
+    else if (weatherState === 3) {
+      drawPrecipitationLayer(W, H, 'near');
+      drawLightning(W, H);
+    } else if (weatherState === 4) drawWind(W, H);
+  }
+
+  function drawPrecipitationLayer(W, H, layer) {
+    const intensity = Math.min(weatherRatio * 1.5, 1);
+    const mode = _precipBiome();
+    const split = Math.floor(rainParticles.length * 0.68);
+    const start = layer === 'far' ? 0 : split;
+    const end = layer === 'far' ? split : rainParticles.length;
+    const near = layer === 'near';
+    const scale = near ? 1.35 : 0.72;
+    const sway = _now * 0.0012;
+
+    ctx.save();
+    if (mode === 'snow') {
+      ctx.fillStyle = 'rgb(240,248,255)';
+      for (let i = start; i < end; i++) {
+        const p = rainParticles[i];
+        const px = (p.x + Math.sin(sway * (0.6 + p.speed) + p.x * 12) * 0.015) * W;
+        const py = p.y * H;
+        ctx.globalAlpha = p.alpha * intensity * (near ? 0.72 : 0.40);
+        ctx.beginPath();
+        ctx.arc(px, py, (p.width || 1) * scale * (weatherState === 3 ? 1.2 : 1), 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else {
+      const isSand = mode === 'desert';
+      ctx.strokeStyle = isSand ? 'rgb(214,178,110)' : (nightRatio > 0.5 ? 'rgb(150,180,255)' : 'rgb(185,215,255)');
+      for (let i = start; i < end; i++) {
+        const p = rainParticles[i];
+        const px = p.x * W;
+        const py = p.y * H;
+        const len = p.len * H * scale * (weatherState === 3 ? 1.25 : 1);
+        ctx.globalAlpha = p.alpha * intensity * (near ? 0.72 : 0.40) * (isSand ? 0.7 : 1);
+        ctx.lineWidth = (p.width || 1) * scale;
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        ctx.lineTo(px - len * (isSand ? 2.6 : weatherState === 3 ? 0.45 : 0.2), py + len * (isSand ? 0.5 : 1));
+        ctx.stroke();
       }
     }
+    if (near && mode !== 'snow' && mode !== 'desert') {
+      _drawSplashes(W, H, intensity, weatherState === 3);
+    }
+    ctx.restore();
+  }
+
+  function _applyWorldTransform(W) {
+    const worldW = COLS * CELL;
+    const scale = getViewScale();
+    ctx.translate((W - worldW * scale) / 2, 0);
+    ctx.scale(scale, scale);
+    ctx.translate(0, -cameraY);
   }
 
   // ── Stars ─────────────────────────────────────────────────
@@ -3638,12 +3704,27 @@ const Renderer = (() => {
       g.fillStyle = grd;
       g.fillRect(0, 0, w, h);
     });
+    const headlightBeam = mk(192, 96, (g) => {
+      const grd = g.createLinearGradient(0, 48, 192, 48);
+      grd.addColorStop(0, 'rgba(255,240,190,0.20)');
+      grd.addColorStop(0.45, 'rgba(255,240,190,0.07)');
+      grd.addColorStop(1, 'rgba(255,240,190,0)');
+      g.fillStyle = grd;
+      g.beginPath();
+      g.moveTo(0, 40);
+      g.lineTo(192, 4);
+      g.lineTo(192, 92);
+      g.lineTo(0, 56);
+      g.closePath();
+      g.fill();
+    });
     _fxSprites = {
       grassTop: vStrip(Math.ceil(CELL * 0.18), [[0, 'rgba(0,0,0,0.28)'], [1, 'rgba(0,0,0,0)']]),
       grassBot: vStrip(Math.ceil(CELL * 0.15), [[0, 'rgba(255,255,255,0)'], [1, 'rgba(255,255,255,0.07)']]),
       coinGlow: radial(0.08 / 0.70, [[0, 'rgba(80,150,255,1)'], [0.45, 'rgba(0,82,255,0.5)'], [1, 'rgba(0,40,220,0)']]),
       hlGlow:   radial(0, [[0, 'rgba(255,238,180,0.55)'], [0.15, 'rgba(255,238,180,0.3)'], [0.4, 'rgba(255,235,170,0.1)'], [1, 'rgba(255,235,170,0)']]),
       hlDot:    radial(0, [[0, 'rgba(255,252,235,1)'], [0.5, 'rgba(255,245,200,0.5)'], [1, 'rgba(255,240,180,0)']]),
+      hlBeam:   headlightBeam,
       tlGlow:   radial(0, [[0, 'rgba(255,25,15,0.55)'], [0.3, 'rgba(255,15,10,0.2)'], [1, 'rgba(255,0,0,0)']]),
       tlDot:    radial(0, [[0, 'rgba(255,60,40,0.95)'], [0.6, 'rgba(255,30,20,0.4)'], [1, 'rgba(255,0,0,0)']]),
     };
@@ -4007,155 +4088,123 @@ const Renderer = (() => {
         ctx.fill();
       }
 
-      // Headlights & taillights at night — per-sprite pixel-accurate positions
-      if (nightRatio > 0.15) {
-        const hlAlpha = nightRatio * 0.85;
-        const sprW = spriteName === 'truck' || spriteName === 'firetruck' || spriteName === 'bus' ? 192 : spriteName === 'ambulance' ? 128 : 96;
-        const sx = car.width / sprW;
-        const sy = car.height / 46;
+    }
+  }
 
-        const lights = _CAR_LIGHT_MAP[imageKey] || _CAR_LIGHT_MAP.taxi;
-        const facingRight = car.speed > 0;
-        const lightR = 2.5 * sx;
-        const beamDir = facingRight ? 1 : -1;
+  function drawCarLights(row, rowY, car) {
+    const isSiren = car.isSirenCar === true;
+    if (nightRatio <= 0.15 && !isSiren) return;
 
-        const toCanvas = (lx, ly) => {
-          const cx = facingRight ? x + lx * sx : x + (sprW - lx) * sx;
-          const cy = y + ly * sy;
-          return { cx, cy };
-        };
+    const x = car.x;
+    const y = rowY + (CELL - car.height) / 2;
+    const spriteName = isSiren
+      ? 'police_siren'
+      : (car.spriteKey || getSpriteName(row.idx * 7 + (car.spriteSlot || 0)));
+    const imageKey = spriteName === 'police_siren' ? 'police' : spriteName;
+    const nativeW = spriteName === 'truck' || spriteName === 'firetruck' || spriteName === 'bus'
+      ? 192
+      : spriteName === 'ambulance' ? 128 : 96;
+    const sx = car.width / nativeW;
+    const sy = car.height / 46;
+    const facingRight = car.speed > 0;
+    const direction = facingRight ? 1 : -1;
+    const lights = _CAR_LIGHT_MAP[imageKey] || _CAR_LIGHT_MAP.taxi;
+    const fxs = _fxS();
+    const alpha = Math.max(nightRatio * 0.85, isSiren ? 0.35 : 0);
+    const toCanvas = (lx, ly) => ({
+      x: facingRight ? x + lx * sx : x + (nativeW - lx) * sx,
+      y: y + ly * sy,
+    });
 
-        // === Layer 3: Soft beam cone (road illumination) — drawn first (underneath) ===
-        if (lights.front.length >= 2) {
-          const topF = toCanvas(lights.front[0].x, lights.front[0].y);
-          const botF = toCanvas(lights.front[1].x, lights.front[1].y);
-          const midFx = (topF.cx + botF.cx) / 2;
-          const midFy = (topF.cy + botF.cy) / 2;
-          const beamLen = CELL * 1.6;
-          const beamEndX = midFx + beamLen * beamDir;
-          const halfSpread = (botF.cy - topF.cy) / 2;
+    ctx.save();
+    if (nightRatio > 0.15 && lights.front.length >= 2) {
+      const first = toCanvas(lights.front[0].x, lights.front[0].y);
+      const second = toCanvas(lights.front[1].x, lights.front[1].y);
+      const midX = (first.x + second.x) / 2;
+      const midY = (first.y + second.y) / 2;
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = alpha;
+      ctx.save();
+      ctx.translate(midX, midY);
+      ctx.scale(direction, 1);
+      ctx.drawImage(fxs.hlBeam, 0, -CELL * 0.50, CELL * 1.65, CELL);
+      ctx.restore();
 
-          // Road illumination — wide soft glow on road surface
-          ctx.save();
-          ctx.globalCompositeOperation = 'lighter';
-          const roadGrd = ctx.createRadialGradient(
-            midFx, midFy, CELL * 0.1,
-            midFx + beamLen * 0.5 * beamDir, midFy, beamLen * 0.7
-          );
-          roadGrd.addColorStop(0, `rgba(255,235,170,${hlAlpha * 0.08})`);
-          roadGrd.addColorStop(0.4, `rgba(255,235,170,${hlAlpha * 0.04})`);
-          roadGrd.addColorStop(1, 'rgba(255,235,170,0)');
-          ctx.fillStyle = roadGrd;
-          ctx.beginPath();
-          ctx.moveTo(midFx, topF.cy - lightR * 2);
-          ctx.lineTo(beamEndX, topF.cy - halfSpread - CELL * 0.4);
-          ctx.lineTo(beamEndX, botF.cy + halfSpread + CELL * 0.4);
-          ctx.lineTo(midFx, botF.cy + lightR * 2);
-          ctx.closePath();
-          ctx.fill();
-          ctx.globalCompositeOperation = 'source-over';
-          ctx.restore();
-
-          // Inner beam cone — brighter, narrower
-          ctx.save();
-          const coneGrd = ctx.createLinearGradient(midFx, midFy, beamEndX, midFy);
-          coneGrd.addColorStop(0, `rgba(255,240,190,${hlAlpha * 0.18})`);
-          coneGrd.addColorStop(0.3, `rgba(255,240,190,${hlAlpha * 0.10})`);
-          coneGrd.addColorStop(0.7, `rgba(255,240,190,${hlAlpha * 0.03})`);
-          coneGrd.addColorStop(1, 'rgba(255,240,190,0)');
-          ctx.fillStyle = coneGrd;
-          ctx.beginPath();
-          ctx.moveTo(topF.cx, topF.cy);
-          ctx.lineTo(beamEndX, topF.cy - CELL * 0.3);
-          ctx.lineTo(beamEndX, botF.cy + CELL * 0.3);
-          ctx.lineTo(botF.cx, botF.cy);
-          ctx.closePath();
-          ctx.fill();
-          ctx.restore();
-        }
-
-        // === Layer 2: Circular glow halo around each headlight (cached sprite) ===
-        const fxs = _fxS();
-        ctx.globalAlpha = hlAlpha;
-        for (const fl of lights.front) {
-          const { cx: fx, cy: fy } = toCanvas(fl.x, fl.y);
-          const glowR = CELL * 0.5;
-          ctx.drawImage(fxs.hlGlow, fx - glowR, fy - glowR, glowR * 2, glowR * 2);
-        }
-
-        // === Layer 1: Bright hot-spot at each headlight (cached sprite) ===
-        for (const fl of lights.front) {
-          const { cx: fx, cy: fy } = toCanvas(fl.x, fl.y);
-          const dotR = lightR * 1.8;
-          ctx.drawImage(fxs.hlDot, fx - dotR, fy - dotR, dotR * 2, dotR * 2);
-        }
-        ctx.globalAlpha = 1;
-
-        // === Wet-road reflection — vertical light smear under each headlight ===
-        if ((weatherState === 1 || weatherState === 3) && weatherRatio > 0.2 && _precipBiome() !== 'desert') {
-          const wet = Math.min(weatherRatio, 1);
-          ctx.fillStyle = 'rgb(255,240,190)';
-          for (const fl of lights.front) {
-            const { cx: fx, cy: fy } = toCanvas(fl.x, fl.y);
-            ctx.globalAlpha = hlAlpha * 0.10 * wet;
-            ctx.beginPath();
-            ctx.ellipse(fx, fy + lightR * 2.2, lightR * 0.9, lightR * 2.2, 0, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.globalAlpha = hlAlpha * 0.05 * wet;
-            ctx.beginPath();
-            ctx.ellipse(fx, fy + lightR * 3.6, lightR * 0.6, lightR * 3.2, 0, 0, Math.PI * 2);
-            ctx.fill();
-          }
-          ctx.globalAlpha = 1;
-        }
-
-        // === Rear taillights — two layers (cached sprites) ===
-        ctx.globalAlpha = hlAlpha;
-        for (const rl of lights.rear) {
-          const { cx: rx, cy: ry } = toCanvas(rl.x, rl.y);
-          const rgR = CELL * 0.22;
-          ctx.drawImage(fxs.tlGlow, rx - rgR, ry - rgR, rgR * 2, rgR * 2);
-          const rdR = lightR * 0.8;
-          ctx.drawImage(fxs.tlDot, rx - rdR, ry - rdR, rdR * 2, rdR * 2);
-        }
-        ctx.globalAlpha = 1;
+      for (const light of lights.front) {
+        const point = toCanvas(light.x, light.y);
+        const glowR = CELL * 0.50;
+        const dotR = Math.max(2, 4.5 * sx);
+        ctx.drawImage(fxs.hlGlow, point.x - glowR, point.y - glowR, glowR * 2, glowR * 2);
+        ctx.drawImage(fxs.hlDot, point.x - dotR, point.y - dotR, dotR * 2, dotR * 2);
       }
 
-      // Siren lights — pixel-perfect over the lightbar on the sprite.
-      // Top-down police sprite is 192×92; the roof lightbar (default facing) is:
-      //   Red  light: x=77–85, y=24–40  → top half of the bar
-      //   Blue light: x=77–85, y=50–66  → bottom half of the bar
-      // When car faces LEFT (speed<0) the sprite is flipped: mirror native x.
-      if (isSiren) {
-        const blink = Math.sin(sirenPhase * Math.PI * 6) > 0;
-        const NW = 192, NH = 92;             // native sprite dimensions
-        const sx = car.width  / NW;          // native→drawn x scale
-        const sy = car.height / NH;          // native→drawn y scale
-
-        // Measured lightbar rects in native sprite pixels (default facing right)
-        const red  = { x: 77, y: 24, w: 8, h: 16 };
-        const blue = { x: 77, y: 50, w: 8, h: 16 };
-
-        const facingRight = car.speed > 0;
-        const nativeX = (r) => facingRight ? r.x : (NW - r.x - r.w);
-        const drawLight = (r, color) => {
-          ctx.fillStyle = color;
-          ctx.fillRect(x + nativeX(r) * sx, y + r.y * sy, r.w * sx, r.h * sy);
-        };
-
-        const redAlpha  = blink ? 0.95 : 0.12;
-        const blueAlpha = blink ? 0.12 : 0.95;
-
-        drawLight(red,  `rgba(255,20,20,${redAlpha})`);
-        drawLight(blue, `rgba(20,100,255,${blueAlpha})`);
-
-        // Soft glow matching active colour
-        ctx.fillStyle = blink
-          ? 'rgba(255,20,20,0.06)'
-          : 'rgba(20,100,255,0.06)';
-        ctx.fillRect(x, y, car.width, car.height);
+      if (_surfaceForRow(row).id === 'wetRoad') {
+        ctx.fillStyle = 'rgb(255,240,190)';
+        for (const light of lights.front) {
+          const point = toCanvas(light.x, light.y);
+          ctx.globalAlpha = alpha * 0.08 * Math.min(weatherRatio, 1);
+          ctx.beginPath();
+          ctx.ellipse(point.x, point.y + CELL * 0.10, CELL * 0.025, CELL * 0.10, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
     }
+
+    if (nightRatio > 0.15) {
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = alpha;
+      for (const light of lights.rear) {
+        const point = toCanvas(light.x, light.y);
+        const glowR = CELL * 0.22;
+        const dotR = Math.max(1.5, 2.5 * sx);
+        ctx.drawImage(fxs.tlGlow, point.x - glowR, point.y - glowR, glowR * 2, glowR * 2);
+        ctx.drawImage(fxs.tlDot, point.x - dotR, point.y - dotR, dotR * 2, dotR * 2);
+      }
+    }
+
+    if (isSiren) {
+      const blink = Math.sin(sirenPhase * Math.PI * 6) > 0;
+      const NW = 192, NH = 92;
+      const sirenSx = car.width / NW;
+      const sirenSy = car.height / NH;
+      const red = { x: 77, y: 24, w: 8, h: 16 };
+      const blue = { x: 77, y: 50, w: 8, h: 16 };
+      const nativeX = (light) => facingRight ? light.x : (NW - light.x - light.w);
+      const drawLight = (light, color) => {
+        ctx.fillStyle = color;
+        ctx.fillRect(x + nativeX(light) * sirenSx, y + light.y * sirenSy, light.w * sirenSx, light.h * sirenSy);
+      };
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 1;
+      drawLight(red, `rgba(255,20,20,${blink ? 0.95 : 0.12})`);
+      drawLight(blue, `rgba(20,100,255,${blink ? 0.12 : 0.95})`);
+      ctx.fillStyle = blink ? 'rgba(255,20,20,0.06)' : 'rgba(20,100,255,0.06)';
+      ctx.fillRect(x, y, car.width, car.height);
+    }
+    ctx.restore();
+  }
+
+  function drawWorldEmissive() {
+    const scale = getViewScale();
+    const visTop = cameraY - CELL;
+    const visBot = cameraY + (_viewH || canvas.height) / scale + CELL;
+    for (const row of World.getRows()) {
+      if (row.type !== 'road') continue;
+      const y = World.rowToY(row.idx);
+      if (y + CELL < visTop || y > visBot) continue;
+      for (const car of row.obstacles) drawCarLights(row, y, car);
+    }
+    if (lightningFlash > 0) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'screen';
+      ctx.globalAlpha = Math.min(lightningFlash, 1) * 0.12;
+      ctx.fillStyle = '#C9D8FF';
+      ctx.fillRect(0, cameraY, COLS * CELL, (_viewH || canvas.height) / scale);
+      ctx.restore();
+    }
+    drawShieldBursts(_frameDt);
+    drawCoinEffects(_frameDt);
+    drawScoreEffects(_frameDt);
   }
 
   const CAR_COLORS = ['#E53935','#1E88E5','#43A047','#FB8C00','#8E24AA','#00ACC1'];
@@ -4361,70 +4410,6 @@ const Renderer = (() => {
       ctx.ellipse(s.x * W, s.y * H, r, r * 0.45, 0, Math.PI, Math.PI * 2);
       ctx.stroke();
     }
-  }
-
-  function drawRain(W, H, isStorm) {
-    const intensity = Math.min(weatherRatio * 1.5, 1);
-    const pMode = _precipBiome();
-    ctx.save();
-
-    // Dim overlay — cold blue for rain, warm dust for desert, pale for snow
-    const darkAlpha = isStorm ? intensity * 0.28 : intensity * 0.18;
-    ctx.fillStyle = pMode === 'desert' ? `rgba(90,70,30,${darkAlpha})`
-                  : pMode === 'snow'   ? `rgba(180,200,230,${darkAlpha * 0.6})`
-                  : `rgba(20,30,60,${darkAlpha})`;
-    ctx.fillRect(0, 0, W, H);
-
-    if (pMode === 'snow') {
-      // Round flakes with sine sway; storm = blizzard (bigger flakes)
-      ctx.fillStyle = 'rgb(240,248,255)';
-      const sway = _now * 0.0012;
-      for (const p of rainParticles) {
-        const px = (p.x + Math.sin(sway * (0.6 + p.speed) + p.x * 12) * 0.015) * W;
-        const py = p.y * H;
-        const r  = (p.width || 1) * (isStorm ? 2.2 : 1.6);
-        ctx.globalAlpha = p.alpha * intensity;
-        ctx.beginPath();
-        ctx.arc(px, py, r, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    } else if (pMode === 'desert') {
-      // Sandstorm — near-horizontal sand streaks (no splashes, nothing to wet)
-      ctx.strokeStyle = 'rgb(214,178,110)';
-      for (const p of rainParticles) {
-        const px  = p.x * W;
-        const py  = p.y * H;
-        const len = p.len * H * (isStorm ? 1.6 : 1.1);
-        ctx.lineWidth = p.width || 1;
-        ctx.globalAlpha = p.alpha * intensity * 0.7;
-        ctx.beginPath();
-        ctx.moveTo(px, py);
-        ctx.lineTo(px - len * 2.6, py + len * 0.5);
-        ctx.stroke();
-      }
-    } else {
-      // Rain streaks — storm has steeper angle and thicker drops
-      const tilt = isStorm ? 0.45 : 0.2;
-      ctx.strokeStyle = nightRatio > 0.5
-        ? `rgba(150,180,255,${intensity * 0.55})`
-        : `rgba(180,210,255,${intensity * 0.45})`;
-
-      for (const p of rainParticles) {
-        const px  = p.x * W;
-        const py  = p.y * H;
-        const len = p.len * H * (isStorm ? 1.4 : 1);
-        ctx.lineWidth = p.width || 1;
-        ctx.globalAlpha = p.alpha * intensity;
-        ctx.beginPath();
-        ctx.moveTo(px, py);
-        ctx.lineTo(px - len * tilt, py + len);
-        ctx.stroke();
-      }
-      _drawSplashes(W, H, intensity, isStorm);
-    }
-
-    ctx.globalAlpha = 1;
-    ctx.restore();
   }
 
   // Fog colours match the fog weatherSky values so distant rows wash into the sky

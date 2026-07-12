@@ -845,7 +845,7 @@ git commit -m "feat(game): add surface-aware contact effects"
 - Consumes: `_surfaceForRow`, `nightRatio`, `weatherState`, `weatherRatio`, and `lightningFlash`.
 - Produces: `drawWeatherFar(W, H)`, `drawWeatherNear(W, H)`, `drawWorldEmissive()`, and `drawCarLights(row, rowY, car)`.
 
-- [ ] **Step 1: Add failing render-order and weather assertions**
+- [x] **Step 1: Add failing render-order and weather assertions**
 
 Append:
 
@@ -863,13 +863,13 @@ assert.ok(drawBody.indexOf('drawWorldEmissive()') > drawBody.indexOf('Night over
 assert.ok(drawBody.indexOf('drawWeatherNear(W, H)') > drawBody.indexOf('drawWorldEmissive()'));
 ```
 
-- [ ] **Step 2: Run and verify failure**
+- [x] **Step 2: Run and verify failure**
 
 Run `node scripts/test-game-vfx.mjs`.
 
 Expected: FAIL on `drawWeatherFar`.
 
-- [ ] **Step 3: Split precipitation into far and near layers**
+- [x] **Step 3: Split precipitation into far and near layers**
 
 Add:
 
@@ -928,7 +928,7 @@ Add:
 
 Keep splash generation in the near rain layer only. Keep sandstorm without splashes. Call `drawWeatherFar(W, H)` after sky/stars/moon and before the world transform. Replace the old weather dispatch after world rendering with `drawWeatherNear(W, H)`.
 
-- [ ] **Step 4: Move emissive work after the night overlay**
+- [x] **Step 4: Move emissive work after the night overlay**
 
 Add one cached right-facing beam to `_fxS()` so `drawCarLights` does not allocate gradients per car per frame:
 
@@ -1076,7 +1076,7 @@ In `draw(dt)`, draw physical world content first. After restoring the world and 
 
 Remove `drawShieldBursts`, `drawCoinEffects`, and `drawScoreEffects` from the pre-night world pass so they update and draw exactly once.
 
-- [ ] **Step 5: Couple lightning to world response**
+- [x] **Step 5: Couple lightning to world response**
 
 Use the existing `lightningFlash` in `drawGroundShadow` to reduce shadow alpha. In `drawWorldEmissive`, add a restrained world-space highlight when `lightningFlash > 0`:
 
@@ -1094,7 +1094,7 @@ Use the existing `lightningFlash` in `drawGroundShadow` to reduce shadow alpha. 
 
 Keep the existing delayed thunder. Do not add repeated full-white frames.
 
-- [ ] **Step 6: Verify and commit Phase 3**
+- [x] **Step 6: Verify and commit Phase 3**
 
 ```bash
 node scripts/test-game-vfx.mjs

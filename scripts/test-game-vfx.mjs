@@ -74,4 +74,16 @@ assert.match(gameRuntime, /function drawPropContact\(type, cx, baseY, surfaceId\
 assert.match(gameRuntime, /function drawVehicleContact\(row, rowY, car\)/);
 assert.match(gameRuntime, /function drawTrainContact\(train, rowY, dir\)/);
 
+assert.match(gameRuntime, /function drawWeatherFar\(W, H\)/);
+assert.match(gameRuntime, /function drawWeatherNear\(W, H\)/);
+assert.match(gameRuntime, /function drawWorldEmissive\(\)/);
+assert.match(gameRuntime, /function drawCarLights\(row, rowY, car\)/);
+
+const drawStart = gameRuntime.indexOf('function draw(dt)');
+const drawEnd = gameRuntime.indexOf('// ── Stars', drawStart);
+const drawBody = gameRuntime.slice(drawStart, drawEnd);
+assert.ok(drawBody.indexOf('drawWeatherFar(W, H)') < drawBody.indexOf('drawRows()'));
+assert.ok(drawBody.indexOf('drawWorldEmissive()') > drawBody.indexOf('Night overlay'));
+assert.ok(drawBody.indexOf('drawWeatherNear(W, H)') > drawBody.indexOf('drawWorldEmissive()'));
+
 console.log('game VFX assertions passed');

@@ -15,6 +15,7 @@ export interface CraftConfig {
   tier: EconomyTier;
   name: string;
   sprite?: string;
+  craftFee?: number;
 }
 
 export interface ShopPurchaseConfig {
@@ -98,18 +99,18 @@ export const CRAFT_CONFIG = {
 
   skin_street_runner: { type: 'skin', tier: 'common', name: 'City Runner', sprite: '/game/chars/street_runner.png' },
   skin_1: { type: 'skin', tier: 'rare', name: 'Court Runner', sprite: '/game/chars/skin1.png' },
-  skin_2: { type: 'skin', tier: 'rare', name: 'Justin Sun', sprite: '/game/chars/skin2.png' },
+  skin_2: { type: 'skin', tier: 'epic', name: 'Justin Sun', sprite: '/game/chars/skin2.png', craftFee: 300 },
   skin_default: { type: 'skin', tier: 'rare', name: 'Base Builder', sprite: '/game/player.png' },
   skin_3: { type: 'skin', tier: 'rare', name: 'Night Operator', sprite: '/game/chars/skin3.png' },
-  skin_4: { type: 'skin', tier: 'rare', name: 'Satoshi Nakamoto', sprite: '/game/chars/skin4.png' },
-  skin_5: { type: 'skin', tier: 'epic', name: 'Anatoly Yakovenko', sprite: '/game/chars/skin5.png' },
-  skin_6: { type: 'skin', tier: 'epic', name: 'Doctor', sprite: '/game/chars/skin6.png' },
-  skin_7: { type: 'skin', tier: 'epic', name: 'Bitcoin Maxi', sprite: '/game/chars/skin7.png' },
-  skin_founder: { type: 'skin', tier: 'epic', name: 'Vitalik Buterin', sprite: '/game/chars/founder.png' },
+  skin_4: { type: 'skin', tier: 'epic', name: 'Satoshi Nakamoto', sprite: '/game/chars/skin4.png', craftFee: 300 },
+  skin_5: { type: 'skin', tier: 'epic', name: 'Anatoly Yakovenko', sprite: '/game/chars/skin5.png', craftFee: 300 },
+  skin_6: { type: 'skin', tier: 'rare', name: 'Doctor', sprite: '/game/chars/skin6.png' },
+  skin_7: { type: 'skin', tier: 'epic', name: 'Bitcoin Maxi', sprite: '/game/chars/skin7.png', craftFee: 300 },
+  skin_founder: { type: 'skin', tier: 'legendary', name: 'Vitalik Buterin', sprite: '/game/chars/founder.png' },
   skin_8: { type: 'skin', tier: 'legendary', name: 'Brian Armstrong', sprite: '/game/chars/skin8.png' },
-  skin_9: { type: 'skin', tier: 'legendary', name: 'Firefighter', sprite: '/game/chars/skin9.png' },
-  skin_10: { type: 'skin', tier: 'legendary', name: 'Police Officer', sprite: '/game/chars/skin10.png' },
-  skin_11: { type: 'skin', tier: 'legendary', name: 'Ape Holder', sprite: '/game/chars/skin11.png' },
+  skin_9: { type: 'skin', tier: 'rare', name: 'Firefighter', sprite: '/game/chars/skin9.png' },
+  skin_10: { type: 'skin', tier: 'rare', name: 'Police Officer', sprite: '/game/chars/skin10.png' },
+  skin_11: { type: 'skin', tier: 'epic', name: 'Ape Holder', sprite: '/game/chars/skin11.png', craftFee: 300 },
   skin_base_king: { type: 'skin', tier: 'legendary', name: 'Base King', sprite: '/game/chars/base_king.png' },
 } as const satisfies Record<string, CraftConfig>;
 
@@ -126,18 +127,18 @@ export const SHOP_PURCHASES = {
 
   skin_street_runner: { type: 'skin', price: 150 },
   skin_1: { type: 'skin', price: 750 },
-  skin_2: { type: 'skin', price: 750 },
+  skin_2: { type: 'skin', price: 1200 },
   skin_default: { type: 'skin', price: 800 },
-  skin_3: { type: 'skin', price: 800 },
-  skin_4: { type: 'skin', price: 850 },
-  skin_5: { type: 'skin', price: 1200 },
-  skin_6: { type: 'skin', price: 1300 },
-  skin_7: { type: 'skin', price: 1400 },
-  skin_founder: { type: 'skin', price: 1500 },
+  skin_3: { type: 'skin', price: 750 },
+  skin_4: { type: 'skin', price: 1400 },
+  skin_5: { type: 'skin', price: 1300 },
+  skin_6: { type: 'skin', price: 800 },
+  skin_7: { type: 'skin', price: 1350 },
+  skin_founder: { type: 'skin', price: null },
   skin_8: { type: 'skin', price: null },
-  skin_9: { type: 'skin', price: null },
-  skin_10: { type: 'skin', price: null },
-  skin_11: { type: 'skin', price: null },
+  skin_9: { type: 'skin', price: 850 },
+  skin_10: { type: 'skin', price: 900 },
+  skin_11: { type: 'skin', price: 1500 },
   skin_base_king: { type: 'skin', price: null },
 } as const satisfies Record<string, ShopPurchaseConfig>;
 

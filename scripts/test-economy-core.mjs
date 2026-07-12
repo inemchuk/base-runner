@@ -2,12 +2,15 @@ import assert from 'node:assert/strict';
 
 import {
   CHECKIN_REWARDS,
+  CRAFT_CONFIG,
   REWARD_CONTAINERS,
+  SHOP_PURCHASES,
   SPIN_REWARD_TABLE,
   getSpinFragmentEv,
 } from '../src/lib/economy/config.ts';
 import {
   awardFragments,
+  buyShopItem,
   craftItem,
   getCraftMeta,
   normalizeShopData,
@@ -39,7 +42,43 @@ assert.equal(rareMeta?.craftFee, 100);
 assert.equal(rareMeta?.directPriceRange?.min, 750);
 assert.equal(rareMeta?.directPriceRange?.max, 900);
 
+const approvedSkinCatalog = [
+  ['skin_street_runner', 'common', 150, 40],
+  ['skin_default', 'rare', 800, 100],
+  ['skin_3', 'rare', 750, 100],
+  ['skin_6', 'rare', 800, 100],
+  ['skin_9', 'rare', 850, 100],
+  ['skin_10', 'rare', 900, 100],
+  ['skin_2', 'epic', 1200, 300],
+  ['skin_5', 'epic', 1300, 300],
+  ['skin_7', 'epic', 1350, 300],
+  ['skin_4', 'epic', 1400, 300],
+  ['skin_11', 'epic', 1500, 300],
+  ['skin_8', 'legendary', null, 500],
+  ['skin_founder', 'legendary', null, 500],
+  ['skin_base_king', 'legendary', null, 500],
+];
+
+for (const [itemId, tier, price, craftFee] of approvedSkinCatalog) {
+  const meta = getCraftMeta(itemId);
+  assert.equal(CRAFT_CONFIG[itemId].tier, tier, `${itemId} tier`);
+  assert.equal(meta?.craftFee, craftFee, `${itemId} craft fee`);
+  assert.equal(SHOP_PURCHASES[itemId].price, price, `${itemId} direct price`);
+}
+
+assert.equal(getCraftMeta('trail_coins')?.craftFee, 220);
+assert.equal(getCraftMeta('death_dramatic')?.craftFee, 220);
+
 const base = normalizeShopData({ owned: ['skin_cryptokid'], equipped: 'skin_cryptokid' });
+const firefighterPurchase = buyShopItem(base, 'skin_9', 850);
+assert.equal(firefighterPurchase.ok, true);
+assert.equal(firefighterPurchase.coinsDelta, -850);
+assert.equal(firefighterPurchase.state.owned.includes('skin_9'), true);
+
+const vitalikPurchase = buyShopItem(base, 'skin_founder', 9999);
+assert.equal(vitalikPurchase.ok, false);
+assert.equal(vitalikPurchase.error, 'direct_buy_disabled');
+
 const withOwnedRare = normalizeShopData({ owned: ['skin_cryptokid', 'skin_1'], equipped: 'skin_cryptokid' });
 assert.equal(setFocus(base, 'skin_8').ok, true);
 assert.equal(setFocus(withOwnedRare, 'skin_1').error, 'already_owned');

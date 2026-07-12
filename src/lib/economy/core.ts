@@ -101,7 +101,7 @@ export function getCraftMeta(itemId: string | null | undefined): CraftMeta | nul
     name: config.name,
     sprite: config.sprite,
     fragments: tier.fragments,
-    craftFee: tier.craftFee,
+    craftFee: ('craftFee' in config ? config.craftFee : undefined) ?? tier.craftFee,
     topUpCost: tier.topUpCost,
     topUpCapPct: tier.topUpCapPct,
     poolCapPct: tier.poolCapPct,

@@ -41,7 +41,7 @@
 ## Phase Ledger
 
 - [x] Phase 1 — Foundation and materials: Tasks 1-3. Commit: `0e314fa`
-- [ ] Phase 2 — Physical interactions: Task 4. Commit: `not-started`
+- [x] Phase 2 — Physical interactions: Task 4. Commit: `b26b182`
 - [ ] Phase 3 — Weather and lighting: Task 5. Commit: `not-started`
 - [ ] Phase 4 — Gameplay and cosmetics: Tasks 6-8. Commit: `not-started`
 - [ ] Phase 5 — Performance and verification: Task 9. Commit: `not-started`
@@ -811,7 +811,7 @@ Add vehicle and passing-train contact helpers:
 
 Call `drawVehicleContact(row, rowY, car)` after the car shadow and before the car body. Call `drawTrainContact(train, rowY, dir)` after the train shadow and before the train sprite. Dry roads draw no continuous wheel smoke.
 
-- [ ] **Step 6: Verify, clean up, and commit Phase 2**
+- [x] **Step 6: Verify, clean up, and commit Phase 2** — completed in `b26b182`.
 
 Run:
 

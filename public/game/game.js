@@ -2849,6 +2849,93 @@ const Renderer = (() => {
     // Crossy Road style: no texture overlay — depth comes from edge shadows in drawGrassRow
   }
 
+  // ── Material surface tiles ───────────────────────────────
+  // Transparent, deterministic detail tiles: the row palette remains the source
+  // of truth and these overlays only add restrained material character.
+  let _surfaceTiles = null;
+
+  function _dominantBiome(bi) {
+    return bi && bi.blendT > 0.5 && bi.nextBiome ? bi.nextBiome : (bi && bi.biome) || 'default';
+  }
+
+  function _surfaceForRow(row) {
+    const fallbackRow = typeof Player !== 'undefined' ? Player.getState().row : 1;
+    const idx = row && Number.isFinite(row.idx) ? row.idx : fallbackRow;
+    const bi = World.getBiomeForRow(idx);
+    return GameVfx.resolveSurface({
+      rowType: row ? row.type : 'grass',
+      biome: _dominantBiome(bi),
+      weatherState,
+      weatherRatio,
+    });
+  }
+
+  function _tileRand(index, salt) {
+    return Math.abs(Math.sin(index * 91.731 + salt * 17.117)) % 1;
+  }
+
+  function _buildSurfaceTile(surfaceId) {
+    const size = 96;
+    const c = typeof OffscreenCanvas !== 'undefined'
+      ? new OffscreenCanvas(size, size)
+      : (() => { const canvas = document.createElement('canvas'); canvas.width = canvas.height = size; return canvas; })();
+    const g = c.getContext('2d');
+
+    if (surfaceId === 'grass') {
+      for (let i = 0; i < 34; i++) {
+        const x = _tileRand(i, 1) * size;
+        const y = _tileRand(i, 2) * size;
+        const h = 2 + _tileRand(i, 3) * 4;
+        g.strokeStyle = i % 3 === 0 ? 'rgba(205,235,170,0.12)' : 'rgba(20,75,34,0.16)';
+        g.lineWidth = 0.7;
+        g.beginPath();
+        g.moveTo(x, y + h);
+        g.lineTo(x + (_tileRand(i, 4) - 0.5) * 2, y);
+        g.stroke();
+      }
+    } else if (surfaceId === 'sand') {
+      for (let i = 0; i < 42; i++) {
+        const x = _tileRand(i, 5) * size;
+        const y = _tileRand(i, 6) * size;
+        const r = 0.35 + _tileRand(i, 7) * 0.8;
+        g.fillStyle = i % 4 === 0 ? 'rgba(255,238,184,0.20)' : 'rgba(114,76,31,0.12)';
+        g.beginPath();
+        g.arc(x, y, r, 0, Math.PI * 2);
+        g.fill();
+      }
+    } else if (surfaceId === 'snow') {
+      for (let i = 0; i < 24; i++) {
+        const x = _tileRand(i, 8) * size;
+        const y = _tileRand(i, 9) * size;
+        const rx = 2 + _tileRand(i, 10) * 5;
+        g.fillStyle = i % 3 === 0 ? 'rgba(255,255,255,0.20)' : 'rgba(95,125,170,0.10)';
+        g.beginPath();
+        g.ellipse(x, y, rx, rx * 0.28, -0.25, 0, Math.PI * 2);
+        g.fill();
+      }
+    }
+    return c;
+  }
+
+  function _drawSurfaceTexture(row, y) {
+    const surfaceId = _surfaceForRow(row).id;
+    if (surfaceId !== 'grass' && surfaceId !== 'sand' && surfaceId !== 'snow') return;
+    if (!_surfaceTiles) {
+      _surfaceTiles = {
+        grass: _buildSurfaceTile('grass'),
+        sand: _buildSurfaceTile('sand'),
+        snow: _buildSurfaceTile('snow'),
+      };
+    }
+    const tile = _surfaceTiles[surfaceId];
+    ctx.save();
+    ctx.globalAlpha = surfaceId === 'snow' ? 0.65 : 0.78;
+    for (let x = 0; x < COLS * CELL; x += tile.width) {
+      ctx.drawImage(tile, x, y, tile.width, CELL);
+    }
+    ctx.restore();
+  }
+
   // Environment sprite images
   const _ENV_SPRITES = {};
   const _ENV_SPRITE_SRCS = {
@@ -3503,6 +3590,7 @@ const Renderer = (() => {
     }
     ctx.fillStyle = grassColor;
     ctx.fillRect(0, y, COLS * CELL, CELL);
+    _drawSurfaceTexture(row, y);
 
     // ── Crossy Road 3D depth: top shadow + bottom highlight (cached sprites) ──
     const fxs = _fxS();

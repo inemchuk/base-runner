@@ -254,7 +254,7 @@ node --check public/game/game.js
 
 Expected: `game VFX assertions passed`, followed by a zero-exit syntax check.
 
-- [ ] **Step 5: Isolate and commit Task 1**
+- [x] **Step 5: Isolate and commit Task 1** — completed in `abcca48`.
 
 Run:
 
@@ -280,7 +280,7 @@ Expected staged paths: only `scripts/test-game-vfx.mjs`, the Task 1 hunk of `pub
 - Produces: `_surfaceForRow(row) -> SurfaceContext` inside `Renderer`.
 - Produces: `_buildSurfaceTile(surfaceId) -> HTMLCanvasElement` and `_drawSurfaceTexture(row, y)`.
 
-- [ ] **Step 1: Add failing source-contract assertions**
+- [x] **Step 1: Add failing source-contract assertions**
 
 Append before the final `console.log` in `scripts/test-game-vfx.mjs`:
 
@@ -292,13 +292,13 @@ assert.match(gameRuntime, /_drawSurfaceTexture\(row, y\);/);
 assert.doesNotMatch(gameRuntime, /ctx\.filter\s*=\s*['"]blur/);
 ```
 
-- [ ] **Step 2: Run and verify failure**
+- [x] **Step 2: Run and verify failure**
 
 Run `node scripts/test-game-vfx.mjs`.
 
 Expected: FAIL on `function _surfaceForRow(row)`.
 
-- [ ] **Step 3: Implement deterministic cached surface tiles**
+- [x] **Step 3: Implement deterministic cached surface tiles**
 
 Inside `Renderer`, near the existing grass texture cache, add:
 
@@ -387,7 +387,7 @@ Inside `Renderer`, near the existing grass texture cache, add:
 
 Call `_drawSurfaceTexture(row, y);` in `drawGrassRow` immediately after its base `fillRect` and before the top/bottom depth strips.
 
-- [ ] **Step 4: Verify tests and syntax**
+- [x] **Step 4: Verify tests and syntax**
 
 Run:
 

@@ -50,4 +50,10 @@ assert.equal(pool.stats().active, 1);
 pool.clear();
 assert.equal(pool.stats().active, 0);
 
+assert.match(gameRuntime, /function _surfaceForRow\(row\)/);
+assert.match(gameRuntime, /function _buildSurfaceTile\(surfaceId\)/);
+assert.match(gameRuntime, /function _drawSurfaceTexture\(row, y\)/);
+assert.match(gameRuntime, /_drawSurfaceTexture\(row, y\);/);
+assert.doesNotMatch(gameRuntime, /ctx\.filter\s*=\s*['"]blur/);
+
 console.log('game VFX assertions passed');

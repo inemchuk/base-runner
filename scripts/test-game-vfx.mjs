@@ -39,6 +39,11 @@ assert.equal(vfx.getLanding('wetRoad').kind, 'splash');
 assert.equal(vfx.getSurface('missing').id, 'neutral');
 assert.ok(vfx.priorityOf('impact') > vfx.priorityOf('ambient'));
 
+assert.equal(typeof vfx.surfaceVariant, 'function', 'terrain variant selector should exist');
+const grassVariants = Array.from({ length: 12 }, (_, rowIdx) => vfx.surfaceVariant(rowIdx, 4));
+assert.deepEqual(grassVariants, Array.from({ length: 12 }, (_, rowIdx) => vfx.surfaceVariant(rowIdx, 4)));
+assert.ok(new Set(grassVariants).size >= 3, 'nearby rows should not reuse one terrain variant');
+
 const pool = vfx.createPool(2);
 assert.ok(pool.spawn({ id: 'rain' }, 'ambient'));
 assert.ok(pool.spawn({ id: 'dust' }, 'contact'));
@@ -51,16 +56,25 @@ pool.clear();
 assert.equal(pool.stats().active, 0);
 
 assert.match(gameRuntime, /function _surfaceForRow\(row\)/);
-assert.match(gameRuntime, /function _buildSurfaceTile\(surfaceId\)/);
 assert.match(gameRuntime, /function _drawSurfaceTexture\(row, y\)/);
 assert.match(gameRuntime, /_drawSurfaceTexture\(row, y\);/);
 assert.doesNotMatch(gameRuntime, /ctx\.filter\s*=\s*['"]blur/);
 assert.match(gameRuntime, /const SURFACE_TEXTURE_PROFILE = Object\.freeze\(/);
-assert.match(gameRuntime, /grass: Object\.freeze\(\{ blades: 180, patches: 22/);
+assert.match(gameRuntime, /const SURFACE_TILE_VARIANTS = 4/);
+assert.match(gameRuntime, /function _buildSurfaceTile\(surfaceId, variant\)/);
+assert.doesNotMatch(gameRuntime, /function _tileRand\(/);
+const grassBranchStart = gameRuntime.indexOf("if (surfaceId === 'grass')", gameRuntime.indexOf('function _buildSurfaceTile'));
+const grassBranchEnd = gameRuntime.indexOf("} else if (surfaceId === 'sand')", grassBranchStart);
+const grassBranch = gameRuntime.slice(grassBranchStart, grassBranchEnd);
+assert.match(grassBranch, /profile\.blades/);
+assert.doesNotMatch(grassBranch, /createRadialGradient|g\.arc\(/);
+assert.match(gameRuntime, /grassTop: vStrip\([^\n]+rgba\(0,0,0,0\.18\)/);
+assert.match(gameRuntime, /grassBot: vStrip\([^\n]+rgba\(255,255,255,0\.05\)/);
 
 assert.match(gameRuntime, /function drawGroundShadow\(x, y, width, height, options = \{\}\)/);
 assert.match(gameRuntime, /const _shadowSpriteCache = new Map\(\)/);
-assert.match(gameRuntime, /const contactAlpha = Math\.min\(0\.46, alpha \* 1\.65\)/);
+assert.match(gameRuntime, /const contactAlpha = Math\.min\(0\.52, alpha \* 1\.9\)/);
+assert.match(gameRuntime, /ctx\.globalCompositeOperation = 'multiply'/);
 
 for (const functionName of ['drawEnvSprite', 'drawCars', 'drawLogs', 'drawTrainSprite', 'drawPlayer']) {
   const start = gameRuntime.indexOf(`function ${functionName}`);

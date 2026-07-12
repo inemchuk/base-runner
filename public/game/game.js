@@ -2330,6 +2330,16 @@ const GameVfx = (() => {
     return PRIORITY[name] ?? PRIORITY.ambient;
   }
 
+  function surfaceVariant(rowIdx, variantCount = 4) {
+    const count = Math.max(1, Math.floor(variantCount) || 1);
+    let value = (Number.isFinite(rowIdx) ? Math.trunc(rowIdx) : 0) >>> 0;
+    value = Math.imul(value ^ 0x9E3779B9, 0x85EBCA6B);
+    value ^= value >>> 13;
+    value = Math.imul(value, 0xC2B2AE35);
+    value ^= value >>> 16;
+    return (value >>> 0) % count;
+  }
+
   function createPool(limit = 160) {
     const items = [];
     const free = [];
@@ -2374,7 +2384,7 @@ const GameVfx = (() => {
     return { items, spawn, releaseAt, clear, stats };
   }
 
-  return { resolveSurface, getSurface, getLanding, createPool, priorityOf };
+  return { resolveSurface, getSurface, getLanding, createPool, priorityOf, surfaceVariant };
 })();
 
 
@@ -2855,10 +2865,12 @@ const Renderer = (() => {
   // Transparent, deterministic detail tiles: the row palette remains the source
   // of truth and these overlays only add restrained material character.
   let _surfaceTiles = null;
+  const SURFACE_TILE_VARIANTS = 4;
+  const SURFACE_TILE_SEEDS = Object.freeze({ grass: 0x41C64E6D, sand: 0xC2B28035, snow: 0xA8BDD8F1 });
   const SURFACE_TEXTURE_PROFILE = Object.freeze({
-    grass: Object.freeze({ blades: 180, patches: 22, alpha: 0.96 }),
-    sand: Object.freeze({ grains: 210, ripples: 14, alpha: 0.92 }),
-    snow: Object.freeze({ drifts: 34, crystals: 72, alpha: 0.86 }),
+    grass: Object.freeze({ blades: 96, tufts: 18, alpha: 0.64 }),
+    sand: Object.freeze({ grains: 120, ripples: 5, alpha: 0.74 }),
+    snow: Object.freeze({ drifts: 12, crystals: 48, alpha: 0.70 }),
   });
 
   function _dominantBiome(bi) {
@@ -2877,11 +2889,7 @@ const Renderer = (() => {
     });
   }
 
-  function _tileRand(index, salt) {
-    return Math.abs(Math.sin(index * 91.731 + salt * 17.117)) % 1;
-  }
-
-  function _buildSurfaceTile(surfaceId) {
+  function _buildSurfaceTile(surfaceId, variant) {
     const width = COLS * CELL;
     const height = CELL;
     const c = typeof OffscreenCanvas !== 'undefined'
@@ -2889,61 +2897,74 @@ const Renderer = (() => {
       : (() => { const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height; return canvas; })();
     const g = c.getContext('2d');
     const profile = SURFACE_TEXTURE_PROFILE[surfaceId];
+    const seed = (SURFACE_TILE_SEEDS[surfaceId] + Math.imul(variant + 1, 0x9E3779B9)) >>> 0;
+    const rng = _seedRng(seed);
 
     if (surfaceId === 'grass') {
-      for (let i = 0; i < profile.patches; i++) {
-        const x = _tileRand(i, 41) * width;
-        const y = _tileRand(i, 42) * height;
-        const rx = 9 + _tileRand(i, 43) * 22;
-        g.fillStyle = i % 3 === 0 ? 'rgba(170,218,112,0.13)' : 'rgba(24,88,38,0.14)';
-        g.beginPath();
-        g.ellipse(x, y, rx, 2 + _tileRand(i, 44) * 4, _tileRand(i, 45) * Math.PI, 0, Math.PI * 2);
-        g.fill();
-      }
+      // A restrained field of short independent strokes reads as turf without
+      // introducing dirt-like dots or large repeated patches.
       for (let i = 0; i < profile.blades; i++) {
-        const x = _tileRand(i, 1) * width;
-        const y = _tileRand(i, 2) * height;
-        const bladeHeight = 3 + _tileRand(i, 3) * 7;
-        g.strokeStyle = i % 4 === 0 ? 'rgba(202,236,139,0.30)' : 'rgba(18,75,31,0.34)';
-        g.lineWidth = i % 5 === 0 ? 1.15 : 0.9;
+        const x = 3 + rng() * (width - 6);
+        const baseY = 4 + rng() * (height - 7);
+        const bladeHeight = 1.4 + rng() * 2.4;
+        const lean = (rng() - 0.5) * 1.4;
+        g.strokeStyle = i % 5 === 0 ? 'rgba(211,237,159,0.10)' : 'rgba(18,74,31,0.13)';
+        g.lineWidth = 0.55 + rng() * 0.25;
         g.beginPath();
-        g.moveTo(x, y + bladeHeight);
-        g.lineTo(x + (_tileRand(i, 4) - 0.5) * 3, y);
+        g.moveTo(x, baseY);
+        g.lineTo(x + lean, baseY - bladeHeight);
+        g.stroke();
+      }
+
+      for (let i = 0; i < profile.tufts; i++) {
+        const x = 4 + rng() * (width - 8);
+        const baseY = 6 + rng() * (height - 10);
+        const tuftHeight = 2.6 + rng() * 2;
+        const lean = (rng() - 0.5) * 1.8;
+        g.strokeStyle = i % 4 === 0 ? 'rgba(203,233,145,0.14)' : 'rgba(16,70,29,0.17)';
+        g.lineWidth = 0.75;
+        g.beginPath();
+        g.moveTo(x - 1, baseY);
+        g.lineTo(x - 1 + lean, baseY - tuftHeight * 0.78);
+        g.moveTo(x, baseY);
+        g.lineTo(x - lean * 0.35, baseY - tuftHeight);
+        g.moveTo(x + 1, baseY);
+        g.lineTo(x + 1 - lean, baseY - tuftHeight * 0.68);
         g.stroke();
       }
     } else if (surfaceId === 'sand') {
       for (let i = 0; i < profile.ripples; i++) {
-        const x = _tileRand(i, 51) * width;
-        const y = _tileRand(i, 52) * height;
-        g.strokeStyle = 'rgba(130,92,42,0.16)';
+        const x = rng() * width;
+        const y = 6 + rng() * (height - 12);
+        g.strokeStyle = 'rgba(130,92,42,0.11)';
         g.lineWidth = 0.8;
         g.beginPath();
-        g.ellipse(x, y, 14 + _tileRand(i, 53) * 22, 1.3 + _tileRand(i, 54) * 1.8, 0, Math.PI * 1.08, Math.PI * 1.92);
+        g.ellipse(x, y, 10 + rng() * 16, 1.1 + rng(), 0, Math.PI * 1.08, Math.PI * 1.92);
         g.stroke();
       }
       for (let i = 0; i < profile.grains; i++) {
-        const x = _tileRand(i, 5) * width;
-        const y = _tileRand(i, 6) * height;
-        const r = 0.45 + _tileRand(i, 7) * 0.95;
-        g.fillStyle = i % 4 === 0 ? 'rgba(255,238,184,0.28)' : 'rgba(114,76,31,0.22)';
+        const x = rng() * width;
+        const y = rng() * height;
+        const r = 0.35 + rng() * 0.65;
+        g.fillStyle = i % 4 === 0 ? 'rgba(255,238,184,0.22)' : 'rgba(114,76,31,0.17)';
         g.beginPath();
         g.arc(x, y, r, 0, Math.PI * 2);
         g.fill();
       }
     } else if (surfaceId === 'snow') {
       for (let i = 0; i < profile.drifts; i++) {
-        const x = _tileRand(i, 8) * width;
-        const y = _tileRand(i, 9) * height;
-        const rx = 2 + _tileRand(i, 10) * 5;
-        g.fillStyle = i % 3 === 0 ? 'rgba(255,255,255,0.30)' : 'rgba(95,125,170,0.18)';
+        const x = rng() * width;
+        const y = rng() * height;
+        const rx = 3 + rng() * 6;
+        g.fillStyle = i % 3 === 0 ? 'rgba(255,255,255,0.24)' : 'rgba(95,125,170,0.13)';
         g.beginPath();
-        g.ellipse(x, y, rx * 1.7, rx * 0.34, -0.25, 0, Math.PI * 2);
+        g.ellipse(x, y, rx * 1.45, rx * 0.28, -0.18, 0, Math.PI * 2);
         g.fill();
       }
-      g.fillStyle = 'rgba(255,255,255,0.34)';
+      g.fillStyle = 'rgba(255,255,255,0.28)';
       for (let i = 0; i < profile.crystals; i++) {
-        const x = _tileRand(i, 61) * width;
-        const y = _tileRand(i, 62) * height;
+        const x = rng() * width;
+        const y = rng() * height;
         g.fillRect(x, y, 1, 1);
       }
     }
@@ -2955,17 +2976,21 @@ const Renderer = (() => {
     if (surfaceId !== 'grass' && surfaceId !== 'sand' && surfaceId !== 'snow') return;
     if (!_surfaceTiles) {
       _surfaceTiles = {
-        grass: _buildSurfaceTile('grass'),
-        sand: _buildSurfaceTile('sand'),
-        snow: _buildSurfaceTile('snow'),
+        grass: Array.from({ length: SURFACE_TILE_VARIANTS }, (_, variant) => _buildSurfaceTile('grass', variant)),
+        sand: Array.from({ length: SURFACE_TILE_VARIANTS }, (_, variant) => _buildSurfaceTile('sand', variant)),
+        snow: Array.from({ length: SURFACE_TILE_VARIANTS }, (_, variant) => _buildSurfaceTile('snow', variant)),
       };
     }
-    const tile = _surfaceTiles[surfaceId];
+    const variants = _surfaceTiles[surfaceId];
+    const rowIdx = row && Number.isFinite(row.idx) ? row.idx : 0;
+    const tile = variants[GameVfx.surfaceVariant(rowIdx, variants.length)];
     ctx.save();
     ctx.globalAlpha = SURFACE_TEXTURE_PROFILE[surfaceId].alpha;
-    for (let x = 0; x < COLS * CELL; x += tile.width) {
-      ctx.drawImage(tile, x, y, tile.width, CELL);
+    if ((rowIdx & 1) !== 0) {
+      ctx.translate(COLS * CELL, 0);
+      ctx.scale(-1, 1);
     }
+    ctx.drawImage(tile, 0, y, COLS * CELL, CELL);
     ctx.restore();
   }
 
@@ -2998,13 +3023,14 @@ const Renderer = (() => {
     const lift = Math.max(0, Math.min(1, options.lift || 0));
     const lightningFade = 1 - Math.min(lightningFlash, 1) * 0.45;
     const alpha = (options.alpha ?? style.shadowAlpha) * (1 - lift * 0.48) * lightningFade;
-    const contactAlpha = Math.min(0.46, alpha * 1.65);
+    const contactAlpha = Math.min(0.52, alpha * 1.9);
     const offsetX = options.offsetX ?? width * 0.08;
     const offsetY = options.offsetY ?? height * 0.16;
     const sprite = _shadowSprite(surfaceId);
 
     ctx.save();
-    ctx.globalAlpha = alpha * 0.72;
+    ctx.globalCompositeOperation = 'multiply';
+    ctx.globalAlpha = alpha * 0.78;
     ctx.drawImage(sprite, x - width * 0.5 + offsetX, y - height * 0.5 + offsetY, width, height);
     if (options.contact !== false) {
       ctx.globalAlpha = contactAlpha;
@@ -3783,8 +3809,8 @@ const Renderer = (() => {
       g.fill();
     });
     _fxSprites = {
-      grassTop: vStrip(Math.ceil(CELL * 0.18), [[0, 'rgba(0,0,0,0.28)'], [1, 'rgba(0,0,0,0)']]),
-      grassBot: vStrip(Math.ceil(CELL * 0.15), [[0, 'rgba(255,255,255,0)'], [1, 'rgba(255,255,255,0.07)']]),
+      grassTop: vStrip(Math.ceil(CELL * 0.18), [[0, 'rgba(0,0,0,0.18)'], [1, 'rgba(0,0,0,0)']]),
+      grassBot: vStrip(Math.ceil(CELL * 0.15), [[0, 'rgba(255,255,255,0)'], [1, 'rgba(255,255,255,0.05)']]),
       coinGlow: radial(0.08 / 0.70, [[0, 'rgba(80,150,255,1)'], [0.45, 'rgba(0,82,255,0.5)'], [1, 'rgba(0,40,220,0)']]),
       hlGlow:   radial(0, [[0, 'rgba(255,238,180,0.55)'], [0.15, 'rgba(255,238,180,0.3)'], [0.4, 'rgba(255,235,170,0.1)'], [1, 'rgba(255,235,170,0)']]),
       hlDot:    radial(0, [[0, 'rgba(255,252,235,1)'], [0.5, 'rgba(255,245,200,0.5)'], [1, 'rgba(255,240,180,0)']]),

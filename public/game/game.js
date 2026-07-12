@@ -2494,6 +2494,8 @@ const Renderer = (() => {
   const COIN_EFFECT_DUR  = 0.7;
   const scoreEffects = [];   // { x, y, age } — row-advance "+1"
   const SCORE_EFFECT_DUR = 0.55;
+  const GAME_FX_FONT = "'Courier New', monospace";
+  let secondChanceFx = null;
 
   // ── Magnet attract animations ───────────────────────────
   const magnetCoins = [];   // { fromX, fromY, toX, toY, age, col, rowIdx, value }
@@ -3311,14 +3313,15 @@ const Renderer = (() => {
 
     // Real frame delta from the game loop; clamped, with a fallback for stray calls
     const dt_approx = (typeof dt === 'number' && dt > 0) ? Math.min(dt, 0.05) : 0.016;
-    _frameDt   = dt_approx;
-    waterTime  += dt_approx;
-    waveTime   += dt_approx * _waveBoost(); // integrate: speed changes smoothly, phase never jumps
+    const visualDt = _visualDt(dt_approx);
+    _frameDt   = visualDt;
+    waterTime  += visualDt;
+    waveTime   += visualDt * _waveBoost(); // integrate: speed changes smoothly, phase never jumps
     sirenPhase += dt_approx;
 
     // Advance walk cycle — only when player is jumping/moving
     const _ps = Player.getState();
-    if (_ps.jumping || _ps.onLog) walkTime += dt_approx;
+    if (_ps.jumping || _ps.onLog) walkTime += visualDt;
 
     // Advance weather blend; a pending swap first fades the current weather to zero
     const targetRatio = pendingWeather !== null ? 0 : (weatherState > 0 ? 1 : 0);
@@ -3493,6 +3496,8 @@ const Renderer = (() => {
       ctx.fillRect(0, 0, W, H);
     }
 
+    drawSecondChanceScreen(W, H);
+
     // Emissive effects must be composited after the night veil — otherwise
     // headlights, coins and shields get dimmed exactly when they matter most.
     ctx.save();
@@ -3571,6 +3576,33 @@ const Renderer = (() => {
     ctx.translate((W - worldW * scale) / 2, 0);
     ctx.scale(scale, scale);
     ctx.translate(0, -cameraY);
+  }
+
+  function _visualDt(dt) {
+    return secondChanceFx && secondChanceFx.age < 0.18 ? dt * 0.45 : dt;
+  }
+
+  function drawSecondChanceScreen(W, H) {
+    if (!secondChanceFx) return;
+    secondChanceFx.age += _frameDt;
+    if (secondChanceFx.age >= secondChanceFx.life) {
+      secondChanceFx = null;
+      return;
+    }
+    const t = secondChanceFx.age / secondChanceFx.life;
+    const fade = 1 - t;
+    ctx.save();
+    ctx.fillStyle = `rgba(105,135,205,${fade * 0.10})`;
+    ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = `rgba(155,190,255,${fade * 0.55})`;
+    ctx.lineWidth = Math.max(1, 3 * fade);
+    for (let ring = 0; ring < 2; ring++) {
+      const radius = Math.min(W, H) * (0.10 + t * 0.28 + ring * 0.05);
+      ctx.beginPath();
+      ctx.ellipse(W / 2, H * 0.56, radius, radius * 0.42, 0, Math.PI * 0.15, Math.PI * 1.85);
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   // ── Stars ─────────────────────────────────────────────────
@@ -5449,20 +5481,28 @@ const Renderer = (() => {
     }
   }
 
+  function emitGameEffect(event, payload) {
+    if (event === 'coinPickup') coinEffects.push({ ...payload, age: 0 });
+    else if (event === 'scoreTick') scoreEffects.push({ ...payload, age: 0 });
+    else if (event === 'magnetPull') magnetCoins.push({ ...payload, age: 0 });
+    else if (event === 'shieldHit') shieldBursts.push({ ...payload, age: 0 });
+  }
+
   function addCoinEffect(x, y, value = 1) {
-    coinEffects.push({ x, y, age: 0, value });
+    emitGameEffect('coinPickup', { x, y, value });
   }
 
   function addScoreEffect(x, y) {
-    scoreEffects.push({ x, y, age: 0 });
+    emitGameEffect('scoreTick', { x, y });
   }
 
   function addMagnetCoin(fromX, fromY, toX, toY, col, rowIdx, value = 1) {
-    magnetCoins.push({ fromX, fromY, toX, toY, age: 0, col, rowIdx, value });
+    emitGameEffect('magnetPull', { fromX, fromY, toX, toY, col, rowIdx, value });
   }
 
   function addShieldBurst(x, y) {
-    shieldBursts.push({ x, y, age: 0 });
+    emitGameEffect('shieldHit', { x, y, direction: 0 });
+    secondChanceFx = { x, y, age: 0, life: 0.42 };
   }
 
   function drawMagnetCoins(dt) {
@@ -5485,9 +5525,9 @@ const Renderer = (() => {
       const scale = 1 - t * 0.3; // shrink slightly as it flies
 
       ctx.save();
-      ctx.globalAlpha = 0.50 * (1 - t);
+      ctx.globalAlpha = 0.42 * (1 - t);
       ctx.strokeStyle = 'rgba(76,205,255,0.72)';
-      ctx.lineWidth = Math.max(1.4, CELL * 0.045 * (1 - t * 0.35));
+      ctx.lineWidth = Math.max(1, CELL * 0.032 * (1 - t * 0.35));
       ctx.beginPath();
       ctx.moveTo(m.fromX, m.fromY);
       ctx.quadraticCurveTo((m.fromX + m.toX) / 2, (m.fromY + m.toY) / 2 - CELL * 0.44, x, y + arc);
@@ -5515,17 +5555,23 @@ const Renderer = (() => {
       const t = b.age / SHIELD_BURST_DUR;
       const ease = 1 - Math.pow(1 - t, 3);
       const alpha = 1 - t;
+      const impactX = b.x + (b.direction || 0) * CELL * 0.08;
       ctx.save();
       ctx.globalAlpha = alpha;
-      ctx.strokeStyle = 'rgba(102,146,255,0.78)';
-      ctx.lineWidth = Math.max(1, CELL * 0.075 * (1 - t));
+      ctx.strokeStyle = 'rgba(120,164,255,0.82)';
+      ctx.lineWidth = Math.max(1, CELL * 0.055 * (1 - t));
       ctx.beginPath();
-      ctx.ellipse(b.x, b.y, CELL * (0.38 + ease * 1.08), CELL * (0.18 + ease * 0.42), 0, 0, Math.PI * 2);
+      ctx.ellipse(impactX, b.y, CELL * (0.38 + ease * 1.08), CELL * (0.18 + ease * 0.42), 0, 0, Math.PI * 2);
       ctx.stroke();
-      ctx.fillStyle = `rgba(102,146,255,${0.16 * alpha})`;
-      ctx.beginPath();
-      ctx.arc(b.x, b.y - CELL * 0.18, CELL * (0.28 + ease * 0.48), 0, Math.PI * 2);
-      ctx.fill();
+      for (let fracture = 0; fracture < 3; fracture++) {
+        const angle = -0.7 + fracture * 0.7 + (b.direction || 0) * 0.25;
+        const length = CELL * (0.18 + fracture * 0.04) * (1 - t);
+        ctx.globalAlpha = alpha * 0.68;
+        ctx.beginPath();
+        ctx.moveTo(impactX, b.y - CELL * 0.08);
+        ctx.lineTo(impactX + Math.cos(angle) * length, b.y - CELL * 0.08 + Math.sin(angle) * length);
+        ctx.stroke();
+      }
       ctx.restore();
     }
   }
@@ -5545,12 +5591,22 @@ const Renderer = (() => {
       const isDouble = value > 1;
       ctx.fillStyle   = isDouble ? '#FFE86A' : '#FFD700';
       ctx.strokeStyle = isDouble ? '#5B3B00' : '#7A5800';
-      ctx.lineWidth   = 2;
-      ctx.font = `bold ${Math.round(CELL * (isDouble ? 0.37 : 0.32))}px Arial`;
+      ctx.lineWidth   = 1.25;
+      ctx.font = `700 ${Math.round(CELL * (isDouble ? 0.34 : 0.29))}px ${GAME_FX_FONT}`;
       ctx.textAlign    = 'center';
       ctx.textBaseline = 'middle';
       ctx.strokeText(`+${value}`, e.x, e.y - rise);
       ctx.fillText  (`+${value}`, e.x, e.y - rise);
+      if (isDouble && t < 0.45) {
+        const arcFade = 1 - t / 0.45;
+        ctx.strokeStyle = `rgba(255,224,92,${arcFade * 0.75})`;
+        ctx.lineWidth = 1.5;
+        for (const side of [-1, 1]) {
+          ctx.beginPath();
+          ctx.arc(e.x + side * CELL * 0.16, e.y - rise, CELL * 0.11, side < 0 ? -1.2 : 1.95, side < 0 ? 1.2 : 4.35);
+          ctx.stroke();
+        }
+      }
       ctx.restore();
     }
   }
@@ -5566,8 +5622,8 @@ const Renderer = (() => {
       // Fade: stays opaque until halfway, then fades
       const alpha = t < 0.5 ? 1 : 1 - (t - 0.5) * 2;
       ctx.save();
-      ctx.globalAlpha  = alpha;
-      ctx.font         = `bold ${Math.round(CELL * 0.28)}px Arial`;
+      ctx.globalAlpha  = alpha * 0.72;
+      ctx.font         = `700 ${Math.round(CELL * 0.23)}px ${GAME_FX_FONT}`;
       ctx.textAlign    = 'center';
       ctx.textBaseline = 'middle';
       const py = e.y - rise - CELL * 0.5;   // starts above player head

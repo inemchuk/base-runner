@@ -1122,7 +1122,7 @@ Update Phase 3 with the commit hash.
 - Produces: `emitGameEffect(event, payload)` as the renderer's semantic entry point.
 - Preserves wrappers: `addCoinEffect`, `addScoreEffect`, `addMagnetCoin`, and `addShieldBurst`.
 
-- [ ] **Step 1: Add failing semantic-feedback assertions**
+- [x] **Step 1: Add failing semantic-feedback assertions**
 
 Append:
 
@@ -1136,13 +1136,13 @@ assert.match(gameRuntime, /secondChanceFx/);
 assert.doesNotMatch(gameRuntime, /ctx\.font\s*=\s*`bold \$\{Math\.round\(CELL.*Arial/);
 ```
 
-- [ ] **Step 2: Run and verify failure**
+- [x] **Step 2: Run and verify failure**
 
 Run `node scripts/test-game-vfx.mjs`.
 
 Expected: FAIL on `emitGameEffect`.
 
-- [ ] **Step 3: Add the semantic dispatcher and preserve callers**
+- [x] **Step 3: Add the semantic dispatcher and preserve callers**
 
 Add:
 
@@ -1175,7 +1175,7 @@ Add:
   }
 ```
 
-- [ ] **Step 4: Retune each approved effect**
+- [x] **Step 4: Retune each approved effect**
 
 Make these exact behavior changes:
 
@@ -1260,7 +1260,7 @@ Add a screen-space Second Chance treatment that changes only visual clocks, neve
 
 Use `_visualDt(dt_approx)` only for `waterTime`, `waveTime`, `walkTime`, and VFX animation clocks during the first 0.18 seconds. Call `drawSecondChanceScreen(W, H)` after the night overlay and before `drawWorldEmissive`. Do not change booster duration, Player timers, collision, or invincibility logic.
 
-- [ ] **Step 5: Verify and commit Task 6**
+- [x] **Step 5: Verify and commit Task 6**
 
 ```bash
 node scripts/test-game-vfx.mjs

@@ -86,4 +86,12 @@ assert.ok(drawBody.indexOf('drawWeatherFar(W, H)') < drawBody.indexOf('drawRows(
 assert.ok(drawBody.indexOf('drawWorldEmissive()') > drawBody.indexOf('Night overlay'));
 assert.ok(drawBody.indexOf('drawWeatherNear(W, H)') > drawBody.indexOf('drawWorldEmissive()'));
 
+assert.match(gameRuntime, /function emitGameEffect\(event, payload\)/);
+assert.match(gameRuntime, /emitGameEffect\('coinPickup'/);
+assert.match(gameRuntime, /emitGameEffect\('shieldHit'/);
+assert.match(gameRuntime, /const GAME_FX_FONT =/);
+assert.match(gameRuntime, /function drawSecondChanceScreen\(W, H\)/);
+assert.match(gameRuntime, /secondChanceFx/);
+assert.doesNotMatch(gameRuntime, /ctx\.font\s*=\s*`bold \$\{Math\.round\(CELL.*Arial/);
+
 console.log('game VFX assertions passed');

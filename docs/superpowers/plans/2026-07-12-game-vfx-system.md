@@ -64,7 +64,7 @@
 - Produces: `GameVfx.priorityOf(name) -> number`
 - `SurfaceContext` is `{ id, biome, wet, reflective }`.
 
-- [ ] **Step 1: Write the failing pure-module tests**
+- [x] **Step 1: Write the failing pure-module tests**
 
 Create `scripts/test-game-vfx.mjs` with:
 
@@ -124,7 +124,7 @@ assert.equal(pool.stats().active, 0);
 console.log('game VFX assertions passed');
 ```
 
-- [ ] **Step 2: Run the test and verify the module is missing**
+- [x] **Step 2: Run the test and verify the module is missing**
 
 Run:
 
@@ -134,7 +134,7 @@ node scripts/test-game-vfx.mjs
 
 Expected: FAIL with `GameVfx module should exist`.
 
-- [ ] **Step 3: Add the pure `GameVfx` module**
+- [x] **Step 3: Add the pure `GameVfx` module**
 
 Insert this block immediately before `/* ===== renderer.js ===== */` in `public/game/game.js`:
 
@@ -243,7 +243,7 @@ const GameVfx = (() => {
 })();
 ```
 
-- [ ] **Step 4: Run the test and syntax check**
+- [x] **Step 4: Run the test and syntax check**
 
 Run:
 

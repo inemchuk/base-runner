@@ -199,13 +199,6 @@ export default function Game() {
             </div>
           </div>
           <div className="menu-spacer" />
-          <nav className="tab-bar" id="menu-tab-bar">
-            <button className="tab-item" id="btn-shop"><img className="tab-icon tab-icon-img ui-icon" src="/game/ui-icons/shop.png" alt="" aria-hidden="true" /><span className="tab-label">Shop</span></button>
-            <button className="tab-item" id="btn-quests"><img className="tab-icon tab-icon-img ui-icon" src="/game/ui-icons/quests.png" alt="" aria-hidden="true" /><span className="tab-label">Quests</span></button>
-            <button className="tab-item tab-play" id="btn-start"><span className="tab-icon">▶</span><span className="tab-label">Play</span></button>
-            <button className="tab-item" id="btn-lb"><img className="tab-icon tab-icon-img ui-icon" src="/game/ui-icons/leaderboard.png" alt="" aria-hidden="true" /><span className="tab-label">Leaders</span></button>
-            <button className="tab-item" id="btn-profile" style={{position:'relative'}}><span className="tab-icon tab-icon-img" id="menu-profile-icon"><img className="ui-icon" src="/game/ui-icons/profile.png" alt="" aria-hidden="true" /></span><span className="tab-label">Profile</span><span className="level-badge" id="profile-level-badge">Lv.1</span></button>
-          </nav>
         </div>
       </div>
 
@@ -225,7 +218,7 @@ export default function Game() {
               <img id="loadout-skin-preview" className="loadout-gear-preview" src="/game/chars/cryptokid.png" alt="Selected skin" style={loadoutGearPreviewStyle} />
               <div className="loadout-gear-info">
                 <span className="loadout-gear-label">Skin</span>
-                <span className="loadout-gear-name" id="loadout-skin-name">Crypto Kid</span>
+                <span className="loadout-gear-name" id="loadout-skin-name">Genesis Runner</span>
                 <span className="loadout-gear-count" id="loadout-skin-count">1/1</span>
               </div>
               <button className="loadout-arrow" id="btn-loadout-skin-next" aria-label="Next skin" style={loadoutGearArrowStyle}>›</button>
@@ -272,30 +265,43 @@ export default function Game() {
 
       {/* Profile Screen */}
       <div id="screen-profile" className="screen hidden profile-screen">
-        {/* Scrollable content */}
-        <div className="profile-scroll">
-          <div className="profile-header">
+        <div className="profile-scroll runner-hub-scroll">
+          <div className="hub-screen-heading">
+            <button className="hub-home-btn" id="btn-home-profile" aria-label="Back to Home">← HOME</button>
+            <div>
+              <span className="hub-eyebrow">Runner dossier</span>
+              <h2 className="hub-title">PROFILE</h2>
+            </div>
+            <span className="hub-status-chip">BASE ID</span>
+          </div>
+
+          <div className="profile-header profile-passport">
             <img id="profile-avatar" className="profile-avatar" alt="" style={{display:'none'}} />
             <div id="profile-avatar-placeholder" className="profile-avatar" style={{display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.5rem'}}><img className="profile-placeholder-icon ui-icon" src="/game/ui-icons/profile.png" alt="" aria-hidden="true" /></div>
             <div className="profile-info">
+              <span className="profile-passport-label">Runner passport</span>
               <span className="profile-name" id="profile-name">Not connected</span>
               <span className="profile-address" id="profile-address"></span>
             </div>
+            <span className="profile-passport-level" id="profile-passport-level">LV.1</span>
           </div>
 
-          {/* XP Progress Bar — tap opens rewards sheet */}
-          <div className="profile-xp" id="profile-xp-clickable" style={{cursor:'pointer'}}>
+          <div className="profile-xp" id="profile-xp-clickable" role="button" tabIndex={0} aria-label="Open level rewards" style={{cursor:'pointer'}}>
             <div className="profile-xp-row">
               <span className="profile-xp-level" id="xp-level-display">Lv.1</span>
-              <span className="profile-xp-hint">Tap to see rewards ›</span>
               <span className="profile-xp-nums" id="xp-nums">0 / 100 XP</span>
             </div>
             <div className="profile-xp-track">
               <div className="profile-xp-fill" id="xp-bar-fill" />
             </div>
+            <div className="profile-next-unlock" id="profile-next-unlock">
+              <span className="profile-next-unlock-label">Next unlock</span>
+              <span className="profile-next-unlock-value" id="profile-next-unlock-value">Level 2 reward</span>
+              <span className="profile-xp-hint">Rewards ›</span>
+            </div>
           </div>
 
-          <div className="profile-stats" id="profile-stats">
+          <div className="profile-stats profile-performance" id="profile-stats">
             <div className="profile-stat profile-stat-rank">
               <span className="profile-stat-value" id="stat-rank">#-</span>
               <span className="profile-stat-label">Global Rank</span>
@@ -305,30 +311,41 @@ export default function Game() {
               <span className="profile-stat-label">Best Score</span>
             </div>
             <div className="profile-stat">
-              <span className="profile-stat-value" id="stat-games">0</span>
-              <span className="profile-stat-label">Games Played</span>
-            </div>
-            <div className="profile-stat">
-              <span className="profile-stat-value" id="stat-rows">0</span>
-              <span className="profile-stat-label">Total Rows</span>
-            </div>
-            <div className="profile-stat">
-              <span className="profile-stat-value" id="stat-coins">0</span>
-              <span className="profile-stat-label">Coins Earned</span>
-            </div>
-            <div className="profile-stat">
               <span className="profile-stat-value" id="stat-streak">0</span>
-              <span className="profile-stat-label">Check-in Streak</span>
-            </div>
-            <div className="profile-stat">
-              <span className="profile-stat-value" id="stat-checkins">0</span>
-              <span className="profile-stat-label">Total Check-ins</span>
+              <span className="profile-stat-label">Day Streak</span>
             </div>
           </div>
 
-          {/* Booster charges */}
+          <section className="profile-career" id="profile-career">
+            <div className="profile-section-head">
+              <p className="profile-section-title">Career</p>
+              <span className="profile-section-meta">All time</span>
+            </div>
+            <div className="career-grid">
+              <div className="career-stat"><span id="stat-games">0</span><small>Games</small></div>
+              <div className="career-stat"><span id="stat-rows">0</span><small>Rows</small></div>
+              <div className="career-stat"><span id="stat-coins">0</span><small>Coins</small></div>
+              <div className="career-stat"><span id="stat-checkins">0</span><small>Check-ins</small></div>
+            </div>
+          </section>
+
+          <section className="profile-collection" id="profile-collection">
+            <div className="profile-section-head">
+              <p className="profile-section-title">Collection</p>
+              <span className="profile-section-meta">Owned gear</span>
+            </div>
+            <div className="profile-collection-rail">
+              <div><span id="profile-collection-skins">1 / 1</span><small>Skins</small></div>
+              <div><span id="profile-collection-trails">1 / 1</span><small>Trails</small></div>
+              <div><span id="profile-collection-boosters">0</span><small>Boosters</small></div>
+            </div>
+          </section>
+
           <div className="profile-boosters">
-            <p className="profile-section-title">Boosters</p>
+            <div className="profile-section-head">
+              <p className="profile-section-title">Booster inventory</p>
+              <span className="profile-section-meta">Run charges</span>
+            </div>
             <div className="profile-booster-row">
               <div className="booster-pill" id="profile-boost-magnet">
                 <span className="booster-pill-icon"><img src="/game/boosters/coin_magnet.png" style={{width:'28px',height:'28px',objectFit:'contain',imageRendering:'pixelated'}} alt="Magnet" /></span>
@@ -345,9 +362,11 @@ export default function Game() {
             </div>
           </div>
 
-          {/* Equipped skin + trail */}
           <div className="profile-equipped">
-            <p className="profile-section-title">Equipped</p>
+            <div className="profile-section-head">
+              <p className="profile-section-title">Current loadout</p>
+              <span className="profile-section-meta">Swipe with arrows</span>
+            </div>
             <div className="profile-equipped-row">
               <div className="equipped-card">
                 <span className="equipped-type-label">Skin</span>
@@ -356,7 +375,7 @@ export default function Game() {
                   <img className="equipped-sprite" id="equipped-skin-sprite" src="/game/chars/cryptokid.png" alt="skin" />
                   <button className="equipped-arrow" id="btn-profile-skin-next" aria-label="Next skin">›</button>
                 </div>
-                <span className="equipped-name" id="equipped-skin-name">Crypto Kid</span>
+                <span className="equipped-name" id="equipped-skin-name">Genesis Runner</span>
                 <span className="equipped-count" id="equipped-skin-count">1/1</span>
               </div>
               <div className="equipped-card">
@@ -373,11 +392,6 @@ export default function Game() {
               </div>
             </div>
           </div>
-        </div>
-
-        {/* Fixed back button — always visible */}
-        <div className="profile-back-bar">
-          <button className="btn btn-back" id="btn-profile-back">← BACK</button>
         </div>
       </div>
 
@@ -490,9 +504,16 @@ export default function Game() {
       </div>
 
       {/* Leaderboard Screen */}
-      <div id="screen-lb" className="screen hidden scroll-screen">
-        <div className="scroll-screen-body">
-          <h2 className="icon-screen-title" style={{color:'#fff',fontSize:'clamp(1.2rem,6vw,2rem)',marginBottom:'16px',letterSpacing:'3px'}}><img className="screen-title-icon ui-icon" src="/game/ui-icons/leaderboard.png" alt="" aria-hidden="true" />LEADERBOARD</h2>
+      <div id="screen-lb" className="screen hidden scroll-screen runner-hub-screen">
+        <div className="scroll-screen-body runner-hub-scroll leaderboard-screen-body">
+          <div className="hub-screen-heading">
+            <button className="hub-home-btn" id="btn-home-lb" aria-label="Back to Home">← HOME</button>
+            <div>
+              <span className="hub-eyebrow">Leaderboards</span>
+              <h2 className="hub-title">LEADERS</h2>
+            </div>
+            <span className="hub-status-chip">ALL TIME</span>
+          </div>
           <div className="lb-tabs">
             <button className="lb-tab lb-tab-active" id="btn-lb-personal">Personal</button>
             <button className="lb-tab" id="btn-lb-global">Global</button>
@@ -501,39 +522,77 @@ export default function Game() {
           {/* Period tabs removed — all-time only */}
           <div id="lb-list" style={{width:'min(320px,90vw)'}}></div>
         </div>
-        <div className="scroll-back-bar">
-          <button className="btn btn-back" id="btn-lb-back">← BACK</button>
-        </div>
       </div>
 
       {/* Shop Screen */}
       <div id="screen-shop" className="screen hidden scroll-screen">
-        <div className="scroll-screen-body">
-          <h2 className="icon-screen-title" style={{color:'#fff',fontSize:'clamp(1.2rem,6vw,2rem)',marginBottom:'8px',letterSpacing:'3px'}}><img className="screen-title-icon ui-icon" src="/game/ui-icons/shop.png" alt="" aria-hidden="true" />SHOP</h2>
-          <div id="shop-balance" style={{color:'#FFD700',fontSize:'clamp(1rem,4.5vw,1.3rem)',marginBottom:'20px',fontWeight:'bold',display:'flex',alignItems:'center',gap:'6px',justifyContent:'center'}}>
-            <img src="/game/coin.png" alt="coin" style={{width:'22px',height:'22px',objectFit:'contain'}} />
-            <span id="shop-coin-count">0</span>
+        <div className="scroll-screen-body runner-hub-scroll shop-screen-body">
+          <div className="hub-screen-heading">
+            <button className="hub-home-btn" id="btn-home-shop" aria-label="Back to Home">← HOME</button>
+            <div>
+              <span className="hub-eyebrow">Gear bay</span>
+              <h2 className="hub-title">SHOP</h2>
+            </div>
+            <div id="shop-balance" className="shop-balance-pill">
+              <img src="/game/coin.png" alt="coin" />
+              <span id="shop-coin-count">0</span>
+            </div>
           </div>
-          <div id="shop-tabs" style={{display:'flex',gap:'0',marginBottom:'16px',width:'min(320px,90vw)'}}>
+          <section className="shop-runner-stage" id="shop-runner-stage">
+            <div className="shop-stage-lane" aria-hidden="true" />
+            <div className="shop-stage-copy">
+              <span className="shop-stage-kicker">Equipped runner</span>
+              <strong id="shop-stage-name">Genesis Runner</strong>
+              <span id="shop-stage-collection">1 skin owned</span>
+            </div>
+            <img id="shop-stage-preview" src="/game/chars/cryptokid.png" alt="Equipped runner" />
+            <span className="shop-stage-status">READY</span>
+          </section>
+          <div className="shop-catalog-head">
+            <span>Catalog</span>
+            <small>Tap an action to equip or unlock</small>
+          </div>
+          <div id="shop-tabs" className="shop-tabs">
             <button id="shop-tab-skins" className="shop-tab shop-tab-active">Skins</button>
             <button id="shop-tab-boosters" className="shop-tab">Boosters</button>
             <button id="shop-tab-trails" className="shop-tab">Trails</button>
           </div>
-          <div id="shop-items" style={{width:'min(320px,90vw)'}}></div>
-        </div>
-        <div className="scroll-back-bar">
-          <button className="btn btn-back" id="btn-shop-back">← BACK</button>
+          <div id="shop-items"></div>
         </div>
       </div>
 
       {/* Quests Screen */}
       <div id="screen-quests" className="screen hidden scroll-screen">
-        <div className="scroll-screen-body">
-          <h2 className="icon-screen-title" style={{color:'#fff',fontSize:'clamp(1.2rem,6vw,2rem)',marginBottom:'16px',letterSpacing:'3px'}}><img className="screen-title-icon ui-icon" src="/game/ui-icons/quests.png" alt="" aria-hidden="true" />QUESTS</h2>
-          <div id="quest-list" style={{width:'min(340px,90vw)'}}></div>
-        </div>
-        <div className="scroll-back-bar">
-          <button className="btn btn-back" id="btn-quests-back">← BACK</button>
+        <div className="scroll-screen-body runner-hub-scroll quests-screen-body">
+          <div className="hub-screen-heading">
+            <button className="hub-home-btn" id="btn-home-quests" aria-label="Back to Home">← HOME</button>
+            <div>
+              <span className="hub-eyebrow">Run objectives</span>
+              <h2 className="hub-title">QUESTS</h2>
+            </div>
+            <span className="hub-status-chip hub-status-live">LIVE</span>
+          </div>
+          <section className="quest-group quest-group-daily">
+            <div className="quest-group-head">
+              <div><span className="quest-group-kicker">Daily</span><strong>Today&apos;s route</strong></div>
+              <span className="quest-reset" id="quest-daily-reset">Resets 00:00 UTC</span>
+            </div>
+            <div className="quest-list" id="quest-daily-list"></div>
+          </section>
+          <section className="quest-group quest-group-weekly">
+            <div className="quest-group-head">
+              <div><span className="quest-group-kicker">Weekly</span><strong>Long run</strong></div>
+              <span className="quest-reset" id="quest-weekly-reset">Resets Monday</span>
+            </div>
+            <div className="quest-list" id="quest-weekly-list"></div>
+          </section>
+          <section className="quest-group quest-group-career">
+            <div className="quest-group-head">
+              <div><span className="quest-group-kicker">Career</span><strong>Permanent tracks</strong></div>
+              <span className="quest-reset">8 levels each</span>
+            </div>
+            <div className="quest-list" id="quest-career-list"></div>
+          </section>
         </div>
       </div>
 
@@ -595,7 +654,7 @@ export default function Game() {
           <div className="starter-pack-items">
             <div className="starter-item">
               <img src="/game/chars/cryptokid.png" className="starter-item-img" alt="skin" />
-              <span className="starter-item-name">Crypto Kid</span>
+              <span className="starter-item-name">Genesis Runner</span>
               <span className="starter-item-type">Skin</span>
             </div>
             <div className="starter-item">
@@ -635,6 +694,17 @@ export default function Game() {
         <button className="btn btn-start" id="btn-do-ci">Claim</button>
         <button className="btn btn-back" id="btn-ci-back">← BACK</button>
       </div>
+
+      <nav className="tab-bar runner-hub-nav" id="runner-hub-nav" aria-label="Runner Hub">
+        <button className="tab-item" id="btn-shop" data-hub-screen="shop"><img className="tab-icon tab-icon-img ui-icon" src="/game/ui-icons/shop.png" alt="" aria-hidden="true" /><span className="tab-label">Shop</span></button>
+        <button className="tab-item" id="btn-quests" data-hub-screen="quests"><img className="tab-icon tab-icon-img ui-icon" src="/game/ui-icons/quests.png" alt="" aria-hidden="true" /><span className="tab-label">Quests</span></button>
+        <button className="tab-item tab-play" id="btn-start" data-hub-screen="menu" aria-label="Play">
+          <span className="tab-icon" id="hub-center-play-icon">▶</span>
+          <span className="tab-label">Play</span>
+        </button>
+        <button className="tab-item" id="btn-lb" data-hub-screen="lb"><img className="tab-icon tab-icon-img ui-icon" src="/game/ui-icons/leaderboard.png" alt="" aria-hidden="true" /><span className="tab-label">Leaders</span></button>
+        <button className="tab-item" id="btn-profile" data-hub-screen="profile" style={{position:'relative'}}><span className="tab-icon tab-icon-img" id="menu-profile-icon"><img className="ui-icon" src="/game/ui-icons/profile.png" alt="" aria-hidden="true" /></span><span className="tab-label">Profile</span><span className="level-badge" id="profile-level-badge">Lv.1</span></button>
+      </nav>
     </div>
   );
 }

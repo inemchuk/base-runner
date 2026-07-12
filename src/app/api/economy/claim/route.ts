@@ -4,7 +4,7 @@ import { base } from 'viem/chains';
 import { CHECKIN_ABI, CHECKIN_ADDRESS } from '@/config/checkin-contract';
 import { CHECKIN_REWARDS } from '@/lib/economy/config.ts';
 import { grantOwnedItem } from '@/lib/economy/core.ts';
-import { claimLevelReward } from '@/lib/economy/levels.ts';
+import { addXpToLevelState, claimLevelReward } from '@/lib/economy/levels.ts';
 import { claimQuestReward } from '@/lib/economy/quests.ts';
 import { applyRewardBundle } from '@/lib/economy/rewards.ts';
 import { trackEconomyEventAfter, trackRewardBundleTelemetryAfter } from '@/lib/economy/telemetry.ts';
@@ -122,37 +122,50 @@ export async function POST(req: NextRequest) {
     }
 
     if (source === 'quest') {
-      const [shop, coins, questState] = await Promise.all([
+      const [shop, coins, questState, levelState] = await Promise.all([
         readShop(address as string),
         readCoins(address as string),
         readQuestState(address as string),
+        readLevelState(address as string),
       ]);
       const claimed = claimQuestReward(
         questState,
         typeof body.questId === 'string' ? body.questId : '',
         typeof body.level === 'number' ? body.level : undefined,
+        typeof body.period === 'string' ? body.period : undefined,
       );
 
       if (!claimed.ok) {
-        return NextResponse.json({ ok: false, error: claimed.error, quests: claimed.state }, { status: 400 });
+        return NextResponse.json({
+          ok: false,
+          error: claimed.error,
+          quests: claimed.state,
+          levels: levelState,
+        }, { status: 400 });
       }
 
       const applied = applyRewardBundle(shop, coins, claimed.reward);
+      const xpUpdate = addXpToLevelState(levelState, applied.result.xpDelta);
 
       await Promise.all([
         writeShop(address as string, applied.state),
         writeCoins(address as string, applied.coins),
         writeQuestState(address as string, claimed.state),
+        writeLevelState(address as string, xpUpdate.state),
       ]);
 
       trackEconomyEventAfter('economy_quest_claimed', address as string, {
         questId: claimed.questId,
         level: claimed.level,
+        scope: claimed.scope,
+        period: claimed.period,
         reward: claimed.reward,
       });
       trackRewardBundleTelemetryAfter(address as string, 'quest', claimed.reward, applied.result, {
         questId: claimed.questId,
         level: claimed.level,
+        scope: claimed.scope,
+        period: claimed.period,
       });
 
       return NextResponse.json({
@@ -163,6 +176,8 @@ export async function POST(req: NextRequest) {
         shop: applied.state,
         coins: applied.coins,
         quests: claimed.state,
+        levels: xpUpdate.state,
+        levelUps: xpUpdate.levelUps,
         reward: claimed.reward,
         result: applied.result,
       });

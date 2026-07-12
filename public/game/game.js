@@ -2275,6 +2275,110 @@ const CAR_SPRITE_SRCS = {
 };
 
 
+/* ===== vfx-system.js ===== */
+const GameVfx = (() => {
+  const PRIORITY = Object.freeze({ ambient: 0, contact: 1, feedback: 2, impact: 3 });
+
+  const SURFACES = Object.freeze({
+    neutral: Object.freeze({ id: 'neutral', shadowRgb: '30,36,46', shadowAlpha: 0.18, mark: '#596170' }),
+    grass: Object.freeze({ id: 'grass', shadowRgb: '18,47,26', shadowAlpha: 0.22, mark: '#315D2E' }),
+    sand: Object.freeze({ id: 'sand', shadowRgb: '91,61,24', shadowAlpha: 0.20, mark: '#9B7138' }),
+    snow: Object.freeze({ id: 'snow', shadowRgb: '50,82,125', shadowAlpha: 0.18, mark: '#A9BDD8' }),
+    dryRoad: Object.freeze({ id: 'dryRoad', shadowRgb: '20,23,31', shadowAlpha: 0.24, mark: '#777D86' }),
+    wetRoad: Object.freeze({ id: 'wetRoad', shadowRgb: '12,22,38', shadowAlpha: 0.22, mark: '#91ABC5' }),
+    water: Object.freeze({ id: 'water', shadowRgb: '0,30,67', shadowAlpha: 0.24, mark: '#C9EDFF' }),
+    railBed: Object.freeze({ id: 'railBed', shadowRgb: '29,27,31', shadowAlpha: 0.24, mark: '#8D8277' }),
+  });
+
+  const LANDING = Object.freeze({
+    neutral: Object.freeze({ kind: 'dust', life: 0.55, count: 3 }),
+    grass: Object.freeze({ kind: 'grass', life: 1.0, count: 5 }),
+    sand: Object.freeze({ kind: 'sand', life: 0.85, count: 6 }),
+    snow: Object.freeze({ kind: 'snow', life: 2.5, count: 6 }),
+    dryRoad: Object.freeze({ kind: 'roadDust', life: 0.45, count: 3 }),
+    wetRoad: Object.freeze({ kind: 'splash', life: 0.65, count: 5 }),
+    water: Object.freeze({ kind: 'ripple', life: 0.9, count: 6 }),
+    railBed: Object.freeze({ kind: 'ballast', life: 0.55, count: 4 }),
+  });
+
+  function getSurface(id) {
+    return SURFACES[id] || SURFACES.neutral;
+  }
+
+  function getLanding(id) {
+    return LANDING[id] || LANDING.neutral;
+  }
+
+  function resolveSurface({ rowType, biome = 'default', weatherState = 0, weatherRatio = 0 }) {
+    let id = 'neutral';
+    if (rowType === 'water') id = 'water';
+    else if (rowType === 'train') id = 'railBed';
+    else if (rowType === 'road') {
+      const rain = (weatherState === 1 || weatherState === 3) && weatherRatio > 0.2;
+      id = rain && biome !== 'desert' ? 'wetRoad' : 'dryRoad';
+    } else if (rowType === 'grass') {
+      id = biome === 'desert' ? 'sand' : biome === 'snow' ? 'snow' : 'grass';
+    }
+    return Object.freeze({
+      id,
+      biome,
+      wet: id === 'wetRoad' || id === 'water',
+      reflective: id === 'wetRoad' || id === 'water',
+    });
+  }
+
+  function priorityOf(name) {
+    return PRIORITY[name] ?? PRIORITY.ambient;
+  }
+
+  function createPool(limit = 160) {
+    const items = [];
+    const free = [];
+
+    function releaseAt(index) {
+      if (index < 0 || index >= items.length) return;
+      const item = items[index];
+      items.splice(index, 1);
+      for (const key of Object.keys(item)) delete item[key];
+      free.push(item);
+    }
+
+    function spawn(data, priority = 'ambient') {
+      const nextPriority = priorityOf(priority);
+      if (items.length >= limit) {
+        let replaceIndex = -1;
+        let replacePriority = nextPriority;
+        for (let i = 0; i < items.length; i++) {
+          const current = items[i]._priority ?? 0;
+          if (current < replacePriority) {
+            replacePriority = current;
+            replaceIndex = i;
+          }
+        }
+        if (replaceIndex === -1) return null;
+        releaseAt(replaceIndex);
+      }
+      const item = free.pop() || {};
+      Object.assign(item, data, { _priority: nextPriority });
+      items.push(item);
+      return item;
+    }
+
+    function clear() {
+      while (items.length) releaseAt(items.length - 1);
+    }
+
+    function stats() {
+      return { active: items.length, free: free.length, limit };
+    }
+
+    return { items, spawn, releaseAt, clear, stats };
+  }
+
+  return { resolveSurface, getSurface, getLanding, createPool, priorityOf };
+})();
+
+
 /* ===== renderer.js ===== */
 const Renderer = (() => {
 
@@ -2694,9 +2798,9 @@ const Renderer = (() => {
 
   const PLAYER_SPRITE_SETS = {
     '/game/chars/cryptokid.png': {
-      idle:  '/game/chars/cryptokid-smooth-preview/idle.png',
-      walkA: '/game/chars/cryptokid-smooth-preview/walk-a.png',
-      walkB: '/game/chars/cryptokid-smooth-preview/walk-b.png',
+      idle:  '/game/chars/cryptokid-genesis/idle.png',
+      walkA: '/game/chars/cryptokid-genesis/walk-a.png',
+      walkB: '/game/chars/cryptokid-genesis/walk-b.png',
     },
   };
 
@@ -5529,6 +5633,19 @@ const UI = (() => {
   // ===== Показать нужный экран =====
   // Screens where music plays
   const MUSIC_SCREENS = new Set(['menu','loadout','profile','lb','shop','quests','spin','ci','settings']);
+  const HUB_SCREENS = new Set(['menu', 'shop', 'quests', 'lb', 'profile']);
+
+  function _updateHubNavigation(name) {
+    const nav = document.getElementById('runner-hub-nav');
+    if (!nav) return;
+    nav.classList.toggle('hidden', !HUB_SCREENS.has(name));
+    nav.querySelectorAll('[data-hub-screen]').forEach((button) => {
+      const isCurrent = button.dataset.hubScreen === name;
+      button.classList.toggle('tab-current', isCurrent);
+      if (isCurrent) button.setAttribute('aria-current', 'page');
+      else button.removeAttribute('aria-current');
+    });
+  }
 
   function show(name) {
     if (name !== 'ci') _stopCiTimer();
@@ -5536,6 +5653,7 @@ const UI = (() => {
     if (name !== 'menu' && _menuCiInterval) { clearInterval(_menuCiInterval); _menuCiInterval = null; }
     Object.values(SCREENS).forEach(s => { if (s) s.classList.add('hidden'); });
     if (hud) hud.classList.add('hidden');
+    _updateHubNavigation(name);
 
     // Music: play on UI screens, pause during gameplay / gameover
     if (typeof Music !== 'undefined') {
@@ -5691,6 +5809,7 @@ const UI = (() => {
       if (canClaim) {
         claimScoreBtn.dataset.score = String(score);
         claimScoreBtn.dataset.claimed = '';
+        claimScoreBtn.dataset.claiming = '';
         claimScoreBtn.disabled = false;
         claimScoreBtn.style.opacity = '1';
         claimScoreBtn.textContent = 'CLAIM ONCHAIN';
@@ -5737,8 +5856,8 @@ const UI = (() => {
   function _rewardParts(bundle) {
     const totals = RewardEconomy.collect(bundle);
     const parts = [];
-    if (totals.coins) parts.push({ kind: 'coins', value: totals.coins, label: 'coins', icon: _imgHtml('/game/coin.png', 'ci-reward-chip-icon', 'coins') });
-    if (totals.fragments) parts.push({ kind: 'frags', value: totals.fragments, label: 'frags', icon: _uiIconHtml('fragments', 'ci-reward-chip-icon', 'fragments') });
+    if (totals.coins) parts.push({ kind: 'coins', value: totals.coins, label: '', icon: _imgHtml('/game/coin.png', 'ci-reward-chip-icon', 'coins') });
+    if (totals.fragments) parts.push({ kind: 'frags', value: totals.fragments, label: '', icon: _uiIconHtml('fragments', 'ci-reward-chip-icon', 'fragments') });
     if (totals.boosters) parts.push({ kind: 'boost', value: totals.boosters, label: totals.boosters === 1 ? 'boost' : 'boosts', icon: _boosterIconHtml('ci-reward-chip-icon', 'boosters', 'boost_magnet') });
     if (totals.xp) parts.push({ kind: 'xp', value: totals.xp, label: 'XP', icon: _uiIconHtml('xp', 'ci-reward-chip-icon', 'xp') });
     return parts;
@@ -5751,7 +5870,7 @@ const UI = (() => {
       <span class="ci-reward-chip ci-reward-chip-${part.kind}">
         ${part.icon}
         <span class="ci-reward-chip-value">${part.value}</span>
-        <span class="ci-reward-chip-label">${part.label}</span>
+        ${part.label ? `<span class="ci-reward-chip-label">${part.label}</span>` : ''}
       </span>`).join('')}</div>`;
   }
 
@@ -6003,23 +6122,24 @@ function _bindNftBtns(container) {
 const Shop = (() => {
   // ── Скины ──
   const ITEMS = [
-    { id: 'skin_cryptokid',     name: 'Crypto Kid',    price: 0,    desc: 'Born on-chain',         sprite: '/game/chars/cryptokid.png'     },
-    { id: 'skin_street_runner', name: 'Street Runner', price: 150,  desc: 'Fast on the streets',   sprite: '/game/chars/street_runner.png' },
-    { id: 'skin_1',             name: 'Neon Runner',   price: 750,  desc: 'Glowing in the dark',   sprite: '/game/chars/skin1.png'         },
-    { id: 'skin_2',             name: 'Pixel Dude',    price: 750,  desc: '8-bit and proud',       sprite: '/game/chars/skin2.png'         },
-    { id: 'skin_default',       name: 'Builder',       price: 800,  desc: 'Default character',     sprite: '/game/player.png'              },
-    { id: 'skin_3',             name: 'Shadow',        price: 800,  desc: 'Moves like a ghost',    sprite: '/game/chars/skin3.png'         },
-    { id: 'skin_4',             name: 'Gold Rush',     price: 850,  desc: 'All that glitters',     sprite: '/game/chars/skin4.png'         },
-    { id: 'skin_5',             name: 'Cyber Punk',    price: 1200, desc: 'Born from the grid',    sprite: '/game/chars/skin5.png'         },
-    { id: 'skin_6',             name: 'Ocean Rider',   price: 1300, desc: 'Rides the blue wave',   sprite: '/game/chars/skin6.png'         },
-    { id: 'skin_7',             name: 'Flame Chaser',  price: 1400, desc: 'Always on fire',        sprite: '/game/chars/skin7.png'         },
-    { id: 'skin_founder',       name: 'Founder',       price: 1500, desc: 'Building the future',   sprite: '/game/chars/founder.png'       },
-    { id: 'skin_8',             name: 'Arctic',        price: 600,  desc: 'Cool under pressure',   sprite: '/game/chars/skin8.png'         },
-    { id: 'skin_9',             name: 'Desert Storm',  price: 700,  desc: 'Forged in the heat',    sprite: '/game/chars/skin9.png'         },
-    { id: 'skin_10',            name: 'Thunder',       price: 800,  desc: 'Speed of lightning',    sprite: '/game/chars/skin10.png'        },
-    { id: 'skin_11',            name: 'Diamond Hands', price: 900,  desc: 'Never gonna sell',      sprite: '/game/chars/skin11.png'        },
-    { id: 'skin_base_king',     name: 'Base King',     price: 1000, desc: 'Rule the chain',        sprite: '/game/chars/base_king.png'     },
+    { id: 'skin_cryptokid',     name: 'Genesis Runner',    price: 0,    desc: 'Born on-chain',            sprite: '/game/chars/cryptokid.png'     },
+    { id: 'skin_street_runner', name: 'City Runner',        price: 150,  desc: 'Fast on the streets',      sprite: '/game/chars/street_runner.png' },
+    { id: 'skin_2',             name: 'Justin Sun',         price: 750,  desc: 'TRON founder',             sprite: '/game/chars/skin2.png'         },
+    { id: 'skin_default',       name: 'Base Builder',       price: 800,  desc: 'Builds on Base',           sprite: '/game/player.png'              },
+    { id: 'skin_3',             name: 'Night Operator',     price: 800,  desc: 'Moves after dark',         sprite: '/game/chars/skin3.png'         },
+    { id: 'skin_4',             name: 'Satoshi Nakamoto',   price: 850,  desc: 'The anonymous genesis',     sprite: '/game/chars/skin4.png'         },
+    { id: 'skin_5',             name: 'Anatoly Yakovenko',  price: 1200, desc: 'Solana co-founder',         sprite: '/game/chars/skin5.png'         },
+    { id: 'skin_6',             name: 'Doctor',              price: 1300, desc: 'Keeps the run alive',       sprite: '/game/chars/skin6.png'         },
+    { id: 'skin_7',             name: 'Bitcoin Maxi',        price: 1400, desc: 'Never sells',               sprite: '/game/chars/skin7.png'         },
+    { id: 'skin_founder',       name: 'Vitalik Buterin',     price: 1500, desc: 'Ethereum co-founder',       sprite: '/game/chars/founder.png'       },
+    { id: 'skin_8',             name: 'Brian Armstrong',     price: 600,  desc: 'Coinbase co-founder',       sprite: '/game/chars/skin8.png'         },
+    { id: 'skin_9',             name: 'Firefighter',          price: 700,  desc: 'Runs toward the heat',      sprite: '/game/chars/skin9.png'         },
+    { id: 'skin_10',            name: 'Police Officer',       price: 800,  desc: 'Patrols the streets',        sprite: '/game/chars/skin10.png'        },
+    { id: 'skin_11',            name: 'Ape Holder',           price: 900,  desc: 'Diamond hands',              sprite: '/game/chars/skin11.png'        },
+    { id: 'skin_base_king',     name: 'Base King',            price: 1000, desc: 'Jesse Pollak inspired',      sprite: '/game/chars/base_king.png'     },
   ];
+
+  const REMOVED_SKIN_IDS = new Set(['skin_1']);
 
   // ── Бустеры (расходуемые, покупаются паками) ──
   const BOOSTERS = [
@@ -6087,17 +6207,36 @@ const Shop = (() => {
   let shopTab = 'skins'; // 'skins' | 'boosters' | 'trails' | 'effects'
   let _shopCache = null; // in-memory cache — avoids localStorage + JSON.parse every frame
 
+  function _removeRetiredSkins(d) {
+    if (!d || typeof d !== 'object') return d;
+    if (Array.isArray(d.owned)) {
+      d.owned = d.owned.filter(id => !REMOVED_SKIN_IDS.has(id));
+    }
+    if (REMOVED_SKIN_IDS.has(d.equipped)) d.equipped = 'skin_cryptokid';
+    if (REMOVED_SKIN_IDS.has(d.focusItemId)) d.focusItemId = null;
+    for (const field of ['fragments', 'topUpFragments', 'poolAppliedFragments']) {
+      if (d[field] && typeof d[field] === 'object' && !Array.isArray(d[field])) {
+        for (const id of REMOVED_SKIN_IDS) delete d[field][id];
+      }
+    }
+    return d;
+  }
+
   function loadShopData() {
     if (_shopCache) return _shopCache;
     try { _shopCache = JSON.parse(localStorage.getItem(SAVE_KEY) || '{}'); } catch { _shopCache = {}; }
+    _removeRetiredSkins(_shopCache);
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(_shopCache)); } catch {}
     return _shopCache;
   }
   function saveShopData(d) {
+    _removeRetiredSkins(d);
     _shopCache = d; // update cache
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(d)); } catch {}
     _syncToServer(d);
   }
   function saveShopDataLocal(d) {
+    _removeRetiredSkins(d);
     _shopCache = d;
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(d)); } catch {}
   }
@@ -6167,7 +6306,7 @@ const Shop = (() => {
     } catch {}
 
     const d = _migrateCharges(loadShopData());
-    d.owned = ['skin_cryptokid', 'skin_street_runner', 'skin_1'];
+    d.owned = ['skin_cryptokid', 'skin_street_runner'];
     d.equipped = 'skin_cryptokid';
     d.boosterCharges = { boost_magnet: 3, boost_double: 3, boost_shield: 3 };
     d.trailPacks = ['trail_sparkle', 'trail_hearts'];
@@ -6175,7 +6314,7 @@ const Shop = (() => {
     saveShopDataLocal(d);
     try {
       const claimed = JSON.parse(localStorage.getItem(NFT_CLAIMED_KEY) || '[]');
-      for (const id of ['skin_street_runner', 'skin_1']) {
+      for (const id of ['skin_street_runner']) {
         if (!claimed.includes(id)) claimed.push(id);
       }
       localStorage.setItem(NFT_CLAIMED_KEY, JSON.stringify(claimed));
@@ -6291,6 +6430,7 @@ const Shop = (() => {
       pooledFragments:      Math.max(0, Math.floor(Number(local.pooledFragments) || 0)),
       poolAppliedFragments: (local.poolAppliedFragments && typeof local.poolAppliedFragments === 'object' && !Array.isArray(local.poolAppliedFragments)) ? local.poolAppliedFragments : {},
     };
+    _removeRetiredSkins(d);
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(d)); } catch {}
     _shopCache = d;
     if (typeof Renderer !== 'undefined') Renderer.reloadPlayerSprite();
@@ -6473,6 +6613,7 @@ const Shop = (() => {
   }
 
   function _migrateEconomy(d) {
+    _removeRetiredSkins(d);
     _migrateCharges(d);
     if (!d.fragments || typeof d.fragments !== 'object' || Array.isArray(d.fragments)) d.fragments = {};
     if (!d.topUpFragments || typeof d.topUpFragments !== 'object' || Array.isArray(d.topUpFragments)) d.topUpFragments = {};
@@ -6854,14 +6995,24 @@ const Shop = (() => {
 
   // ── Trails (следы персонажа) ──
   function getTrailPacks() { return loadShopData().trailPacks || []; }
-  function getEquippedTrail() { return loadShopData().equippedTrail || 'default'; }
+  function getEquippedTrail() {
+    const id = loadShopData().equippedTrail || 'default';
+    // Enforce the claim gate: an unclaimed trail falls back to default footprints.
+    return _trailUnlocked(id) ? id : 'default';
+  }
   function getTrailMeta(id) {
     if (id === 'default') return DEFAULT_TRAIL;
     return TRAIL_PACKS.find(item => item.id === id) || DEFAULT_TRAIL;
   }
+  // Trails (except the free default) require an on-chain NFT claim before equipping.
+  function _trailUnlocked(id) {
+    if (id === 'default')       return true;   // free default — no claim needed
+    if (!window.__NFT_DEPLOYED) return true;   // NFT not deployed — open access
+    return _isNftClaimed(id);
+  }
   function getTrailOptions() {
     const validTrails = new Set(TRAIL_PACKS.map(item => item.id));
-    return [...new Set(['default', ...getTrailPacks().filter(id => validTrails.has(id))])];
+    return [...new Set(['default', ...getTrailPacks().filter(id => validTrails.has(id) && _trailUnlocked(id))])];
   }
   function equipTrailLocal(id) {
     if (!getTrailOptions().includes(id)) return false;
@@ -7283,10 +7434,31 @@ const Shop = (() => {
       const isEquipped = equipped === item.id;
       const canDirectBuy = _directBuyAvailable(item.id);
       const canAfford  = canDirectBuy && balance >= item.price;
+      const isUnlocked = _trailUnlocked(item.id); // claimed or open access
+      const needsClaim = isOwned && !isUnlocked;
 
       const trailIconHtml = item.sprite
         ? `<span class="shop-icon shop-icon-img"><img src="${item.sprite}" alt="${item.name}" style="width:48px;height:48px;object-fit:contain;display:block;image-rendering:pixelated;"></span>`
         : `<span class="shop-icon">${item.icon}</span>`;
+
+      // Info row: show claimed badge for claimed trails; nothing for unclaimed
+      const nftInfoHtml = (isOwned && window.__NFT_DEPLOYED)
+        ? `<div class="shop-nft-row">${isUnlocked ? '<span class="shop-nft-claimed">✓ On-chain</span>' : ''}</div>`
+        : '';
+
+      // Action: equipped → ON | owned+unlocked → Equip | owned+locked → Claim to Equip | not owned → Buy
+      let actionHtml;
+      if (isEquipped) {
+        actionHtml = '<span class="shop-badge-on">✓ ON</span>';
+      } else if (isOwned && isUnlocked) {
+        actionHtml = `<button class="shop-btn shop-btn-equip-trail" data-id="${item.id}">Equip</button>`;
+      } else if (needsClaim) {
+        actionHtml = `<button class="shop-btn shop-btn-claim-equip-trail" data-id="${item.id}">Claim</button>`;
+      } else if (canDirectBuy) {
+        actionHtml = `<button class="shop-btn shop-btn-buy${canAfford ? '' : ' disabled'}" data-id="${item.id}" data-price="${item.price}" style="display:inline-flex;flex-direction:row;align-items:center;justify-content:center;gap:4px;"><img src="/game/coin.png" style="width:14px;height:14px;object-fit:contain;display:block;flex-shrink:0;"> ${item.price}</button>`;
+      } else {
+        actionHtml = '<span class="shop-badge-owned">Craft only</span>';
+      }
 
       const el = document.createElement('div');
       el.className = 'shop-item' + (isEquipped ? ' shop-item-equipped' : '');
@@ -7295,40 +7467,42 @@ const Shop = (() => {
         ${trailIconHtml}
         <div class="shop-info">
           <span class="shop-name">${item.name}</span>
-          <span class="shop-desc">${item.desc}</span>
-          ${isOwned ? `<div class="shop-nft-row">${_nftBtnHtml(item.id)}</div>` : ''}
+          <span class="shop-desc">${item.desc}${needsClaim ? '<br><span style="color:rgba(180,140,255,0.7);font-size:0.7rem;">Claim NFT to unlock</span>' : ''}</span>
+          ${nftInfoHtml}
           ${_shopEconomyHtml(item.id, isOwned)}
         </div>
-        <div class="shop-action">
-          ${isEquipped
-            ? '<span class="shop-badge-on">✓ ON</span>'
-            : isOwned
-              ? `<button class="shop-btn shop-btn-equip-trail" data-id="${item.id}">Equip</button>`
-              : canDirectBuy
-                ? `<button class="shop-btn shop-btn-buy${canAfford ? '' : ' disabled'}" data-id="${item.id}" data-price="${item.price}" style="display:inline-flex;flex-direction:row;align-items:center;justify-content:center;gap:4px;"><img src="/game/coin.png" style="width:14px;height:14px;object-fit:contain;display:block;flex-shrink:0;"> ${item.price}</button>`
-                : '<span class="shop-badge-owned">Craft only</span>'
-          }
-        </div>`;
+        <div class="shop-action">${actionHtml}</div>`;
       container.appendChild(el);
     }
 
-    _bindNftBtns(container);
-
+    // Equip (only possible for unlocked trails — double-check guard)
     container.querySelectorAll('.shop-btn-equip-trail').forEach(btn => {
       btn.addEventListener('click', () => {
-        equipTrail(btn.dataset.id);
+        const id = btn.dataset.id;
+        if (!_trailUnlocked(id)) return;
+        equipTrail(id);
         render();
       });
     });
+
+    // Claim to Equip
+    container.querySelectorAll('.shop-btn-claim-equip-trail').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const mintFn = window.__NFT_MINT;
+        if (!mintFn || window.__NFT_PENDING) return;
+        btn.textContent = 'Claiming...';
+        btn.disabled    = true;
+        mintFn(btn.dataset.id);
+      });
+    });
+
+    // Buy with coins (trail still needs claiming after purchase)
     container.querySelectorAll('.shop-btn-buy').forEach(btn => {
       if (btn.classList.contains('disabled')) return;
       btn.addEventListener('click', async () => {
         const price = parseInt(btn.dataset.price);
         btn.disabled = true;
-        const ok = await buyShopItemServerFirst(btn.dataset.id, price, (usedLocalFallback) => {
-          if (usedLocalFallback) equipTrailLocal(btn.dataset.id);
-          else equipTrail(btn.dataset.id);
-        });
+        const ok = await buyShopItemServerFirst(btn.dataset.id, price);
         if (ok) render();
         else btn.disabled = false;
       });
@@ -7339,7 +7513,32 @@ const Shop = (() => {
   function render() {
     const coinEl = document.getElementById('shop-coin-count');
     if (coinEl) coinEl.textContent = Save.getCoins();
+    renderRunnerStage();
     setTab(shopTab);
+  }
+
+  function renderRunnerStage() {
+    const equipped = getEquipped();
+    const meta = ITEMS.find(item => item.id === equipped) || ITEMS[0];
+    const preview = document.getElementById('shop-stage-preview');
+    const name = document.getElementById('shop-stage-name');
+    const collection = document.getElementById('shop-stage-collection');
+    if (preview) {
+      preview.src = meta && meta.sprite ? meta.sprite : '/game/chars/cryptokid.png';
+      preview.alt = meta ? meta.name : 'Equipped runner';
+    }
+    if (name) name.textContent = meta ? meta.name : 'Genesis Runner';
+    if (collection) collection.textContent = `${getOwned().length} / ${ITEMS.length} skins owned`;
+  }
+
+  function getCollectionSummary() {
+    return {
+      skinsOwned: getOwned().length,
+      skinsTotal: ITEMS.length,
+      trailsOwned: getTrailPacks().length + 1,
+      trailsTotal: TRAIL_PACKS.length + 1,
+      boosters: BOOSTERS.reduce((total, booster) => total + getBoosterCount(booster.id), 0),
+    };
   }
 
   function refreshVisible() {
@@ -7396,6 +7595,7 @@ const Shop = (() => {
     getTrailOptions,
     equipTrailLocal,
     getTrailPacks,
+    getCollectionSummary,
     own,
     ownTrailPack,
     addBoosterCharges,
@@ -7417,6 +7617,7 @@ const Shop = (() => {
     _markNftClaimedPublic: _markNftClaimed,
     _refreshNft: () => render(),
     _equipPublic: equip,
+    _equipTrailPublic: equipTrail,
   };
 })();
 
@@ -7477,15 +7678,14 @@ const RewardEconomy = (() => {
     return parts.join(' + ') || label(bundle);
   }
 
-  function currencyHtml(kind, amount, labelText = '') {
+  function currencyHtml(kind, amount) {
     const value = Math.max(0, Math.floor(Number(amount) || 0));
     if (!value) return '';
     const iconSrc = kind === 'fragments' ? '/game/ui-icons/fragments.png' : '/game/coin.png';
     const safeKind = kind === 'fragments' ? 'fragments' : 'coins';
-    const labelPart = labelText ? `<span class="reward-inline-label">${_escapeHtml(labelText)}</span>` : '';
     return `<span class="reward-inline reward-inline-${safeKind}">` +
       _imgHtml(iconSrc, `reward-inline-icon reward-inline-icon-${safeKind}`, '', ' aria-hidden="true"') +
-      `<span class="reward-inline-plus">+</span><span class="reward-inline-value">${value}</span>${labelPart}</span>`;
+      `<span class="reward-inline-plus">+</span><span class="reward-inline-value">${value}</span></span>`;
   }
 
   function _textRewardHtml(text) {
@@ -7504,10 +7704,9 @@ const RewardEconomy = (() => {
       boosters: Math.max(0, Math.floor(Number(bundle.boosters) || 0)),
       xp: Math.max(0, Math.floor(Number(bundle.xp) || 0)),
     };
-    const compact = Boolean(options.compact);
     const parts = [];
-    if (totals.coins) parts.push(currencyHtml('coins', totals.coins, compact ? '' : 'coins'));
-    if (totals.fragments) parts.push(currencyHtml('fragments', totals.fragments, compact ? '' : 'Focus fragments'));
+    if (totals.coins) parts.push(currencyHtml('coins', totals.coins));
+    if (totals.fragments) parts.push(currencyHtml('fragments', totals.fragments));
     if (totals.boosters) parts.push(_textRewardHtml(`+${totals.boosters} booster${totals.boosters === 1 ? '' : 's'}`));
     if (totals.xp) parts.push(_textRewardHtml(`+${totals.xp} XP`));
     return parts.join('<span class="reward-separator">&middot;</span>') || _escapeHtml(label(bundle));
@@ -7615,7 +7814,6 @@ const Loadout = (() => {
 
   let selected = new Set();
   let active = {};
-  let openedFromMenu = true;
 
   function isActive(id) { return !!active[id]; }
 
@@ -7714,7 +7912,6 @@ const Loadout = (() => {
   }
 
   function show() {
-    openedFromMenu = currentState === GameState.MENU;
     selected = new Set();
     render();
     if (typeof UI !== 'undefined') UI.show('loadout');
@@ -7761,11 +7958,7 @@ const Loadout = (() => {
   function back() {
     selected = new Set();
     render();
-    if (typeof UI !== 'undefined') UI.show('menu');
-    if (!openedFromMenu) {
-      currentState = GameState.MENU;
-      initMenuBackground();
-    }
+    goToMenu();
   }
 
   function bind() {
@@ -7790,213 +7983,246 @@ function refreshGearViews() {
 
 
 /* ===== quests.js ===== */
-/**
- * quests.js — Система прогрессивных квестов
- * 4 типа × 8 уровней. Прогресс суммируется между играми.
- * Данные хранятся в localStorage + синхронизация через Redis.
- */
 const Quests = (() => {
-
   const SAVE_KEY = 'quests_v1';
   const _pendingClaims = new Set();
 
   const DEFS = [
-    { id: 'rows', name: 'Marathon Runner', iconSrc: '/game/ui-icons/fire.png', desc: 'Run rows across all games', type: 'cumulative',
-      levels: [
-        { target: 100,   reward: { coins: 35 } },
-        { target: 300,   reward: { boosters: 1 } },
-        { target: 700,   reward: { fragments: 3 } },
-        { target: 1400,  reward: { coins: 55, boosters: 1 } },
-        { target: 2400,  reward: { coins: 70, fragments: 5 } },
-        { target: 4000,  reward: { container: 'rare_crate' } },
-        { target: 7000,  reward: { fragments: 8, boosters: 1 } },
-        { target: 12000, reward: { container: 'epic_crate' } },
-      ]},
-    { id: 'coins', name: 'Coin Collector', iconSrc: '/game/ui-icons/coin-pouch.png', desc: 'Collect coins across all games', type: 'cumulative',
-      levels: [
-        { target: 40,   reward: { coins: 30 } },
-        { target: 120,  reward: { coins: 45 } },
-        { target: 300,  reward: { fragments: 3 } },
-        { target: 600,  reward: { coins: 65, boosters: 1 } },
-        { target: 1000, reward: { coins: 80, fragments: 5 } },
-        { target: 1800, reward: { container: 'rare_crate' } },
-        { target: 3000, reward: { coins: 120, fragments: 8 } },
-        { target: 5000, reward: { container: 'epic_crate' } },
-      ]},
-    { id: 'games', name: 'Dedicated Player', iconSrc: '/game/ui-icons/gamepad.png', desc: 'Play games', type: 'cumulative',
-      levels: [
-        { target: 5,   reward: { boosters: 1 } },
-        { target: 15,  reward: { coins: 35 } },
-        { target: 35,  reward: { fragments: 3 } },
-        { target: 70,  reward: { boosters: 2 } },
-        { target: 120, reward: { coins: 70, fragments: 5 } },
-        { target: 200, reward: { container: 'rare_crate' } },
-        { target: 350, reward: { fragments: 8, boosters: 2 } },
-        { target: 600, reward: { container: 'epic_crate' } },
-      ]},
-    { id: 'record', name: 'High Scorer', iconSrc: '/game/ui-icons/leaderboard.png', desc: 'Reach a high score record', type: 'best',
-      levels: [
-        { target: 20,  reward: { coins: 45 } },
-        { target: 40,  reward: { fragments: 3 } },
-        { target: 80,  reward: { coins: 65, boosters: 1 } },
-        { target: 150, reward: { fragments: 6 } },
-        { target: 250, reward: { container: 'rare_crate' } },
-        { target: 400, reward: { coins: 130, fragments: 8 } },
-        { target: 600, reward: { container: 'epic_crate' } },
-        { target: 900, reward: { container: 'legendary_crate' } },
-      ]},
-    { id: 'elite_runs', name: 'Elite Runner', iconSrc: '/game/ui-icons/quests.png', desc: 'Finish Great or better runs', type: 'cumulative',
-      levels: [
-        { target: 1,   reward: { coins: 40 } },
-        { target: 3,   reward: { boosters: 1 } },
-        { target: 7,   reward: { fragments: 3 } },
-        { target: 15,  reward: { coins: 80, boosters: 1 } },
-        { target: 30,  reward: { fragments: 6 } },
-        { target: 50,  reward: { container: 'rare_crate' } },
-        { target: 80,  reward: { fragments: 10, boosters: 2 } },
-        { target: 120, reward: { container: 'epic_crate' } },
-      ]},
+    { id: 'rows', name: 'Marathon Runner', iconSrc: '/game/ui-icons/quests/career-rows.png', desc: 'Run rows across all games', levels: [
+      { target: 100, reward: { coins: 35 } }, { target: 300, reward: { boosters: 1 } },
+      { target: 700, reward: { fragments: 3 } }, { target: 1400, reward: { coins: 55, boosters: 1 } },
+      { target: 2400, reward: { coins: 70, fragments: 5 } }, { target: 4000, reward: { container: 'rare_crate' } },
+      { target: 7000, reward: { fragments: 8, boosters: 1 } }, { target: 12000, reward: { container: 'epic_crate' } },
+    ]},
+    { id: 'coins', name: 'Coin Collector', iconSrc: '/game/ui-icons/quests/career-coins.png', desc: 'Collect coins across all games', levels: [
+      { target: 40, reward: { coins: 30 } }, { target: 120, reward: { coins: 45 } },
+      { target: 300, reward: { fragments: 3 } }, { target: 600, reward: { coins: 65, boosters: 1 } },
+      { target: 1000, reward: { coins: 80, fragments: 5 } }, { target: 1800, reward: { container: 'rare_crate' } },
+      { target: 3000, reward: { coins: 120, fragments: 8 } }, { target: 5000, reward: { container: 'epic_crate' } },
+    ]},
+    { id: 'games', name: 'Dedicated Player', iconSrc: '/game/ui-icons/quests/career-games.png', desc: 'Play games', levels: [
+      { target: 5, reward: { boosters: 1 } }, { target: 15, reward: { coins: 35 } },
+      { target: 35, reward: { fragments: 3 } }, { target: 70, reward: { boosters: 2 } },
+      { target: 120, reward: { coins: 70, fragments: 5 } }, { target: 200, reward: { container: 'rare_crate' } },
+      { target: 350, reward: { fragments: 8, boosters: 2 } }, { target: 600, reward: { container: 'epic_crate' } },
+    ]},
+    { id: 'record', name: 'High Scorer', iconSrc: '/game/ui-icons/quests/career-record.png', desc: 'Reach a high score record', levels: [
+      { target: 20, reward: { coins: 45 } }, { target: 40, reward: { fragments: 3 } },
+      { target: 80, reward: { coins: 65, boosters: 1 } }, { target: 150, reward: { fragments: 6 } },
+      { target: 250, reward: { container: 'rare_crate' } }, { target: 400, reward: { coins: 130, fragments: 8 } },
+      { target: 600, reward: { container: 'epic_crate' } }, { target: 900, reward: { container: 'legendary_crate' } },
+    ]},
+    { id: 'elite_runs', name: 'Elite Runner', iconSrc: '/game/ui-icons/quests/career-elite.png', desc: 'Finish Great or better runs', levels: [
+      { target: 1, reward: { coins: 40 } }, { target: 3, reward: { boosters: 1 } },
+      { target: 7, reward: { fragments: 3 } }, { target: 15, reward: { coins: 80, boosters: 1 } },
+      { target: 30, reward: { fragments: 6 } }, { target: 50, reward: { container: 'rare_crate' } },
+      { target: 80, reward: { fragments: 10, boosters: 2 } }, { target: 120, reward: { container: 'epic_crate' } },
+    ]},
   ];
 
-  function _loadData() {
-    try {
-      const raw = localStorage.getItem(SAVE_KEY);
-      if (!raw) return _defaults();
-      const parsed = JSON.parse(raw);
-      // Ensure all quest IDs exist
-      const d = _defaults();
-      for (const def of DEFS) {
-        if (parsed[def.id]) d[def.id] = parsed[def.id];
-      }
-      return d;
-    } catch { return _defaults(); }
+  const ROTATION_DEFS = [
+    { id: 'daily_games', scope: 'daily', metric: 'games', name: 'Warm-up laps', desc: 'Finish 2 runs', iconSrc: '/game/ui-icons/quests/daily-games.png', target: 2, reward: { coins: 10 } },
+    { id: 'daily_rows', scope: 'daily', metric: 'rows', name: 'Keep moving', desc: 'Run 120 rows', iconSrc: '/game/ui-icons/quests/daily-rows.png', target: 120, reward: { xp: 15 } },
+    { id: 'daily_coins', scope: 'daily', metric: 'coins', name: 'Pocket change', desc: 'Collect 25 coins', iconSrc: '/game/ui-icons/quests/daily-coins.png', target: 25, reward: { coins: 10 } },
+    { id: 'daily_quality', scope: 'daily', metric: 'great_runs', name: 'Strong finish', desc: 'Finish one Great+ run', iconSrc: '/game/ui-icons/quests/daily-quality.png', target: 1, reward: { xp: 20 } },
+    { id: 'daily_score', scope: 'daily', metric: 'best', name: 'Push the pace', desc: 'Score 80 in one run', iconSrc: '/game/ui-icons/quests/daily-score.png', target: 80, reward: { boosters: 1 } },
+    { id: 'weekly_games', scope: 'weekly', metric: 'games', name: 'Run regular', desc: 'Finish 12 runs', iconSrc: '/game/ui-icons/quests/weekly-games.png', target: 12, reward: { xp: 50 } },
+    { id: 'weekly_rows', scope: 'weekly', metric: 'rows', name: 'Long haul', desc: 'Run 900 rows', iconSrc: '/game/ui-icons/quests/weekly-rows.png', target: 900, reward: { coins: 35 } },
+    { id: 'weekly_coins', scope: 'weekly', metric: 'coins', name: 'Coin route', desc: 'Collect 220 coins', iconSrc: '/game/ui-icons/quests/weekly-coins.png', target: 220, reward: { boosters: 1 } },
+    { id: 'weekly_quality', scope: 'weekly', metric: 'great_runs', name: 'Quality week', desc: 'Finish 4 Great+ runs', iconSrc: '/game/ui-icons/quests/weekly-quality.png', target: 4, reward: { xp: 60 } },
+    { id: 'weekly_score', scope: 'weekly', metric: 'best', name: 'Weekly peak', desc: 'Score 220 in one run', iconSrc: '/game/ui-icons/quests/weekly-score.png', target: 220, reward: { coins: 40 } },
+  ];
+
+  function _periods(now = new Date()) {
+    const thursday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const day = thursday.getUTCDay() || 7;
+    thursday.setUTCDate(thursday.getUTCDate() + 4 - day);
+    const year = thursday.getUTCFullYear();
+    const yearStart = new Date(Date.UTC(year, 0, 1));
+    const week = Math.ceil((((thursday - yearStart) / 86400000) + 1) / 7);
+    return { daily: now.toISOString().slice(0, 10), weekly: `${year}-W${String(week).padStart(2, '0')}` };
+  }
+
+  function _hash(input) {
+    let hash = 2166136261;
+    for (let i = 0; i < input.length; i++) { hash ^= input.charCodeAt(i); hash = Math.imul(hash, 16777619); }
+    return hash >>> 0;
+  }
+
+  function _activeDefs(scope, period) {
+    const pool = ROTATION_DEFS.filter(def => def.scope === scope);
+    const count = scope === 'daily' ? 3 : 2;
+    const start = _hash(`${scope}:${period}`) % pool.length;
+    return Array.from({ length: count }, (_, index) => pool[(start + index * 2) % pool.length]);
+  }
+
+  function _rotationDefaults(scope, period) {
+    return { period, entries: _activeDefs(scope, period).map(def => ({ id: def.id, progress: 0, claimed: false })) };
   }
 
   function _defaults() {
-    const d = {};
+    const periods = _periods();
+    const data = { daily: _rotationDefaults('daily', periods.daily), weekly: _rotationDefaults('weekly', periods.weekly) };
+    for (const def of DEFS) data[def.id] = { progress: 0, claimed: Array(8).fill(false) };
+    return data;
+  }
+
+  function _normalizeRotation(raw, scope, period) {
+    const fallback = _rotationDefaults(scope, period);
+    if (!raw || raw.period !== period || !Array.isArray(raw.entries)) return fallback;
+    fallback.entries = fallback.entries.map(entry => {
+      const saved = raw.entries.find(candidate => candidate && candidate.id === entry.id);
+      return saved ? { ...entry, progress: Math.max(0, Math.floor(Number(saved.progress) || 0)), claimed: saved.claimed === true } : entry;
+    });
+    return fallback;
+  }
+
+  function _normalizeData(parsed) {
+    const data = _defaults();
+    if (!parsed || typeof parsed !== 'object') return data;
     for (const def of DEFS) {
-      d[def.id] = { progress: 0, claimed: [false,false,false,false,false,false,false,false] };
+      const saved = parsed[def.id];
+      if (!saved || typeof saved !== 'object') continue;
+      data[def.id] = {
+        progress: Math.max(0, Math.floor(Number(saved.progress) || 0)),
+        claimed: Array.from({ length: 8 }, (_, index) => Boolean(Array.isArray(saved.claimed) && saved.claimed[index])),
+      };
     }
-    return d;
+    const periods = _periods();
+    data.daily = _normalizeRotation(parsed.daily, 'daily', periods.daily);
+    data.weekly = _normalizeRotation(parsed.weekly, 'weekly', periods.weekly);
+    return data;
+  }
+
+  function _loadData() {
+    try { return _normalizeData(JSON.parse(localStorage.getItem(SAVE_KEY) || '{}')); }
+    catch { return _defaults(); }
   }
 
   function _saveData(data) {
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch {}
-    _syncToServer(data);
-  }
-
-  function _syncToServer(data) {
     const syncFn = window.__BASE_QUEST_SYNC;
     if (syncFn) syncFn(data);
   }
 
-  // Get current level for a quest (0-based, 8 = all done)
   function _getLevel(questData) {
     const idx = questData.claimed.indexOf(false);
     return idx === -1 ? 8 : idx;
   }
 
-  // Called after each game over
+  function _rotationDef(id) { return ROTATION_DEFS.find(def => def.id === id); }
+
+  function _advanceRotation(rotation, score, sessionCoins, greatRunDelta) {
+    rotation.entries = rotation.entries.map(entry => {
+      const def = _rotationDef(entry.id);
+      if (!def) return entry;
+      const delta = def.metric === 'games' ? 1 : def.metric === 'rows' ? score : def.metric === 'coins' ? sessionCoins : def.metric === 'great_runs' ? greatRunDelta : 0;
+      return { ...entry, progress: def.metric === 'best' ? Math.max(entry.progress, score) : entry.progress + delta };
+    });
+  }
+
   function onGameOver(score, sessionCoins) {
     const data = _loadData();
-    data.rows.progress += score;
-    data.coins.progress += sessionCoins;
+    const safeScore = Math.max(0, Math.floor(Number(score) || 0));
+    const safeCoins = Math.max(0, Math.floor(Number(sessionCoins) || 0));
+    const connected = Boolean(window.__BASE_WALLET);
+    const rating = typeof _getLocalRunRating === 'function' ? _getLocalRunRating(safeScore).id : 'casual';
+    const greatRunDelta = !connected && (rating === 'great' || rating === 'elite' || rating === 'master') ? 1 : 0;
+    data.rows.progress += safeScore;
+    data.coins.progress += safeCoins;
     data.games.progress += 1;
-    data.record.progress = Math.max(data.record.progress, score);
-    // elite_runs is server-authoritative when connected (server increments it
-    // from the accepted score's rating). Only advance it locally when offline,
-    // so a client can't inflate it past the server value via applyServerData's max().
-    if (data.elite_runs) {
-      const connected = Boolean(window.__BASE_WALLET);
-      if (!connected) {
-        const rating = typeof _getLocalRunRating === 'function' ? _getLocalRunRating(score).id : 'casual';
-        if (rating === 'great' || rating === 'elite' || rating === 'master') {
-          data.elite_runs.progress += 1;
-        }
-      }
-    }
+    data.record.progress = Math.max(data.record.progress, safeScore);
+    data.elite_runs.progress += greatRunDelta;
+    _advanceRotation(data.daily, safeScore, safeCoins, greatRunDelta);
+    _advanceRotation(data.weekly, safeScore, safeCoins, greatRunDelta);
     _saveData(data);
   }
 
-  // Check if any quest has a claimable reward
+  function _claimContext(data, questId) {
+    if (questId.includes(':')) {
+      const [scope, id] = questId.split(':');
+      if (scope !== 'daily' && scope !== 'weekly') return null;
+      const def = _rotationDef(id);
+      const entry = data[scope].entries.find(item => item.id === id);
+      if (!def || !entry || def.scope !== scope) return null;
+      return { questId, scope, period: data[scope].period, entry, level: 0, target: def.target, reward: def.reward };
+    }
+    const def = DEFS.find(item => item.id === questId);
+    if (!def) return null;
+    const entry = data[questId];
+    const level = _getLevel(entry);
+    if (level >= def.levels.length) return { questId, scope: 'career', entry, level, complete: true };
+    return { questId, scope: 'career', entry, level, target: def.levels[level].target, reward: def.levels[level].reward };
+  }
+
   function hasClaimable() {
     const data = _loadData();
     for (const def of DEFS) {
-      const q = data[def.id];
-      const lvl = _getLevel(q);
-      if (lvl < 8 && q.progress >= def.levels[lvl].target) return true;
+      const context = _claimContext(data, def.id);
+      if (context && !context.complete && context.entry.progress >= context.target && !context.entry.claimed[context.level]) return true;
+    }
+    for (const scope of ['daily', 'weekly']) {
+      for (const entry of data[scope].entries) {
+        const def = _rotationDef(entry.id);
+        if (def && entry.progress >= def.target && !entry.claimed) return true;
+      }
     }
     return false;
   }
 
-  async function applyQuestRewardServerClaim(questId, level) {
+  async function applyQuestRewardServerClaim(context) {
     const claimFn = window.__BASE_ECONOMY_CLAIM;
     if (typeof claimFn !== 'function') return null;
     try {
-      const claimed = await claimFn({ source: 'quest', questId, level });
+      const claimed = await claimFn({ source: 'quest', questId: context.questId, level: context.level, period: context.period });
       if (!claimed || claimed.error === 'no_address') return null;
-      if (!claimed.ok) return { serverRejected: true, error: claimed.error || 'claim_failed' };
-      if (claimed.shop && typeof Shop !== 'undefined' && Shop.applyServerEconomyData) {
-        Shop.applyServerEconomyData(claimed.shop);
-      }
-      if (typeof claimed.coins === 'number') {
-        RewardEconomy.setCoinsLocal(claimed.coins);
-      }
-      if (claimed.quests) {
-        applyServerData(claimed.quests);
-      }
+      if (!claimed.ok) return {
+        serverRejected: true,
+        error: claimed.error || 'claim_failed',
+        levels: claimed.levels,
+        quests: claimed.quests,
+      };
+      if (claimed.shop && typeof Shop !== 'undefined' && Shop.applyServerEconomyData) Shop.applyServerEconomyData(claimed.shop);
+      if (typeof claimed.coins === 'number') RewardEconomy.setCoinsLocal(claimed.coins);
+      if (claimed.quests) applyServerData(claimed.quests);
+      if (claimed.levels && typeof Xp !== 'undefined' && Xp.applyServerState) Xp.applyServerState(claimed.levels);
       return claimed;
-    } catch {
-      return { serverRejected: true, error: 'claim_failed' };
-    }
+    } catch { return { serverRejected: true, error: 'claim_failed' }; }
   }
 
-  function applyQuestRewardLocalFallback(data, questId, level, reward) {
-    data[questId].claimed[level] = true;
-    RewardEconomy.applyBundleLocal(reward, 'quest');
-    _saveData(data);
+  function _setClaimed(context, claimed) {
+    if (context.scope === 'career') context.entry.claimed[context.level] = claimed;
+    else context.entry.claimed = claimed;
   }
 
-  // Claim reward for a quest — optimistic: grant the reward locally right away,
-  // then reconcile with the server. On a genuine server rejection we revert from
-  // the pre-claim snapshot; when the server is unavailable we keep the local
-  // grant (offline behavior, same as before).
   async function claim(questId) {
     const data = _loadData();
-    const def = DEFS.find(d => d.id === questId);
-    if (!def) return;
-    const q = data[questId];
-    const lvl = _getLevel(q);
-    if (lvl >= 8) return;
-    if (q.progress < def.levels[lvl].target) return;
-    if (q.claimed[lvl]) return;
-    const claimKey = `${questId}:${lvl}`;
+    const context = _claimContext(data, questId);
+    if (!context || context.complete || context.entry.progress < context.target) return;
+    const alreadyClaimed = context.scope === 'career' ? context.entry.claimed[context.level] : context.entry.claimed;
+    if (alreadyClaimed) return;
+    const claimKey = `${context.questId}:${context.level}:${context.period || 'career'}`;
     if (_pendingClaims.has(claimKey)) return;
 
-    const reward = def.levels[lvl].reward;
-
-    // Snapshot for revert-on-reject
-    const coinsBefore = (typeof Save !== 'undefined') ? Save.getCoins() : 0;
-    const shopBefore  = (typeof Shop !== 'undefined' && Shop.exportEconomyData) ? Shop.exportEconomyData() : null;
-
-    // Optimistic grant — instant feedback (suppress coin-sync so the server
-    // claim, which is authoritative for coins, doesn't grant on top of it)
+    const coinsBefore = typeof Save !== 'undefined' ? Save.getCoins() : 0;
+    const shopBefore = typeof Shop !== 'undefined' && Shop.exportEconomyData ? Shop.exportEconomyData() : null;
     _pendingClaims.add(claimKey);
-    _applyRewardSuppressingCoinSync(() => applyQuestRewardLocalFallback(data, questId, lvl, reward));
+    _setClaimed(context, true);
+    _applyRewardSuppressingCoinSync(() => RewardEconomy.applyBundleLocal(context.reward, 'quest'));
+    _saveData(data);
     if (typeof UI !== 'undefined') UI.updateCoins(Save.getCoins());
     render();
 
     try {
-      const claimed = await applyQuestRewardServerClaim(questId, lvl);
-      // claimed === null   → server unavailable → keep optimistic grant
-      // claimed.ok         → applyQuestRewardServerClaim already reconciled state
+      const claimed = await applyQuestRewardServerClaim(context);
       if (claimed && claimed.serverRejected) {
-        // Genuine rejection — roll back the optimistic grant
         if (shopBefore && typeof Shop !== 'undefined' && Shop.applyServerEconomyData) Shop.applyServerEconomyData(shopBefore);
         if (typeof RewardEconomy !== 'undefined' && RewardEconomy.setCoinsLocal) RewardEconomy.setCoinsLocal(coinsBefore);
-        const d2 = _loadData();
-        if (d2[questId] && Array.isArray(d2[questId].claimed)) d2[questId].claimed[lvl] = false;
-        _saveData(d2);
+        if (claimed.levels && typeof Xp !== 'undefined' && Xp.applyServerState) Xp.applyServerState(claimed.levels);
+        if (claimed.quests) applyServerData(claimed.quests);
+        const rollback = _loadData();
+        const rollbackContext = _claimContext(rollback, questId);
+        if (rollbackContext) { _setClaimed(rollbackContext, false); _saveData(rollback); }
         console.warn('quest reward claim rejected — reverted:', claimed.error || 'unknown');
       }
       if (typeof UI !== 'undefined') UI.updateCoins(Save.getCoins());
@@ -8006,77 +8232,92 @@ const Quests = (() => {
     }
   }
 
-  // Apply server data (merge with local)
   function applyServerData(serverData) {
     if (!serverData) return;
     const local = _loadData();
+    const server = _normalizeData(serverData);
     for (const def of DEFS) {
-      const s = serverData[def.id];
-      const l = local[def.id];
-      if (!s) continue;
-      // Take max progress
-      l.progress = Math.max(l.progress || 0, s.progress || 0);
-      // Union of claimed
-      if (s.claimed && Array.isArray(s.claimed)) {
-        for (let i = 0; i < 8; i++) {
-          if (s.claimed[i]) l.claimed[i] = true;
-        }
-      }
+      local[def.id].progress = Math.max(local[def.id].progress, server[def.id].progress);
+      for (let i = 0; i < 8; i++) local[def.id].claimed[i] = local[def.id].claimed[i] || server[def.id].claimed[i];
+    }
+    for (const scope of ['daily', 'weekly']) {
+      if (local[scope].period !== server[scope].period) { local[scope] = server[scope]; continue; }
+      local[scope].entries = local[scope].entries.map(entry => {
+        const remote = server[scope].entries.find(candidate => candidate.id === entry.id);
+        return remote ? { ...entry, progress: Math.max(entry.progress, remote.progress), claimed: entry.claimed || remote.claimed } : entry;
+      });
     }
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(local)); } catch {}
+    render();
   }
 
-  // Render quests screen
-  function render() {
-    const container = document.getElementById('quest-list');
+  function _questCard(def, context, variant) {
+    const isRotation = context.scope !== 'career';
+    const isMaxed = Boolean(context.complete);
+    const target = context.target || def.levels[7].target;
+    const progress = context.entry.progress;
+    const claimed = isRotation ? context.entry.claimed : isMaxed || context.entry.claimed[context.level];
+    const canClaim = !isMaxed && progress >= target && !claimed;
+    const claimKey = `${context.questId}:${context.level}:${context.period || 'career'}`;
+    const isPending = canClaim && _pendingClaims.has(claimKey);
+    const pct = isMaxed ? 100 : Math.min(100, Math.floor((progress / target) * 100));
+    const rewardLabel = context.reward ? RewardEconomy.labelHtml(context.reward) : '';
+    const badge = isRotation ? (claimed ? 'DONE' : variant.toUpperCase()) : (isMaxed ? 'MAX' : `LV ${context.level + 1}`);
+    const card = document.createElement('div');
+    card.className = `quest-card quest-card-${variant}${canClaim ? ' quest-claimable' : ''}${claimed ? ' quest-card-complete' : ''}${isPending ? ' quest-pending' : ''}`;
+    card.innerHTML = `
+      <div class="quest-header">
+        <span class="quest-name">${_imgHtml(def.iconSrc, 'quest-icon-img', def.name, ' aria-hidden="true"')} ${def.name}</span>
+        <span class="quest-level">${badge}</span>
+      </div>
+      <div class="quest-desc">${def.desc}</div>
+      ${isMaxed ? '' : `<div class="quest-reward-label">${rewardLabel}</div>`}
+      <div class="quest-bar-bg"><div class="quest-bar-fill${canClaim ? ' complete' : ''}" style="width:${pct}%"></div></div>
+      <div class="quest-progress">
+        <span class="quest-progress-text">${Math.min(progress, target)} / ${target}</span>
+        ${isMaxed || claimed
+          ? '<span class="quest-done">COMPLETED</span>'
+          : canClaim
+            ? `<button class="quest-claim-btn" data-id="${context.questId}"${isPending ? ' disabled' : ''}>${isPending ? 'CLAIMING...' : 'CLAIM'}</button>`
+            : `<span class="quest-progress-text">${pct}%</span>`}
+      </div>`;
+    return card;
+  }
+
+  function _renderRotation(scope, data) {
+    const container = document.getElementById(`quest-${scope}-list`);
     if (!container) return;
-    const data = _loadData();
-
     container.innerHTML = '';
-    for (const def of DEFS) {
-      const q = data[def.id];
-      const lvl = _getLevel(q);
-      const isMaxed = lvl >= 8;
-      const levelInfo = isMaxed ? null : def.levels[lvl];
-      const target = levelInfo ? levelInfo.target : def.levels[7].target;
-      const progress = q.progress;
-      const pct = isMaxed ? 100 : Math.min(100, Math.floor((progress / target) * 100));
-      const canClaim = !isMaxed && progress >= target && !q.claimed[lvl];
-      const isPending = canClaim && _pendingClaims.has(`${def.id}:${lvl}`);
-      const rewardLabel = levelInfo ? RewardEconomy.labelHtml(levelInfo.reward) : '';
-      const rewardShort = levelInfo ? RewardEconomy.shortLabelHtml(levelInfo.reward) : '';
-
-      const card = document.createElement('div');
-      card.className = 'quest-card' + (canClaim ? ' quest-claimable' : '') + (isPending ? ' quest-pending' : '');
-
-      card.innerHTML = `
-        <div class="quest-header">
-          <span class="quest-name">${_imgHtml(def.iconSrc, 'quest-icon-img ui-icon', def.name, ' aria-hidden="true"')} ${def.name}</span>
-          <span class="quest-level">${isMaxed ? 'MAX' : 'Lv ' + (lvl + 1)}</span>
-        </div>
-        <div class="quest-desc">${def.desc}</div>
-        ${isMaxed ? '' : `<div class="quest-reward-label">${rewardLabel}</div>`}
-        <div class="quest-bar-bg">
-          <div class="quest-bar-fill${canClaim ? ' complete' : ''}" style="width:${pct}%"></div>
-        </div>
-        <div class="quest-progress">
-          <span class="quest-progress-text">${isMaxed ? target + ' / ' + target : Math.min(progress, target) + ' / ' + target}</span>
-          ${isMaxed
-            ? '<span class="quest-done">COMPLETED</span>'
-            : canClaim
-              ? '<button class="quest-claim-btn" data-id="' + def.id + '"' + (isPending ? ' disabled' : '') + '>' + (isPending ? 'Claiming...' : 'Claim <span class="quest-reward-label">' + rewardShort + '</span>') + '</button>'
-              : '<span class="quest-progress-text">' + pct + '%</span>'
-          }
-        </div>
-      `;
-      container.appendChild(card);
+    for (const entry of data[scope].entries) {
+      const def = _rotationDef(entry.id);
+      const context = _claimContext(data, `${scope}:${entry.id}`);
+      if (def && context) container.appendChild(_questCard(def, context, scope));
     }
+  }
 
-    // Bind claim buttons
-    container.querySelectorAll('.quest-claim-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        claim(btn.dataset.id);
-      });
+  function _updateResetLabels() {
+    const now = new Date();
+    const midnight = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1);
+    const dailyHours = Math.max(1, Math.ceil((midnight - now.getTime()) / 3600000));
+    const daysToMonday = (8 - (now.getUTCDay() || 7)) % 7 || 7;
+    const daily = document.getElementById('quest-daily-reset');
+    const weekly = document.getElementById('quest-weekly-reset');
+    if (daily) daily.textContent = `Resets in ${dailyHours}h`;
+    if (weekly) weekly.textContent = `Resets in ${daysToMonday}d`;
+  }
+
+  function render() {
+    const data = _loadData();
+    _renderRotation('daily', data);
+    _renderRotation('weekly', data);
+    const career = document.getElementById('quest-career-list');
+    if (career) {
+      career.innerHTML = '';
+      for (const def of DEFS) career.appendChild(_questCard(def, _claimContext(data, def.id), 'career'));
+    }
+    _updateResetLabels();
+    document.querySelectorAll('#screen-quests .quest-claim-btn').forEach(btn => {
+      btn.addEventListener('click', () => claim(btn.dataset.id));
     });
   }
 
@@ -8539,10 +8780,10 @@ const DailySpin = (() => {
     } else if (prize.type === 'skin') {
       // Server picks a specific skin; if it's already owned, pick a random unowned one
       if (typeof Shop !== 'undefined') {
-        const ALL_SKINS = ['skin_street_runner', 'skin_1', 'skin_2', 'skin_default', 'skin_3', 'skin_4', 'skin_5', 'skin_6', 'skin_7', 'skin_founder', 'skin_8', 'skin_9', 'skin_10', 'skin_11', 'skin_base_king'];
+        const ALL_SKINS = ['skin_street_runner', 'skin_2', 'skin_default', 'skin_3', 'skin_4', 'skin_5', 'skin_6', 'skin_7', 'skin_founder', 'skin_8', 'skin_9', 'skin_10', 'skin_11', 'skin_base_king'];
         const owned     = Shop.getOwned ? Shop.getOwned() : [];
         let   skinId    = prize.value;
-        if (owned.includes(skinId)) {
+        if (!ALL_SKINS.includes(skinId) || owned.includes(skinId)) {
           const unowned = ALL_SKINS.filter(id => !owned.includes(id));
           skinId = unowned.length > 0
             ? unowned[Math.floor(Math.random() * unowned.length)]
@@ -8551,27 +8792,25 @@ const DailySpin = (() => {
         Shop.own(skinId);
         // Update prize label shown in result box
         const SKIN_NAMES = {
-          skin_cryptokid:     'Crypto Kid',
-          skin_street_runner: 'Street Runner',
-          skin_1:             'Neon Runner',
-          skin_2:             'Pixel Dude',
-          skin_default:       'Builder',
-          skin_3:             'Shadow',
-          skin_4:             'Gold Rush',
-          skin_5:             'Cyber Punk',
-          skin_6:             'Ocean Rider',
-          skin_7:             'Flame Chaser',
-          skin_founder:       'Founder',
-          skin_8:             'Arctic',
-          skin_9:             'Desert Storm',
-          skin_10:            'Thunder',
-          skin_11:            'Diamond Hands',
+          skin_cryptokid:     'Genesis Runner',
+          skin_street_runner: 'City Runner',
+          skin_2:             'Justin Sun',
+          skin_default:       'Base Builder',
+          skin_3:             'Night Operator',
+          skin_4:             'Satoshi Nakamoto',
+          skin_5:             'Anatoly Yakovenko',
+          skin_6:             'Doctor',
+          skin_7:             'Bitcoin Maxi',
+          skin_founder:       'Vitalik Buterin',
+          skin_8:             'Brian Armstrong',
+          skin_9:             'Firefighter',
+          skin_10:            'Police Officer',
+          skin_11:            'Ape Holder',
           skin_base_king:     'Base King',
         };
         const SKIN_SPRITES = {
           skin_cryptokid:     '/game/chars/cryptokid.png',
           skin_street_runner: '/game/chars/street_runner.png',
-          skin_1:             '/game/chars/skin1.png',
           skin_2:             '/game/chars/skin2.png',
           skin_default:       '/game/player.png',
           skin_3:             '/game/chars/skin3.png',
@@ -8640,8 +8879,8 @@ const DailySpin = (() => {
         const pooled = Number(_prize.fragmentsPooled || 0);
         const total = awarded + pooled || Number(_prize.value || 0);
         labelEl.innerHTML = awarded <= 0 && pooled > 0
-          ? `${RewardEconomy.currencyHtml('fragments', pooled, 'Focus fragments')} <span class="reward-overflow">→ Pool</span>`
-          : `${RewardEconomy.currencyHtml('fragments', total, 'Focus fragments')}${pooled > 0 ? ` <span class="reward-overflow">${pooled} → Pool</span>` : ''}`;
+          ? `${RewardEconomy.currencyHtml('fragments', pooled)} <span class="reward-overflow">→ Pool</span>`
+          : `${RewardEconomy.currencyHtml('fragments', total)}${pooled > 0 ? ` <span class="reward-overflow">${pooled} → Pool</span>` : ''}`;
       } else if (_prize.type === 'crate') {
         iconEl.innerHTML = IMG('/game/ui-icons/starter-pack.png', '56px');
         const pooled = Number(_prize.fragmentsPooled || 0);
@@ -8653,7 +8892,7 @@ const DailySpin = (() => {
         labelEl.textContent = _prize.label || `+${_prize.value} XP`;
       } else if (_prize.type === 'coins') {
         iconEl.innerHTML = IMG('/game/coin.png', '56px');
-        labelEl.innerHTML = RewardEconomy.currencyHtml('coins', _prize.value, 'Coins');
+        labelEl.innerHTML = RewardEconomy.currencyHtml('coins', _prize.value);
       } else if (_prize.type === 'nothing') {
         iconEl.innerHTML = IMG('/game/ui-icons/fire.png', '56px');
         labelEl.textContent = 'Better luck next time!';
@@ -8813,6 +9052,15 @@ const DailySpin = (() => {
     }
   }
 
+  // Re-sync UI when the React hook publishes fresh __SPIN state (fired via the
+  // 'spin-state' event). Refreshes the menu banner, and the spin button when the
+  // spin screen is currently open.
+  function refresh() {
+    updateBanner();
+    const spinScreen = document.getElementById('screen-spin');
+    if (spinScreen && !spinScreen.classList.contains('hidden')) _updateDoBtn();
+  }
+
   // ── Countdown timer on spin screen ───────────────────────────────────────
   function _startCountdown() {
     if (_timerInterval) clearInterval(_timerInterval);
@@ -8909,7 +9157,7 @@ const DailySpin = (() => {
     if (nftSection) nftSection.classList.add('hidden');
   }
 
-  return { show, doSpin, onPrize, onInsufficient, updateBanner, onNftClaim, onNftLater };
+  return { show, doSpin, onPrize, onInsufficient, updateBanner, refresh, onNftClaim, onNftLater };
 })();
 
 
@@ -8922,14 +9170,14 @@ const Xp = (() => {
 
   const LEVEL_REWARDS = {
     2:  { type: 'bundle', value: { coins: 75, boosters: 1 }, iconSrc: '/game/ui-icons/starter-pack.png', label: '+75 coins + booster' },
-    3:  { type: 'skin',  value: 'skin_street_runner', sprite: '/game/chars/street_runner.png', label: 'Street Runner unlocked!' },
+    3:  { type: 'skin',  value: 'skin_street_runner', sprite: '/game/chars/street_runner.png', label: 'City Runner unlocked!' },
     5:  { type: 'bundle', value: { container: 'focus_chest' }, iconSrc: '/game/ui-icons/fragments.png', label: 'Focus Chest' },
     7:  { type: 'trail', value: 'trail_sparkle', sprite: '/nft/images/trail_sparkle.png', label: 'Sparkle Trail unlocked!' },
     10: { type: 'bundle', value: { container: 'rare_crate' }, iconSrc: '/game/ui-icons/starter-pack.png', label: 'Rare Crate' },
     12: { type: 'trail', value: 'trail_hearts',  sprite: '/nft/images/trail_hearts.png',  label: 'Hearts Trail unlocked!' },
     15: { type: 'bundle', value: { coins: 120, fragments: 8 }, iconSrc: '/game/ui-icons/fragments.png', label: '+120 coins + 8 fragments' },
     18: { type: 'trail', value: 'trail_fire',    sprite: '/nft/images/trail_fire.png',    label: 'Fire Trail unlocked!' },
-    20: { type: 'skin',  value: 'skin_founder',  sprite: '/game/chars/founder.png',       label: 'Founder unlocked!' },
+    20: { type: 'skin',  value: 'skin_founder',  sprite: '/game/chars/founder.png',       label: 'Vitalik Buterin unlocked!' },
     25: { type: 'bundle', value: { container: 'epic_crate' }, iconSrc: '/game/ui-icons/starter-pack.png', label: 'Epic Crate' },
     30: { type: 'bundle', value: { container: 'legendary_crate' }, iconSrc: '/game/ui-icons/crown.png', label: 'Legendary Crate' },
     35: { type: 'bundle', value: { container: 'legendary_focus_bundle' }, iconSrc: '/game/ui-icons/crown.png', label: 'Legendary Focus Bundle' },
@@ -9069,9 +9317,18 @@ const Xp = (() => {
     const lvlEl  = document.getElementById('xp-level-display');
     const numEl  = document.getElementById('xp-nums');
     const fillEl = document.getElementById('xp-bar-fill');
+    const passportLevelEl = document.getElementById('profile-passport-level');
+    const nextUnlockEl = document.getElementById('profile-next-unlock-value');
     if (lvlEl)  lvlEl.textContent  = `Lv.${level}`;
     if (numEl)  numEl.textContent  = `${xpInLevel} / ${needed} XP`;
     if (fillEl) fillEl.style.width = `${pct}%`;
+    if (passportLevelEl) passportLevelEl.textContent = `LV.${level}`;
+    if (nextUnlockEl) {
+      const nextLevel = Object.keys(LEVEL_REWARDS).map(Number).sort((a, b) => a - b).find((milestone) => milestone > level);
+      nextUnlockEl.textContent = nextLevel
+        ? `Lv.${nextLevel} · ${LEVEL_REWARDS[nextLevel].label}`
+        : 'All milestone rewards unlocked';
+    }
     _updateBadge(level);
   }
 
@@ -9111,7 +9368,7 @@ const Xp = (() => {
       const labelHtml = r.type === 'bundle'
         ? RewardEconomy.labelHtml(r.value)
         : r.type === 'coins'
-          ? RewardEconomy.currencyHtml('coins', r.value, 'Coins')
+          ? RewardEconomy.currencyHtml('coins', r.value)
           : _escapeHtml(r.label);
       html += `
         <div class="${cls}">
@@ -9217,6 +9474,19 @@ function menuLoop(timestamp, gen) {
   Renderer.draw(dt);
 
   requestAnimationFrame((ts) => menuLoop(ts, gen));
+}
+
+// Canonical "return to the home menu". Guarantees currentState is MENU and the
+// menu background loop is live, from any screen. When coming from a non-MENU
+// state (gameplay / game over) the stale gameLoop keeps drawing a frozen world;
+// bumping into initMenuBackground supersedes it (via _loopGen) and restarts the
+// menu loop. When already on the menu, the running loop and its scrolling scene
+// are left untouched (no scene reset / no double loop).
+function goToMenu() {
+  const wasMenu = currentState === GameState.MENU;
+  currentState = GameState.MENU;
+  if (typeof UI !== 'undefined') UI.show('menu');
+  if (!wasMenu) initMenuBackground();
 }
 
 // ===== ИНИЦИАЛИЗАЦИЯ ИГРЫ =====
@@ -9393,7 +9663,7 @@ function _showNextLevelUp() {
       ? (r.type === 'bundle'
         ? RewardEconomy.labelHtml(r.value)
         : r.type === 'coins'
-          ? RewardEconomy.currencyHtml('coins', r.value, 'Coins')
+          ? RewardEconomy.currencyHtml('coins', r.value)
           : _escapeHtml(r.label))
       : '';
   }
@@ -9838,6 +10108,12 @@ function _renderProfile() {
 
   // Booster charges
   if (typeof Shop !== 'undefined') {
+    if (typeof Shop.getCollectionSummary === 'function') {
+      const collection = Shop.getCollectionSummary();
+      if (el('profile-collection-skins')) el('profile-collection-skins').textContent = `${collection.skinsOwned} / ${collection.skinsTotal}`;
+      if (el('profile-collection-trails')) el('profile-collection-trails').textContent = `${collection.trailsOwned} / ${collection.trailsTotal}`;
+      if (el('profile-collection-boosters')) el('profile-collection-boosters').textContent = collection.boosters;
+    }
     for (const key of ['magnet', 'double', 'shield']) {
       const count  = Shop.getBoosterCount(`boost_${key}`);
       const pillEl = el(`profile-boost-${key}`);
@@ -9858,14 +10134,21 @@ async function _loadProfileData(addr) {
   const menuIcon = document.getElementById('menu-profile-icon');
 
   try {
-    const res = await fetch(`/api/resolve-names?addresses=${addr}`);
+    const res = await fetch('/api/resolve-names', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ addresses: [addr] }),
+    });
     const data = await res.json();
-    if (data.names && data.names[addr.toLowerCase()]) {
-      if (nameEl) nameEl.textContent = data.names[addr.toLowerCase()];
+    const entry = (data.results || []).find(r => r.address.toLowerCase() === addr.toLowerCase());
+    if (entry && entry.name) {
+      if (nameEl) nameEl.textContent = entry.name;
     } else {
       if (nameEl) nameEl.textContent = addr.slice(0, 6) + '...' + addr.slice(-4);
     }
-  } catch {}
+  } catch {
+    if (nameEl) nameEl.textContent = addr.slice(0, 6) + '...' + addr.slice(-4);
+  }
 
   // Avatar from Neynar
   try {
@@ -9935,11 +10218,14 @@ function _initUI() {
 
   // Кнопки меню
   _bind('btn-start',   'click', () => Loadout.show());
+  document.querySelectorAll('.hub-home-btn').forEach((button) => {
+    button.addEventListener('click', () => goToMenu());
+  });
   _bind('menu-focus-strip', 'click', () => { Shop.showFocusItem ? Shop.showFocusItem() : Shop.show(); });
   _bind('btn-lb',    'click', () => UI.showLeaderboard());
   // btn-ci removed from profile — check-in is now on the main menu
   _bind('btn-shop',  'click', () => Shop.show());
-  _bind('btn-shop-back', 'click', () => UI.show('menu'));
+  _bind('btn-shop-back', 'click', () => goToMenu());
   _bind('shop-tab-skins',    'click', () => Shop.setTab('skins'));
   _bind('shop-tab-boosters', 'click', () => Shop.setTab('boosters'));
   _bind('shop-tab-trails',   'click', () => Shop.setTab('trails'));
@@ -9956,6 +10242,12 @@ function _initUI() {
 
   // XP rewards sheet — open on tap of XP bar or level label
   _bind('profile-xp-clickable', 'click', () => { if (typeof Xp !== 'undefined') Xp.showRewards(); });
+  _bind('profile-xp-clickable', 'keydown', (event) => {
+    if ((event.key === 'Enter' || event.key === ' ') && typeof Xp !== 'undefined') {
+      event.preventDefault();
+      Xp.showRewards();
+    }
+  });
   _bind('btn-xp-rewards-close', 'click', () => { if (typeof Xp !== 'undefined') Xp.hideRewards(); });
   // Close on backdrop tap
   const xprModal = document.getElementById('xp-rewards-modal');
@@ -9994,7 +10286,7 @@ function _initUI() {
       if (hud)            hud.classList.remove('hidden');
       if (typeof Music !== 'undefined') Music.pause(); // game screens have no music
     } else {
-      UI.show('menu');
+      goToMenu();
     }
   });
 
@@ -10044,11 +10336,7 @@ function _initUI() {
 
   // Кнопки game over
   _bind('btn-restart', 'click', () => Loadout.show());
-  _bind('btn-go-menu', 'click', () => {
-    currentState = GameState.MENU;
-    UI.show('menu');
-    initMenuBackground(); // restart menu RAF loop (it exited when state left MENU)
-  });
+  _bind('btn-go-menu', 'click', () => goToMenu());
   // Coins are auto-synced at game over, no claim button needed
 
   // Onchain score claim (game over) — fires a paymaster tx via the React bridge
@@ -10057,12 +10345,14 @@ function _initUI() {
     if (!btn || btn.disabled || btn.dataset.claimed === '1') return;
     const score = parseInt(btn.dataset.score || '0', 10);
     if (!score || typeof window.__BASE_CLAIM_SCORE !== 'function') return;
+    btn.dataset.claiming = '1';
     btn.disabled = true;
     btn.style.opacity = '0.5';
     btn.textContent = 'CLAIMING...';
     Promise.resolve(window.__BASE_CLAIM_SCORE(score)).catch(() => {
       // send failed to even start — revert to idle so the player can retry
       if (btn.dataset.claimed === '1') return;
+      btn.dataset.claiming = '';
       btn.disabled = false;
       btn.style.opacity = '1';
       btn.textContent = 'CLAIM ONCHAIN';
@@ -10072,9 +10362,23 @@ function _initUI() {
     const btn = document.getElementById('btn-claim-score');
     if (!btn) return;
     btn.dataset.claimed = '1';
+    btn.dataset.claiming = '';
     btn.disabled = true;
     btn.style.opacity = '1';
     btn.textContent = 'CLAIMED';
+  });
+  // Onchain claim in progress — show a "Confirming" status while the tx is
+  // sending / being mined (mirrors check-in & mint). Only acts once a claim has
+  // been started (data-claiming) and hasn't completed yet.
+  window.addEventListener('base-score-claim-state', (e) => {
+    const btn = document.getElementById('btn-claim-score');
+    if (!btn || btn.dataset.claimed === '1' || btn.dataset.claiming !== '1') return;
+    const pending = e.detail && e.detail.isPending;
+    if (pending) {
+      btn.disabled      = true;
+      btn.style.opacity = '0.5';
+      btn.textContent   = '⏳ CONFIRMING...';
+    }
   });
 
   // Continue screen
@@ -10119,7 +10423,6 @@ function _initUI() {
   });
 
   // Кнопки leaderboard
-  _bind('btn-lb-back',     'click', () => UI.show('menu'));
   _bind('btn-lb-personal', 'click', () => Leaderboard.setMode('personal'));
   _bind('btn-lb-global',   'click', () => Leaderboard.setMode('global'));
   _bind('btn-lb-coins',    'click', () => Leaderboard.setMode('coins'));
@@ -10223,30 +10526,34 @@ function _initUI() {
 
     _updateCiBanner();
   });
-  _bind('btn-ci-back', 'click', () => UI.show('menu'));
+  _bind('btn-ci-back', 'click', () => goToMenu());
 
   // Quests
   _bind('btn-quests', 'click', () => { Quests.render(); UI.show('quests'); });
-  _bind('btn-quests-back', 'click', () => UI.show('menu'));
+  _bind('btn-quests-back', 'click', () => goToMenu());
 
   // Quest notify on game over — tap to go to quests
   _bind('go-quest-notify', 'click', () => { Quests.render(); UI.show('quests'); });
 
   // Profile
   _bind('btn-profile', 'click', () => { _renderProfile(); UI.show('profile'); });
-  _bind('btn-profile-back', 'click', () => UI.show('menu'));
+  _bind('btn-profile-back', 'click', () => goToMenu());
 
   // Daily Spin
   _bind('btn-ci-banner', 'click', () => UI.showCheckIn());
   _bind('btn-spin',      'click', () => DailySpin.show());
   _bind('btn-do-spin',       'click', () => DailySpin.doSpin());
-  _bind('btn-spin-back',     'click', () => UI.show('menu'));
+  _bind('btn-spin-back',     'click', () => goToMenu());
   _bind('btn-spin-nft',      'click', () => DailySpin.onNftClaim());
   _bind('btn-spin-nft-later','click', () => DailySpin.onNftLater());
   window.addEventListener('spin-prize',        e => DailySpin.onPrize(e.detail));
   window.addEventListener('spin-insufficient', () => {
     // Abort animation if running, show "not enough coins"
     DailySpin.onInsufficient();
+  });
+  // React hook published fresh spin state — refresh banner / button.
+  window.addEventListener('spin-state', () => {
+    if (typeof DailySpin !== 'undefined') DailySpin.refresh();
   });
 
   // NFT mint events
@@ -10263,6 +10570,13 @@ function _initUI() {
         // Equip via internal method exposed on Shop
         if (Shop._equipPublic) Shop._equipPublic(itemId);
         if (typeof Renderer !== 'undefined') Renderer.reloadPlayerSprite();
+      }
+    }
+    // If it's a trail, auto-equip now that it's unlocked
+    if (itemId.startsWith('trail_') && typeof Shop !== 'undefined') {
+      const trailPacks = Shop.getTrailPacks ? Shop.getTrailPacks() : [];
+      if (trailPacks.includes(itemId) && Shop._equipTrailPublic) {
+        Shop._equipTrailPublic(itemId);
       }
     }
     // Re-render current shop tab

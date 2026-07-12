@@ -13,6 +13,7 @@ type EconomyClaim = {
   source: 'checkin' | 'quest' | 'level';
   questId?: string;
   level?: number;
+  period?: string;
 };
 
 type EconomyResponse = {
@@ -27,6 +28,7 @@ type EconomyResponse = {
     coinsDelta?: number;
     fragmentsDelta?: number;
     boostersDelta?: number;
+    xpDelta?: number;
   };
 };
 

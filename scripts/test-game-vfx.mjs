@@ -1,0 +1,53 @@
+import { readFileSync } from 'node:fs';
+import assert from 'node:assert/strict';
+import vm from 'node:vm';
+
+const gameRuntime = readFileSync(new URL('../public/game/game.js', import.meta.url), 'utf8');
+const moduleStart = gameRuntime.indexOf('const GameVfx = (() => {');
+const rendererStart = gameRuntime.indexOf('/* ===== renderer.js ===== */');
+
+assert.notEqual(moduleStart, -1, 'GameVfx module should exist');
+assert.ok(rendererStart > moduleStart, 'GameVfx should load before Renderer');
+
+const sandbox = {};
+vm.createContext(sandbox);
+vm.runInContext(
+  `${gameRuntime.slice(moduleStart, rendererStart)}\nthis.__GAME_VFX__ = GameVfx;`,
+  sandbox,
+);
+
+const vfx = sandbox.__GAME_VFX__;
+assert.ok(vfx, 'GameVfx should be extractable without DOM globals');
+
+const surfaceCases = [
+  [{ rowType: 'grass', biome: 'default', weatherState: 0, weatherRatio: 0 }, 'grass'],
+  [{ rowType: 'grass', biome: 'desert', weatherState: 0, weatherRatio: 0 }, 'sand'],
+  [{ rowType: 'grass', biome: 'snow', weatherState: 0, weatherRatio: 0 }, 'snow'],
+  [{ rowType: 'road', biome: 'default', weatherState: 0, weatherRatio: 0 }, 'dryRoad'],
+  [{ rowType: 'road', biome: 'default', weatherState: 1, weatherRatio: 0.8 }, 'wetRoad'],
+  [{ rowType: 'road', biome: 'desert', weatherState: 3, weatherRatio: 1 }, 'dryRoad'],
+  [{ rowType: 'water', biome: 'snow', weatherState: 0, weatherRatio: 0 }, 'water'],
+  [{ rowType: 'train', biome: 'default', weatherState: 0, weatherRatio: 0 }, 'railBed'],
+];
+
+for (const [input, expected] of surfaceCases) {
+  assert.equal(vfx.resolveSurface(input).id, expected, JSON.stringify(input));
+}
+
+assert.equal(vfx.getLanding('snow').kind, 'snow');
+assert.equal(vfx.getLanding('wetRoad').kind, 'splash');
+assert.equal(vfx.getSurface('missing').id, 'neutral');
+assert.ok(vfx.priorityOf('impact') > vfx.priorityOf('ambient'));
+
+const pool = vfx.createPool(2);
+assert.ok(pool.spawn({ id: 'rain' }, 'ambient'));
+assert.ok(pool.spawn({ id: 'dust' }, 'contact'));
+assert.equal(pool.spawn({ id: 'extra' }, 'ambient'), null, 'low priority should be dropped');
+assert.ok(pool.spawn({ id: 'hit' }, 'impact'), 'impact should replace a lower priority item');
+assert.equal(pool.stats().active, 2);
+pool.releaseAt(0);
+assert.equal(pool.stats().active, 1);
+pool.clear();
+assert.equal(pool.stats().active, 0);
+
+console.log('game VFX assertions passed');

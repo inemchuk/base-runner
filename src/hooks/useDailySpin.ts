@@ -137,6 +137,9 @@ export function useDailySpin() {
       pendingSpinIdRef.current = spinId;
       return _fetchPrize(address || '0x000000000000000000000000000000000000dead', spinId);
     };
+    // Notify game.js so the menu banner / spin button reflect freshly fetched
+    // state (the async GET resolves after the menu first renders its banner).
+    window.dispatchEvent(new CustomEvent('spin-state'));
     return () => {
       delete spinWindow.__SPIN;
       delete spinWindow.__SPIN_DO;

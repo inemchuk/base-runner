@@ -129,6 +129,9 @@ export function useScoreClaim() {
     const w = window as ScoreClaimWindow;
     w.__BASE_CLAIM_SCORE = claim;
     w.__BASE_SCORE_CLAIM_STATE = { isPending };
+    // Notify game.js so the claim button can show a "Confirming" state while the
+    // tx is sending / being mined (matches the check-in / mint transaction UX).
+    window.dispatchEvent(new CustomEvent('base-score-claim-state', { detail: { isPending } }));
     return () => {
       delete w.__BASE_CLAIM_SCORE;
       delete w.__BASE_SCORE_CLAIM_STATE;

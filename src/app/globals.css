@@ -351,6 +351,9 @@
       position: relative;
       transform: translateZ(0);
       will-change: transform;
+      /* Lock the height so the pending/"Confirming…" state stays the same size as
+         the Claim state (whose reward chips make it taller than the base .btn). */
+      min-height: 46px;
     }
     #btn-do-ci .ci-reward-icon-img {
       width: 22px;
@@ -1042,12 +1045,6 @@
       font-weight: 900;
       font-variant-numeric: tabular-nums;
     }
-    .reward-inline-label {
-      color: rgba(210,225,255,0.62);
-      font-size: 0.88em;
-      font-weight: 800;
-      text-transform: none;
-    }
     .reward-separator {
       color: rgba(210,225,255,0.34);
       margin: 0 4px;
@@ -1191,7 +1188,9 @@
     .ci-compact .ci-streak-row { margin-bottom: 8px; gap: 6px; }
     .ci-compact .ci-streak-num { font-size: clamp(1.4rem, 7vw, 2rem); }
     .ci-compact .ci-streak-lbl { font-size: 0.65rem; }
-    .ci-compact .ci-status-box { padding: 8px 0; }
+    /* Claimed state: the countdown box replaces the Claim button — keep it the
+       exact same footprint (width + height) so it doesn't visually shrink. */
+    .ci-compact .ci-status-box { padding: 8px 0; width: min(280px, 80vw); min-height: 46px; }
     .ci-compact .ci-countdown { font-size: 1.05rem; letter-spacing: 2px; }
     .ci-compact .ci-countdown-label { font-size: 0.58rem; }
 
@@ -1630,15 +1629,15 @@
       min-width: 92px;
     }
     .shop-btn-buy.disabled { opacity: 0.4; cursor: not-allowed; }
-    .shop-btn-claim-equip {
+    .shop-btn-claim-equip, .shop-btn-claim-equip-trail {
       background: rgba(77,143,255,0.12);
       border-color: rgba(77,143,255,0.24);
       color: rgba(190,212,255,0.92);
       font-size: 0.78rem;
       padding: 6px 10px;
     }
-    .shop-btn-claim-equip:active { background: rgba(77,143,255,0.2); }
-    .shop-btn-claim-equip:disabled { opacity: 0.5; cursor: not-allowed; }
+    .shop-btn-claim-equip:active, .shop-btn-claim-equip-trail:active { background: rgba(77,143,255,0.2); }
+    .shop-btn-claim-equip:disabled, .shop-btn-claim-equip-trail:disabled { opacity: 0.5; cursor: not-allowed; }
 
     /* NFT claim row inside shop items */
     .shop-nft-row {
@@ -1859,7 +1858,7 @@
     }
     .quest-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 4px; }
     .quest-name { color: #fff; font-size: 0.88rem; font-weight: 800; letter-spacing: 0.5px; display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
-    .quest-icon-img { width: 16px; height: 16px; flex: 0 0 16px; filter: drop-shadow(0 1px 3px rgba(0,82,255,0.14)); }
+    .quest-icon-img { width: 20px; height: 20px; flex: 0 0 20px; object-fit: contain; image-rendering: pixelated; filter: drop-shadow(0 1px 3px rgba(0,82,255,0.14)); }
     .quest-level {
       color: rgba(136,170,255,0.86);
       font-size: 0.68rem;
@@ -1891,24 +1890,15 @@
     .quest-bar-bg { width: 100%; height: 6px; background: rgba(255,255,255,0.075); border-radius: 3px; overflow: hidden; margin-bottom: 7px; }
     .quest-bar-fill { height: 100%; background: linear-gradient(90deg, #0052FF, #4D8FFF); border-radius: 3px; transition: width 0.3s; }
     .quest-bar-fill.complete { background: linear-gradient(90deg, #00C853, #69F0AE); }
-    .quest-progress { display: flex; justify-content: space-between; align-items: center; }
-    .quest-progress-text { color: rgba(210,225,255,0.5); font-size: 0.7rem; font-weight: 700; }
+    .quest-progress { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    .quest-progress-text { color: rgba(210,225,255,0.5); font-size: 0.7rem; font-weight: 700; white-space: nowrap; }
     .quest-claim-btn {
       background: var(--button-gold); color: #1a0a00; border: 1px solid rgba(255,230,100,0.42); border-radius: 9px;
       padding: 6px 11px; font-size: 0.74rem; font-weight: 900; cursor: pointer;
-      display: inline-flex; align-items: center; gap: 4px; font-family: inherit;
-      letter-spacing: 0.4px;
+      display: inline-flex; align-items: center; justify-content: center; font-family: inherit;
+      min-width: 96px; min-height: 36px; flex: 0 0 auto;
+      letter-spacing: 0.8px; white-space: nowrap; text-transform: uppercase;
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.25);
-    }
-    .quest-claim-btn .quest-reward-label {
-      margin: 0;
-      color: #1a0a00;
-      font-size: 0.72rem;
-      gap: 3px;
-      min-height: 0;
-    }
-    .quest-claim-btn .reward-inline-label {
-      display: none;
     }
     .quest-claim-btn:active { transform: translateY(1px) scale(0.97); }
     .quest-done { color: #69F0AE; font-size: 0.72rem; font-weight: 900; letter-spacing: 0.5px; }
@@ -2572,6 +2562,357 @@
     @media (max-width: 370px) {
       h1.game-title { font-size: 2.58rem; }
       .tab-label { font-size: 0.44rem; }
+    }
+
+    /* ===== RUNNER HUB ===== */
+    .runner-hub-nav {
+      position: fixed;
+      z-index: 45;
+      left: 50%;
+      bottom: max(10px, env(safe-area-inset-bottom, 0px));
+      transform: translateX(-50%);
+      width: min(386px, calc(100vw - 28px));
+      margin: 0;
+      backdrop-filter: none;
+      background: linear-gradient(180deg, rgba(9,17,40,0.985), rgba(4,8,22,0.995));
+      box-shadow: 0 16px 44px rgba(0,0,0,0.48), inset 0 1px 0 rgba(255,255,255,0.08);
+    }
+    .runner-hub-nav .tab-item.tab-current:not(.tab-play) {
+      color: #fff;
+      background: linear-gradient(180deg, rgba(77,143,255,0.2), rgba(0,82,255,0.09));
+      border-color: rgba(77,143,255,0.38);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+    }
+    .runner-hub-nav .tab-current:not(.tab-play) .tab-label { color: #fff; }
+    .runner-hub-nav .tab-current:not(.tab-play) .tab-icon { opacity: 1; transform: translateY(-1px); }
+    #screen-menu { padding-bottom: max(104px, calc(94px + env(safe-area-inset-bottom, 0px))); }
+    .runner-hub-scroll {
+      width: 100%;
+      touch-action: pan-y;
+      padding: max(28px, calc(env(safe-area-inset-top, 0px) + 18px)) 16px max(126px, calc(116px + env(safe-area-inset-bottom, 0px)));
+    }
+    .hub-screen-heading {
+      width: min(360px, 92vw);
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      align-items: flex-end;
+      gap: 11px;
+      margin: 0 0 16px;
+    }
+    .hub-home-btn {
+      min-height: 34px;
+      align-self: end;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 7px 9px;
+      border: 1px solid rgba(136,170,255,0.2);
+      border-radius: 9px;
+      background: rgba(7,15,36,0.74);
+      color: rgba(210,225,255,0.72);
+      font-family: inherit;
+      font-size: 0.54rem;
+      font-weight: 900;
+      letter-spacing: 0.8px;
+      cursor: pointer;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+      transition: color 0.12s, border-color 0.12s, background 0.12s, transform 0.12s;
+    }
+    .hub-home-btn:active {
+      transform: translateY(1px);
+      color: #fff;
+      border-color: rgba(77,143,255,0.4);
+      background: rgba(0,82,255,0.13);
+    }
+    .hub-home-btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+    .hub-eyebrow {
+      display: block;
+      color: rgba(136,170,255,0.66);
+      font-size: 0.58rem;
+      line-height: 1;
+      font-weight: 900;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 7px;
+    }
+    .hub-title {
+      color: #fff;
+      font-size: clamp(1.6rem, 7vw, 2.15rem);
+      line-height: 0.9;
+      letter-spacing: 3px;
+      font-weight: 900;
+    }
+    .hub-status-chip {
+      padding: 6px 8px;
+      border: 1px solid rgba(77,143,255,0.28);
+      border-radius: 7px;
+      color: rgba(160,190,255,0.86);
+      background: rgba(0,82,255,0.09);
+      font-size: 0.55rem;
+      font-weight: 900;
+      letter-spacing: 1.2px;
+    }
+    .hub-status-live {
+      color: #69F0AE;
+      border-color: rgba(105,240,174,0.3);
+      background: rgba(105,240,174,0.07);
+    }
+
+    /* Shop: the equipped runner is the visual anchor, catalog stays functional below. */
+    .shop-screen-body { align-items: center; }
+    .shop-balance-pill {
+      min-height: 36px;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 7px 11px;
+      border-radius: 10px;
+      background: rgba(255,215,0,0.08);
+      border: 1px solid rgba(255,215,0,0.25);
+      color: #FFD700;
+      font-size: 0.88rem;
+      font-weight: 900;
+      font-variant-numeric: tabular-nums;
+    }
+    .shop-balance-pill img { width: 21px; height: 21px; object-fit: contain; }
+    .shop-runner-stage {
+      position: relative;
+      isolation: isolate;
+      width: min(360px, 92vw);
+      height: 174px;
+      min-height: 174px;
+      max-height: 174px;
+      flex: 0 0 174px;
+      overflow: hidden;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 138px;
+      align-items: center;
+      border: 1px solid rgba(77,143,255,0.28);
+      border-radius: 18px;
+      background:
+        linear-gradient(115deg, rgba(8,21,54,0.98) 0 54%, rgba(0,82,255,0.19) 54% 100%),
+        #071028;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 18px 36px rgba(0,0,0,0.22);
+      padding: 20px 14px 18px 18px;
+      margin-bottom: 20px;
+    }
+    .shop-stage-lane {
+      position: absolute;
+      z-index: -1;
+      inset: auto -12px -58px 45%;
+      height: 146px;
+      transform: perspective(170px) rotateX(63deg);
+      border-top: 1px solid rgba(255,255,255,0.16);
+      background: repeating-linear-gradient(90deg, transparent 0 30px, rgba(255,255,255,0.12) 31px 33px);
+      opacity: 0.68;
+    }
+    .shop-stage-copy { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; }
+    .shop-stage-kicker {
+      color: #4D8FFF;
+      font-size: 0.56rem;
+      font-weight: 900;
+      letter-spacing: 1.6px;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    .shop-stage-copy strong {
+      color: #fff;
+      font-size: 1rem;
+      line-height: 1.15;
+      letter-spacing: 0.4px;
+      margin-bottom: 7px;
+    }
+    .shop-stage-copy > span:last-child { color: rgba(210,225,255,0.52); font-size: 0.64rem; line-height: 1.35; }
+    #shop-stage-preview {
+      align-self: end;
+      justify-self: center;
+      width: 126px;
+      height: 136px;
+      object-fit: contain;
+      filter: drop-shadow(0 14px 14px rgba(0,0,0,0.42));
+    }
+    .shop-stage-status {
+      position: absolute;
+      right: 11px;
+      top: 10px;
+      color: #69F0AE;
+      font-size: 0.52rem;
+      font-weight: 900;
+      letter-spacing: 1.4px;
+    }
+    .shop-stage-status::before { content: ''; display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: currentColor; margin-right: 5px; }
+    .shop-catalog-head {
+      width: min(360px, 92vw);
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
+      margin-bottom: 9px;
+    }
+    .shop-catalog-head > span { color: #fff; font-size: 0.74rem; font-weight: 900; letter-spacing: 1.5px; text-transform: uppercase; }
+    .shop-catalog-head small { color: rgba(210,225,255,0.38); font-size: 0.54rem; text-align: right; }
+    .shop-tabs { display: flex; width: min(360px, 92vw); margin-bottom: 12px; }
+    #shop-items { width: min(360px, 92vw); gap: 9px; }
+    .shop-item { border-radius: 13px; padding: 11px 12px; }
+    .shop-item-equipped { box-shadow: inset 3px 0 0 #FFD700, inset 0 1px 0 rgba(255,255,255,0.055); }
+
+    /* Profile: identity and performance stay prominent; activity becomes Career. */
+    .profile-scroll { padding-top: max(28px, calc(env(safe-area-inset-top, 0px) + 18px)); }
+    .profile-header,
+    .profile-xp,
+    .profile-stats,
+    .profile-career,
+    .profile-collection,
+    .profile-boosters,
+    .profile-equipped { width: min(360px, 92vw); }
+    .profile-passport {
+      position: relative;
+      min-height: 82px;
+      border-radius: 15px;
+      margin-bottom: 10px;
+      background:
+        linear-gradient(105deg, rgba(13,29,67,0.96), rgba(6,13,31,0.94)),
+        var(--surface-arcade);
+      border-color: rgba(77,143,255,0.28);
+    }
+    .profile-passport::after {
+      content: '';
+      position: absolute;
+      right: 12px;
+      bottom: 10px;
+      width: 48px;
+      height: 3px;
+      border-radius: 2px;
+      background: repeating-linear-gradient(90deg, #4D8FFF 0 4px, transparent 4px 7px);
+      opacity: 0.38;
+    }
+    .profile-avatar { width: 58px; height: 58px; border-radius: 13px; }
+    .profile-passport-label { color: rgba(136,170,255,0.62); font-size: 0.52rem; font-weight: 900; letter-spacing: 1.4px; text-transform: uppercase; }
+    .profile-passport-level {
+      align-self: flex-start;
+      color: #fff;
+      background: rgba(0,82,255,0.16);
+      border: 1px solid rgba(77,143,255,0.3);
+      border-radius: 8px;
+      padding: 5px 7px;
+      font-size: 0.58rem;
+      font-weight: 900;
+      letter-spacing: 1px;
+    }
+    .profile-xp {
+      margin-bottom: 12px;
+      padding: 12px 13px 11px;
+      border: 1px solid rgba(167,139,250,0.2);
+      border-radius: 13px;
+      background: rgba(15,12,38,0.52);
+    }
+    .profile-next-unlock {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 8px;
+      margin-top: 9px;
+    }
+    .profile-next-unlock-label { color: rgba(167,139,250,0.66); font-size: 0.54rem; font-weight: 900; letter-spacing: 1px; text-transform: uppercase; }
+    .profile-next-unlock-value { color: rgba(255,255,255,0.78); font-size: 0.62rem; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    .profile-performance { grid-template-columns: repeat(3, 1fr); gap: 7px; margin-bottom: 14px; }
+    .profile-performance .profile-stat { min-width: 0; padding: 11px 5px 10px; border-radius: 11px; }
+    .profile-performance .profile-stat-rank { grid-column: auto; background: linear-gradient(180deg, rgba(35,28,10,0.76), rgba(12,12,22,0.78)); }
+    .profile-performance .profile-stat-value,
+    .profile-performance .profile-stat-rank .profile-stat-value { font-size: 1rem; }
+    .profile-performance .profile-stat-label { font-size: 0.5rem; letter-spacing: 0.45px; }
+    .profile-career,
+    .profile-collection { margin: 2px 0 14px; }
+    .profile-section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 8px; padding: 0 2px; }
+    .profile-section-head .profile-section-title { margin: 0; }
+    .profile-section-meta { color: rgba(210,225,255,0.34); font-size: 0.52rem; }
+    .career-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      border: 1px solid var(--surface-line);
+      border-radius: 12px;
+      overflow: hidden;
+      background: linear-gradient(180deg, var(--surface-arcade-strong), var(--surface-arcade));
+    }
+    .career-stat { min-width: 0; padding: 10px 4px; text-align: center; border-right: 1px solid var(--surface-line); }
+    .career-stat:last-child { border-right: 0; }
+    .career-stat span { display: block; color: #fff; font-size: 0.84rem; font-weight: 900; overflow: hidden; text-overflow: ellipsis; }
+    .career-stat small { color: rgba(210,225,255,0.42); font-size: 0.48rem; text-transform: uppercase; letter-spacing: 0.4px; }
+    .profile-collection-rail {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 7px;
+    }
+    .profile-collection-rail > div {
+      padding: 10px 8px;
+      border-radius: 11px;
+      border: 1px solid rgba(77,143,255,0.16);
+      background: rgba(7,15,36,0.72);
+      text-align: left;
+    }
+    .profile-collection-rail span { display: block; color: #4D8FFF; font-size: 0.78rem; font-weight: 900; margin-bottom: 2px; }
+    .profile-collection-rail small { color: rgba(210,225,255,0.42); font-size: 0.52rem; text-transform: uppercase; }
+
+    /* Quests: short rotations first, long-term progression remains below. */
+    .quests-screen-body { align-items: center; }
+    .leaderboard-screen-body { align-items: center; }
+    .leaderboard-screen-body .lb-tabs,
+    .leaderboard-screen-body #lb-list { width: min(360px, 92vw) !important; }
+    .quest-group { width: min(360px, 92vw); margin-bottom: 18px; }
+    .quest-group-head {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 0 2px 8px;
+    }
+    .quest-group-head > div { display: flex; flex-direction: column; gap: 3px; }
+    .quest-group-kicker { color: #4D8FFF; font-size: 0.52rem; font-weight: 900; letter-spacing: 1.5px; text-transform: uppercase; }
+    .quest-group-weekly .quest-group-kicker { color: #A78BFA; }
+    .quest-group-career .quest-group-kicker { color: #FFD700; }
+    .quest-group-head strong { color: #fff; font-size: 0.76rem; letter-spacing: 0.4px; }
+    .quest-reset { color: rgba(210,225,255,0.38); font-size: 0.52rem; white-space: nowrap; }
+    .quest-list { display: flex; flex-direction: column; gap: 8px; }
+    .quest-card { border-radius: 12px; padding: 11px 12px; }
+    .quest-card-daily { border-left: 3px solid rgba(77,143,255,0.6); }
+    .quest-card-weekly { border-left: 3px solid rgba(167,139,250,0.62); }
+    .quest-card-career { border-left: 3px solid rgba(255,215,0,0.34); }
+    .quest-card-complete { opacity: 0.62; }
+    .quest-card .quest-reward-label { min-height: 20px; }
+
+    .tab-item:focus-visible,
+    .shop-tab:focus-visible,
+    .shop-btn:focus-visible,
+    .quest-claim-btn:focus-visible,
+    .equipped-arrow:focus-visible,
+    .profile-xp:focus-visible {
+      outline: 2px solid #fff;
+      outline-offset: 2px;
+    }
+
+    @media (max-height: 720px) {
+      #screen-menu { padding-bottom: max(94px, calc(86px + env(safe-area-inset-bottom, 0px))); }
+      .runner-hub-nav { bottom: max(6px, env(safe-area-inset-bottom, 0px)); }
+      .runner-hub-scroll { padding-top: max(18px, calc(env(safe-area-inset-top, 0px) + 10px)); }
+      .shop-runner-stage { height: 152px; min-height: 152px; max-height: 152px; flex-basis: 152px; }
+      #shop-stage-preview { height: 114px; }
+    }
+
+    @media (max-width: 370px) {
+      .runner-hub-nav { width: calc(100vw - 18px); }
+      .shop-runner-stage { grid-template-columns: minmax(0, 1fr) 116px; height: 158px; min-height: 158px; max-height: 158px; flex-basis: 158px; }
+      #shop-stage-preview { width: 108px; height: 120px; }
+      .career-stat span { font-size: 0.74rem; }
+      .career-stat small { font-size: 0.43rem; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .tab-item,
+      .shop-item,
+      .profile-xp-fill,
+      .quest-bar-fill,
+      .equipped-arrow { transition: none !important; }
+      .quest-notify { animation: none !important; }
     }
 
     /* Wheel */

@@ -115,6 +115,19 @@ function mergeLegacyQuests(server: QuestState, legacyInput: unknown): QuestState
       claimed: next[def.id].claimed.map((claimed, i) => Boolean(claimed || legacy[def.id].claimed[i])),
     };
   }
+  for (const scope of ['daily', 'weekly'] as const) {
+    if (legacy[scope].period !== next[scope].period) continue;
+    next[scope].entries = next[scope].entries.map((entry) => {
+      const localEntry = legacy[scope].entries.find((candidate) => candidate.id === entry.id);
+      return localEntry
+        ? {
+            ...entry,
+            progress: Math.max(entry.progress, localEntry.progress),
+            claimed: entry.claimed || localEntry.claimed,
+          }
+        : entry;
+    });
+  }
   return normalizeQuestState(next);
 }
 

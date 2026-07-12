@@ -55,9 +55,12 @@ assert.match(gameRuntime, /function _buildSurfaceTile\(surfaceId\)/);
 assert.match(gameRuntime, /function _drawSurfaceTexture\(row, y\)/);
 assert.match(gameRuntime, /_drawSurfaceTexture\(row, y\);/);
 assert.doesNotMatch(gameRuntime, /ctx\.filter\s*=\s*['"]blur/);
+assert.match(gameRuntime, /const SURFACE_TEXTURE_PROFILE = Object\.freeze\(/);
+assert.match(gameRuntime, /grass: Object\.freeze\(\{ blades: 180, patches: 22/);
 
 assert.match(gameRuntime, /function drawGroundShadow\(x, y, width, height, options = \{\}\)/);
 assert.match(gameRuntime, /const _shadowSpriteCache = new Map\(\)/);
+assert.match(gameRuntime, /const contactAlpha = Math\.min\(0\.46, alpha \* 1\.65\)/);
 
 for (const functionName of ['drawEnvSprite', 'drawCars', 'drawLogs', 'drawTrainSprite', 'drawPlayer']) {
   const start = gameRuntime.indexOf(`function ${functionName}`);

@@ -2855,6 +2855,11 @@ const Renderer = (() => {
   // Transparent, deterministic detail tiles: the row palette remains the source
   // of truth and these overlays only add restrained material character.
   let _surfaceTiles = null;
+  const SURFACE_TEXTURE_PROFILE = Object.freeze({
+    grass: Object.freeze({ blades: 180, patches: 22, alpha: 0.96 }),
+    sand: Object.freeze({ grains: 210, ripples: 14, alpha: 0.92 }),
+    snow: Object.freeze({ drifts: 34, crystals: 72, alpha: 0.86 }),
+  });
 
   function _dominantBiome(bi) {
     return bi && bi.blendT > 0.5 && bi.nextBiome ? bi.nextBiome : (bi && bi.biome) || 'default';
@@ -2877,43 +2882,69 @@ const Renderer = (() => {
   }
 
   function _buildSurfaceTile(surfaceId) {
-    const size = 96;
+    const width = COLS * CELL;
+    const height = CELL;
     const c = typeof OffscreenCanvas !== 'undefined'
-      ? new OffscreenCanvas(size, size)
-      : (() => { const canvas = document.createElement('canvas'); canvas.width = canvas.height = size; return canvas; })();
+      ? new OffscreenCanvas(width, height)
+      : (() => { const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height; return canvas; })();
     const g = c.getContext('2d');
+    const profile = SURFACE_TEXTURE_PROFILE[surfaceId];
 
     if (surfaceId === 'grass') {
-      for (let i = 0; i < 34; i++) {
-        const x = _tileRand(i, 1) * size;
-        const y = _tileRand(i, 2) * size;
-        const h = 2 + _tileRand(i, 3) * 4;
-        g.strokeStyle = i % 3 === 0 ? 'rgba(205,235,170,0.12)' : 'rgba(20,75,34,0.16)';
-        g.lineWidth = 0.7;
+      for (let i = 0; i < profile.patches; i++) {
+        const x = _tileRand(i, 41) * width;
+        const y = _tileRand(i, 42) * height;
+        const rx = 9 + _tileRand(i, 43) * 22;
+        g.fillStyle = i % 3 === 0 ? 'rgba(170,218,112,0.13)' : 'rgba(24,88,38,0.14)';
         g.beginPath();
-        g.moveTo(x, y + h);
-        g.lineTo(x + (_tileRand(i, 4) - 0.5) * 2, y);
+        g.ellipse(x, y, rx, 2 + _tileRand(i, 44) * 4, _tileRand(i, 45) * Math.PI, 0, Math.PI * 2);
+        g.fill();
+      }
+      for (let i = 0; i < profile.blades; i++) {
+        const x = _tileRand(i, 1) * width;
+        const y = _tileRand(i, 2) * height;
+        const bladeHeight = 3 + _tileRand(i, 3) * 7;
+        g.strokeStyle = i % 4 === 0 ? 'rgba(202,236,139,0.30)' : 'rgba(18,75,31,0.34)';
+        g.lineWidth = i % 5 === 0 ? 1.15 : 0.9;
+        g.beginPath();
+        g.moveTo(x, y + bladeHeight);
+        g.lineTo(x + (_tileRand(i, 4) - 0.5) * 3, y);
         g.stroke();
       }
     } else if (surfaceId === 'sand') {
-      for (let i = 0; i < 42; i++) {
-        const x = _tileRand(i, 5) * size;
-        const y = _tileRand(i, 6) * size;
-        const r = 0.35 + _tileRand(i, 7) * 0.8;
-        g.fillStyle = i % 4 === 0 ? 'rgba(255,238,184,0.20)' : 'rgba(114,76,31,0.12)';
+      for (let i = 0; i < profile.ripples; i++) {
+        const x = _tileRand(i, 51) * width;
+        const y = _tileRand(i, 52) * height;
+        g.strokeStyle = 'rgba(130,92,42,0.16)';
+        g.lineWidth = 0.8;
+        g.beginPath();
+        g.ellipse(x, y, 14 + _tileRand(i, 53) * 22, 1.3 + _tileRand(i, 54) * 1.8, 0, Math.PI * 1.08, Math.PI * 1.92);
+        g.stroke();
+      }
+      for (let i = 0; i < profile.grains; i++) {
+        const x = _tileRand(i, 5) * width;
+        const y = _tileRand(i, 6) * height;
+        const r = 0.45 + _tileRand(i, 7) * 0.95;
+        g.fillStyle = i % 4 === 0 ? 'rgba(255,238,184,0.28)' : 'rgba(114,76,31,0.22)';
         g.beginPath();
         g.arc(x, y, r, 0, Math.PI * 2);
         g.fill();
       }
     } else if (surfaceId === 'snow') {
-      for (let i = 0; i < 24; i++) {
-        const x = _tileRand(i, 8) * size;
-        const y = _tileRand(i, 9) * size;
+      for (let i = 0; i < profile.drifts; i++) {
+        const x = _tileRand(i, 8) * width;
+        const y = _tileRand(i, 9) * height;
         const rx = 2 + _tileRand(i, 10) * 5;
-        g.fillStyle = i % 3 === 0 ? 'rgba(255,255,255,0.20)' : 'rgba(95,125,170,0.10)';
+        g.fillStyle = i % 3 === 0 ? 'rgba(255,255,255,0.30)' : 'rgba(95,125,170,0.18)';
         g.beginPath();
-        g.ellipse(x, y, rx, rx * 0.28, -0.25, 0, Math.PI * 2);
+        g.ellipse(x, y, rx * 1.7, rx * 0.34, -0.25, 0, Math.PI * 2);
         g.fill();
+      }
+      g.fillStyle = 'rgba(255,255,255,0.34)';
+      for (let i = 0; i < profile.crystals; i++) {
+        const x = _tileRand(i, 61) * width;
+        const y = _tileRand(i, 62) * height;
+        g.fillRect(x, y, 1, 1);
       }
     }
     return c;
@@ -2931,7 +2962,7 @@ const Renderer = (() => {
     }
     const tile = _surfaceTiles[surfaceId];
     ctx.save();
-    ctx.globalAlpha = surfaceId === 'snow' ? 0.65 : 0.78;
+    ctx.globalAlpha = SURFACE_TEXTURE_PROFILE[surfaceId].alpha;
     for (let x = 0; x < COLS * CELL; x += tile.width) {
       ctx.drawImage(tile, x, y, tile.width, CELL);
     }
@@ -2967,15 +2998,16 @@ const Renderer = (() => {
     const lift = Math.max(0, Math.min(1, options.lift || 0));
     const lightningFade = 1 - Math.min(lightningFlash, 1) * 0.45;
     const alpha = (options.alpha ?? style.shadowAlpha) * (1 - lift * 0.48) * lightningFade;
+    const contactAlpha = Math.min(0.46, alpha * 1.65);
     const offsetX = options.offsetX ?? width * 0.08;
     const offsetY = options.offsetY ?? height * 0.16;
     const sprite = _shadowSprite(surfaceId);
 
     ctx.save();
-    ctx.globalAlpha = alpha * 0.55;
+    ctx.globalAlpha = alpha * 0.72;
     ctx.drawImage(sprite, x - width * 0.5 + offsetX, y - height * 0.5 + offsetY, width, height);
     if (options.contact !== false) {
-      ctx.globalAlpha = alpha;
+      ctx.globalAlpha = contactAlpha;
       ctx.drawImage(sprite, x - width * 0.34, y - height * 0.24, width * 0.68, height * 0.48);
     }
     ctx.restore();

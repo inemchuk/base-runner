@@ -66,4 +66,12 @@ for (const functionName of ['drawEnvSprite', 'drawCars', 'drawLogs', 'drawTrainS
   assert.match(gameRuntime.slice(start, end === -1 ? undefined : end), /drawGroundShadow\(/, `${functionName} should use ground shadows`);
 }
 
+assert.match(gameRuntime, /function addLandingEffect\(x, y, rowIdx\)/);
+assert.match(gameRuntime, /Renderer\.addLandingEffect\(state\.visualX, state\.visualY, state\.row\)/);
+assert.match(gameRuntime, /function drawPhysicalTrails\(\)/);
+assert.match(gameRuntime, /function drawLogWake\(log, rowY\)/);
+assert.match(gameRuntime, /function drawPropContact\(type, cx, baseY, surfaceId\)/);
+assert.match(gameRuntime, /function drawVehicleContact\(row, rowY, car\)/);
+assert.match(gameRuntime, /function drawTrainContact\(train, rowY, dir\)/);
+
 console.log('game VFX assertions passed');

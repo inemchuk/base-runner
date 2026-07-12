@@ -1984,9 +1984,8 @@ const Player = (() => {
         state.visualX = state.jumpTo.x;
         state.visualY = World.rowToY(state.row) + CELL / 2;
         // Leave a footprint on landing
-        if (typeof Renderer !== 'undefined' && Renderer.addTrail) {
-          const row = World.getRow(state.row);
-          Renderer.addTrail(state.visualX, state.visualY, row ? row.type : 'grass');
+        if (typeof Renderer !== 'undefined' && Renderer.addLandingEffect) {
+          Renderer.addLandingEffect(state.visualX, state.visualY, state.row);
         }
       }
     }
@@ -2509,6 +2508,7 @@ const Renderer = (() => {
   // Surface-aware (default): 'footprint' (grass) | 'dust' (road/train) | 'ripple' (water/log)
   // Custom (shop variant):   'sparkle' | 'hearts' | 'fire' | 'coins' | 'rainbow'
   const trails = [];
+  const physicalFxPool = GameVfx.createPool(96);
   const TRAIL_LIFE = {
     footprint: 0.75,
     dust:      0.55,
@@ -2979,6 +2979,32 @@ const Renderer = (() => {
     ctx.restore();
   }
 
+  function drawPropContact(type, cx, baseY, surfaceId) {
+    ctx.save();
+    if (surfaceId === 'snow') {
+      ctx.fillStyle = 'rgba(246,250,255,0.76)';
+      ctx.beginPath();
+      ctx.ellipse(cx, baseY, CELL * 0.20, CELL * 0.045, 0, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (surfaceId === 'sand') {
+      ctx.strokeStyle = 'rgba(118,79,35,0.25)';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.ellipse(cx, baseY, CELL * 0.18, CELL * 0.04, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    } else if (surfaceId === 'grass' && type !== 'rock') {
+      ctx.strokeStyle = 'rgba(27,78,35,0.35)';
+      ctx.lineWidth = 1;
+      for (let i = -2; i <= 2; i++) {
+        ctx.beginPath();
+        ctx.moveTo(cx + i * CELL * 0.045, baseY);
+        ctx.lineTo(cx + i * CELL * 0.04, baseY - CELL * (0.035 + Math.abs(i) * 0.004));
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
   // Environment sprite images
   const _ENV_SPRITES = {};
   const _ENV_SPRITE_SRCS = {
@@ -3050,6 +3076,7 @@ const Renderer = (() => {
       offsetX: CELL * (tallCaster ? 0.10 : 0.04),
       offsetY: CELL * 0.02,
     });
+    drawPropContact(type, cx, baseY, surfaceId);
     // Sprite: image bottom sits at baseY
     ctx.drawImage(img, cx - size / 2, baseY - size, size, size);
     return true;
@@ -3446,6 +3473,7 @@ const Renderer = (() => {
     // Set current biome for global elements (sky)
     _currentBiomeInfo = World.getBiomeForRow(Player.getState().row);
     drawRows();
+    drawPhysicalTrails();
     drawTrails();
     drawPlayer();
     drawShieldBursts(dt_approx);
@@ -3721,6 +3749,7 @@ const Renderer = (() => {
   function drawBush(cx, cy, bi, surfaceId) {
     const r = CELL * 0.3;
     drawGroundShadow(cx, cy + r * 0.9, r * 1.8, r * 0.56, { surfaceId, offsetX: CELL * 0.04, offsetY: 0 });
+    drawPropContact('bush', cx, cy + r * 0.9, surfaceId);
     const clusters = [
       {dx:  0,   dy: -r*0.1, r: r * 0.72},
       {dx: -r*0.45, dy:  r*0.15, r: r * 0.55},
@@ -3746,6 +3775,7 @@ const Renderer = (() => {
   function drawTree(cx, cy, bi, surfaceId) {
     const r = CELL * 0.32;
     drawGroundShadow(cx, cy + r * 0.7, r * 1.9, r * 0.60, { surfaceId, offsetX: CELL * 0.10, offsetY: CELL * 0.02 });
+    drawPropContact('tree', cx, cy + r * 0.7, surfaceId);
     const trunkW = r * 0.32, trunkH = r * 0.55;
     ctx.fillStyle = dcBiome('trunk', bi);
     ctx.fillRect(cx - trunkW/2, cy + r*0.15, trunkW, trunkH);
@@ -3771,6 +3801,7 @@ const Renderer = (() => {
   function drawRock(cx, cy, bi, surfaceId) {
     const rw = CELL * 0.3, rh = CELL * 0.22;
     drawGroundShadow(cx, cy + rh * 0.9, rw * 1.8, rh * 0.70, { surfaceId, offsetX: CELL * 0.03, offsetY: 0 });
+    drawPropContact('rock', cx, cy + rh * 0.9, surfaceId);
     ctx.fillStyle = dcBiome('rockDk', bi);
     ctx.beginPath();
     ctx.ellipse(cx, cy, rw, rh, 0, 0, Math.PI * 2);
@@ -3781,6 +3812,7 @@ const Renderer = (() => {
   function drawCactus(cx, cy, bi, surfaceId) {
     const h = CELL * 0.6, w = CELL * 0.12;
     drawGroundShadow(cx, cy + h * 0.35, w * 5, h * 0.22, { surfaceId, offsetX: CELL * 0.10, offsetY: CELL * 0.02 });
+    drawPropContact('cactus', cx, cy + h * 0.35, surfaceId);
     // Main trunk
     ctx.fillStyle = dcBiome('treeMd', bi);
     roundRect(ctx, cx - w/2, cy - h * 0.35, w, h, w/2);
@@ -3807,6 +3839,7 @@ const Renderer = (() => {
   function drawTumbleweed(cx, cy, bi, surfaceId) {
     const r = CELL * 0.2;
     drawGroundShadow(cx, cy + r * 0.7, r * 1.7, r * 0.50, { surfaceId, offsetX: CELL * 0.05, offsetY: 0 });
+    drawPropContact('tumbleweed', cx, cy + r * 0.7, surfaceId);
     // Body
     ctx.fillStyle = dcBiome('trunk', bi);
     ctx.beginPath();
@@ -3832,6 +3865,7 @@ const Renderer = (() => {
   function drawPine(cx, cy, bi, surfaceId) {
     const h = CELL * 0.55, w = CELL * 0.38;
     drawGroundShadow(cx, cy + h * 0.35, w * 1.2, h * 0.16, { surfaceId, offsetX: CELL * 0.10, offsetY: CELL * 0.02 });
+    drawPropContact('pine', cx, cy + h * 0.35, surfaceId);
     // Trunk
     const trunkW = CELL * 0.08, trunkH = CELL * 0.12;
     ctx.fillStyle = dcBiome('trunk', bi);
@@ -3864,6 +3898,7 @@ const Renderer = (() => {
   // ── Snowman: three stacked circles (snow) ──────────────────
   function drawSnowman(cx, cy, bi, surfaceId) {
     drawGroundShadow(cx, cy + CELL * 0.22, CELL * 0.44, CELL * 0.12, { surfaceId, offsetX: CELL * 0.03, offsetY: 0 });
+    drawPropContact('snowman', cx, cy + CELL * 0.22, surfaceId);
     // Bottom ball
     ctx.fillStyle = '#F0F0F5';
     ctx.beginPath();
@@ -3916,6 +3951,25 @@ const Renderer = (() => {
     ctx.setLineDash([]);
   }
 
+  function drawVehicleContact(row, rowY, car) {
+    if (_surfaceForRow(row).id !== 'wetRoad') return;
+    const direction = Math.sign(car.speed || 1);
+    const rearX = direction > 0 ? car.x + car.width * 0.18 : car.x + car.width * 0.82;
+    const wheelY = rowY + CELL * 0.68;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(175,210,232,0.26)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 3; i++) {
+      const spread = CELL * (0.04 + i * 0.025);
+      ctx.globalAlpha = 0.28 - i * 0.06;
+      ctx.beginPath();
+      ctx.moveTo(rearX, wheelY + (i - 1) * CELL * 0.06);
+      ctx.lineTo(rearX - direction * CELL * 0.30, wheelY + (i - 1) * spread);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   function drawCars(row, rowY) {
     for (let carI = 0; carI < row.obstacles.length; carI++) {
       const car = row.obstacles[carI];
@@ -3927,6 +3981,7 @@ const Renderer = (() => {
         offsetX: car.width * 0.035,
         offsetY: car.height * 0.025,
       });
+      drawVehicleContact(row, rowY, car);
 
       // Use explicit spriteKey from world if available, else fall back to pool
       const isSiren    = car.isSirenCar === true;
@@ -4209,6 +4264,26 @@ const Renderer = (() => {
     }
   }
 
+  function drawLogWake(log, rowY) {
+    const dir = Math.sign(log.speed || 1);
+    const centerX = log.x + log.width / 2;
+    const waterY = rowY + CELL * 0.53;
+    const pulse = 0.85 + Math.sin(waterTime * 2 + log.x * 0.01) * 0.15;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(210,242,255,0.34)';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.ellipse(centerX + dir * log.width * 0.34, waterY, CELL * 0.13 * pulse, CELL * 0.045, 0, -Math.PI * 0.55, Math.PI * 0.55);
+    ctx.stroke();
+    ctx.globalAlpha = 0.22;
+    ctx.beginPath();
+    ctx.moveTo(centerX - dir * log.width * 0.38, waterY - CELL * 0.05);
+    ctx.lineTo(centerX - dir * log.width * 0.62, waterY);
+    ctx.lineTo(centerX - dir * log.width * 0.38, waterY + CELL * 0.05);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   function drawLogs(row, rowY, bi) {
     for (const log of row.obstacles) {
       const x = log.x;
@@ -4221,6 +4296,7 @@ const Renderer = (() => {
         offsetX: log.speed > 0 ? 3 : -3,
         offsetY: 1,
       });
+      drawLogWake(log, rowY);
       if (_logSpriteImg && _logSpriteImg.complete && _logSpriteImg.naturalWidth) {
         ctx.drawImage(_logSpriteImg, x, y, log.width, log.height);
         continue;
@@ -4485,27 +4561,11 @@ const Renderer = (() => {
 
 
   // ── Landing Trails ───────────────────────────────────────
-  // Called once per jump-landing. Picks visual by equipped shop trail,
-  // falling back to a surface-aware default.
-  function addTrail(x, y, rowType) {
+  function _addEquippedCosmeticTrail(x, y) {
     const variant = (typeof Shop !== 'undefined' && Shop.getEquippedTrail)
                       ? Shop.getEquippedTrail()
                       : 'default';
-
-    if (!variant || variant === 'default') {
-      let type;
-      if      (rowType === 'grass') type = 'footprint';
-      else if (rowType === 'water') type = 'ripple';
-      else                          type = 'dust';
-      trails.push({
-        x, y,
-        age:    0,
-        maxAge: TRAIL_LIFE[type],
-        type,
-        seed:   Math.random(),
-      });
-      return;
-    }
+    if (!variant || variant === 'default') return;
 
     // Custom trail — pre-compute particle burst so it doesn't jitter
     // Strip 'trail_' prefix so type matches the draw-branch keys ('hearts', 'fire', …)
@@ -4518,6 +4578,94 @@ const Renderer = (() => {
       seed:      Math.random(),
       particles: _makeTrailParticles(shortType),
     });
+  }
+
+  function addLandingEffect(x, y, rowIdx) {
+    const row = World.getRow(rowIdx);
+    const surface = _surfaceForRow(row || { idx: rowIdx, type: 'grass' });
+    const preset = GameVfx.getLanding(surface.id);
+    physicalFxPool.spawn({
+      event: 'land',
+      surfaceId: surface.id,
+      kind: preset.kind,
+      x,
+      y,
+      age: 0,
+      life: preset.life,
+      count: preset.count,
+      seed: Math.random(),
+    }, 'contact');
+    _addEquippedCosmeticTrail(x, y);
+  }
+
+  // Compatibility for older callers. New gameplay calls addLandingEffect with
+  // a row id so desert and snow rows cannot inherit grass behavior.
+  function addTrail(x, y) {
+    addLandingEffect(x, y, Player.getState().row);
+  }
+
+  function drawPhysicalTrails() {
+    const items = physicalFxPool.items;
+    for (let i = items.length - 1; i >= 0; i--) {
+      const fx = items[i];
+      fx.age += _frameDt;
+      if (fx.age >= fx.life) {
+        physicalFxPool.releaseAt(i);
+        continue;
+      }
+
+      const t = fx.age / fx.life;
+      const fade = 1 - t;
+      const surface = GameVfx.getSurface(fx.surfaceId);
+      ctx.save();
+
+      if (fx.kind === 'grass') {
+        ctx.globalAlpha = fade * 0.34;
+        ctx.fillStyle = surface.mark;
+        ctx.beginPath();
+        ctx.ellipse(fx.x - CELL * 0.09, fx.y + CELL * 0.07, CELL * 0.055, CELL * 0.11, 0.28, 0, Math.PI * 2);
+        ctx.ellipse(fx.x + CELL * 0.09, fx.y - CELL * 0.06, CELL * 0.055, CELL * 0.11, -0.28, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (fx.kind === 'sand' || fx.kind === 'roadDust' || fx.kind === 'ballast') {
+        ctx.globalAlpha = fade * (fx.kind === 'sand' ? 0.42 : 0.25);
+        ctx.fillStyle = surface.mark;
+        for (let p = 0; p < fx.count; p++) {
+          const angle = fx.seed * 8 + p * 2.399;
+          const dist = CELL * t * (0.08 + p * 0.012);
+          const radius = CELL * (0.025 + (p % 3) * 0.008) * fade;
+          ctx.beginPath();
+          ctx.arc(fx.x + Math.cos(angle) * dist, fx.y + Math.sin(angle) * dist * 0.42 - t * CELL * 0.06, radius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else if (fx.kind === 'snow') {
+        ctx.globalAlpha = Math.min(0.38, fade * 0.52);
+        ctx.fillStyle = surface.mark;
+        ctx.beginPath();
+        ctx.ellipse(fx.x, fx.y + CELL * 0.05, CELL * 0.14, CELL * 0.055, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(245,250,255,0.9)';
+        for (let p = 0; p < fx.count; p++) {
+          const angle = fx.seed * 6 + p * 2.1;
+          const dist = CELL * t * (0.08 + p * 0.01);
+          ctx.beginPath();
+          ctx.arc(fx.x + Math.cos(angle) * dist, fx.y + Math.sin(angle) * dist * 0.35 - t * CELL * 0.08, CELL * 0.018 * fade, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else if (fx.kind === 'splash' || fx.kind === 'ripple') {
+        ctx.strokeStyle = fx.surfaceId === 'water' ? 'rgba(215,244,255,0.9)' : 'rgba(190,220,240,0.8)';
+        ctx.lineWidth = Math.max(0.8, 2 * fade);
+        for (let ring = 0; ring < 2; ring++) {
+          const rt = Math.max(0, t - ring * 0.16);
+          if (rt === 0) continue;
+          const rx = CELL * (0.12 + rt * 0.42);
+          ctx.globalAlpha = fade * (ring === 0 ? 0.65 : 0.35);
+          ctx.beginPath();
+          ctx.ellipse(fx.x, fx.y + CELL * 0.05, rx, rx * 0.42, 0, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+    }
   }
 
   // Pre-generate randomized particles for a custom trail variant.
@@ -4843,6 +4991,27 @@ const Renderer = (() => {
     drawTrainFallback(train, rowY, dir);
   }
 
+  function drawTrainContact(train, rowY, dir) {
+    const phase = Math.sin(_now * 0.035 + train.x * 0.02);
+    const contactY = rowY + CELL * 0.74;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(205,190,170,0.20)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(train.x, contactY + phase);
+    ctx.lineTo(train.x + train.width, contactY - phase);
+    ctx.stroke();
+    if (Math.abs(phase) > 0.96) {
+      const sparkX = dir > 0 ? train.x + train.width * 0.78 : train.x + train.width * 0.22;
+      ctx.strokeStyle = 'rgba(255,208,120,0.52)';
+      ctx.beginPath();
+      ctx.moveTo(sparkX, contactY);
+      ctx.lineTo(sparkX - dir * CELL * 0.10, contactY - CELL * 0.08);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   function drawTrainSprite(train, rowY, dir) {
     if (!_trainSpriteImg || !_trainSpriteImg.complete || !_trainSpriteImg.naturalWidth) return false;
 
@@ -4858,6 +5027,7 @@ const Renderer = (() => {
       offsetX: dir * CELL * 0.05,
       offsetY: CELL * 0.02,
     });
+    drawTrainContact(train, rowY, dir);
 
     ctx.translate(centerX, centerY);
     ctx.scale(dir < 0 ? -1 : 1, 1);
@@ -4874,6 +5044,13 @@ const Renderer = (() => {
     const gap    = CELL * 0.08;
     const totalW = train.width;
     const y      = rowY + (CELL - carH) / 2;
+
+    drawGroundShadow(train.x + totalW / 2, rowY + CELL * 0.60, totalW * 0.98, carH * 0.56, {
+      surfaceId: 'railBed',
+      offsetX: dir * CELL * 0.05,
+      offsetY: CELL * 0.02,
+    });
+    drawTrainContact(train, rowY, dir);
 
     for (let i = 0; i < CARS; i++) {
       // Draw from front to back based on direction
@@ -5700,7 +5877,7 @@ const Renderer = (() => {
   function _dbgNight(on) { _dbgNightForce = on; nightTarget = on ? 1 : 0; _nightOn = on; }
   // Pin the zoom curve to an arbitrary "score" (null = back to real score)
   function _dbgZoom(score) { _dbgZoomForce = (typeof score === 'number') ? score : null; }
-  return { init, resize, updateCamera, draw, setScore, setWeather, triggerDeath, triggerShake, isDying, deathDone, stopDeath, resetWeather, addTrail, addCoinEffect, addScoreEffect, addMagnetCoin, addShieldBurst, reloadPlayerSprite, _dbgWeather, _dbgNight, _dbgZoom };
+  return { init, resize, updateCamera, draw, setScore, setWeather, triggerDeath, triggerShake, isDying, deathDone, stopDeath, resetWeather, addTrail, addLandingEffect, addCoinEffect, addScoreEffect, addMagnetCoin, addShieldBurst, reloadPlayerSprite, _dbgWeather, _dbgNight, _dbgZoom };
 
 })();
 

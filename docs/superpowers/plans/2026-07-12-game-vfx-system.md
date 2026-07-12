@@ -40,7 +40,7 @@
 
 ## Phase Ledger
 
-- [ ] Phase 1 — Foundation and materials: Tasks 1-3. Commit: `not-started`
+- [x] Phase 1 — Foundation and materials: Tasks 1-3. Commit: `0e314fa`
 - [ ] Phase 2 — Physical interactions: Task 4. Commit: `not-started`
 - [ ] Phase 3 — Weather and lighting: Task 5. Commit: `not-started`
 - [ ] Phase 4 — Gameplay and cosmetics: Tasks 6-8. Commit: `not-started`
@@ -554,7 +554,7 @@ git diff --check
 
 Expected: all zero exit. Update Phase 1 in the ledger with the Task 3 commit hash.
 
-- [ ] **Step 6: Commit Task 3**
+- [x] **Step 6: Commit Task 3** — completed in `0e314fa`.
 
 ```bash
 git add -p public/game/game.js scripts/test-game-vfx.mjs docs/superpowers/plans/2026-07-12-game-vfx-system.md
@@ -583,7 +583,7 @@ git commit -m "feat(game): unify material-aware ground shadows"
 - Produces: `drawPhysicalTrails()` and `drawLogWake(log, rowY)`.
 - Keeps: `Renderer.addTrail` as a temporary compatibility alias until Task 8.
 
-- [ ] **Step 1: Add failing surface-contact assertions**
+- [x] **Step 1: Add failing surface-contact assertions**
 
 Append:
 
@@ -597,13 +597,13 @@ assert.match(gameRuntime, /function drawTrainContact\(train, rowY, dir\)/);
 assert.doesNotMatch(gameRuntime, /Renderer\.addTrail\(state\.visualX, state\.visualY, row \? row\.type/);
 ```
 
-- [ ] **Step 2: Verify failure**
+- [x] **Step 2: Verify failure**
 
 Run `node scripts/test-game-vfx.mjs`.
 
 Expected: FAIL at `addLandingEffect`.
 
-- [ ] **Step 3: Emit landing by row identity**
+- [x] **Step 3: Emit landing by row identity**
 
 Replace the current landing call in `Player.update` with:
 
@@ -641,7 +641,7 @@ Inside `Renderer`, create one physical effect pool and the landing entry point:
   }
 ```
 
-- [ ] **Step 4: Draw the approved material responses**
+- [x] **Step 4: Draw the approved material responses**
 
 Add `drawPhysicalTrails` and call it after `drawRows()` but before `drawPlayer()`:
 
@@ -710,7 +710,7 @@ Add `drawPhysicalTrails` and call it after `drawRows()` but before `drawPlayer()
   }
 ```
 
-- [ ] **Step 5: Add log wakes and prop-base contact**
+- [x] **Step 5: Add log wakes and prop-base contact**
 
 Add and call these before drawing their corresponding sprite:
 

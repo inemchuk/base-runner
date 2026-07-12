@@ -56,4 +56,14 @@ assert.match(gameRuntime, /function _drawSurfaceTexture\(row, y\)/);
 assert.match(gameRuntime, /_drawSurfaceTexture\(row, y\);/);
 assert.doesNotMatch(gameRuntime, /ctx\.filter\s*=\s*['"]blur/);
 
+assert.match(gameRuntime, /function drawGroundShadow\(x, y, width, height, options = \{\}\)/);
+assert.match(gameRuntime, /const _shadowSpriteCache = new Map\(\)/);
+
+for (const functionName of ['drawEnvSprite', 'drawCars', 'drawLogs', 'drawTrainSprite', 'drawPlayer']) {
+  const start = gameRuntime.indexOf(`function ${functionName}`);
+  const end = gameRuntime.indexOf('\n  function ', start + 1);
+  assert.ok(start >= 0, `${functionName} should exist`);
+  assert.match(gameRuntime.slice(start, end === -1 ? undefined : end), /drawGroundShadow\(/, `${functionName} should use ground shadows`);
+}
+
 console.log('game VFX assertions passed');

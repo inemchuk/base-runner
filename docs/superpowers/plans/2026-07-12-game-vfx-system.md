@@ -399,7 +399,7 @@ git diff --check
 
 Expected: all commands exit zero.
 
-- [ ] **Step 5: Commit Task 2**
+- [x] **Step 5: Commit Task 2** — completed in `287aa58`.
 
 ```bash
 git add -p public/game/game.js scripts/test-game-vfx.mjs
@@ -423,7 +423,7 @@ git commit -m "feat(game): add cached biome surface texture"
 - Produces: `drawGroundShadow(x, y, width, height, options)`.
 - `options` is `{ surfaceId, alpha, offsetX, offsetY, lift, contact }`.
 
-- [ ] **Step 1: Add failing shadow integration assertions**
+- [x] **Step 1: Add failing shadow integration assertions**
 
 Append before the final log in `scripts/test-game-vfx.mjs`:
 
@@ -439,13 +439,13 @@ const playerBody = gameRuntime.slice(
 assert.equal((playerBody.match(/drawGroundShadow\(/g) || []).length, 1, 'player uses one shadow path');
 ```
 
-- [ ] **Step 2: Verify failure**
+- [x] **Step 2: Verify failure**
 
 Run `node scripts/test-game-vfx.mjs`.
 
 Expected: FAIL because `drawGroundShadow` does not exist.
 
-- [ ] **Step 3: Add a cached soft shadow mask and helper**
+- [x] **Step 3: Add a cached soft shadow mask and helper**
 
 Inside `Renderer`, add:
 
@@ -489,7 +489,7 @@ Inside `Renderer`, add:
   }
 ```
 
-- [ ] **Step 4: Migrate every caster to the helper**
+- [x] **Step 4: Migrate every caster to the helper**
 
 Use these exact role mappings and delete each replaced hard-coded black ellipse:
 
@@ -542,7 +542,7 @@ In `drawPlayer`, calculate one jump lift before the sprite/fallback branch and d
 
 Change `drawEnvSprite` to `drawEnvSprite(type, cx, cy, surfaceId)` and each fallback to `(cx, cy, bi, surfaceId)`. Resolve `const decorationSurfaceId = _surfaceForRow(row).id` once in `drawGrassRow` and pass it through both paths. Use the same helper in `drawBush`, `drawTree`, `drawRock`, `drawCactus`, `drawTumbleweed`, `drawPine`, and `drawSnowman`. Keep `offsetX: CELL * 0.10` for `tree`, `pine`, and `cactus`; use `offsetX: CELL * 0.04` for rocks, bushes, stumps, and snowmen.
 
-- [ ] **Step 5: Verify and mark the Phase 1 checkpoint**
+- [x] **Step 5: Verify and mark the Phase 1 checkpoint**
 
 Run:
 

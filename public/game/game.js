@@ -2936,6 +2936,49 @@ const Renderer = (() => {
     ctx.restore();
   }
 
+  // ── Unified soft shadows ─────────────────────────────────
+  // Shadow masks are cached by material. Individual objects only supply
+  // footprint, lift and a tiny directional offset from the global light.
+  const _shadowSpriteCache = new Map();
+
+  function _shadowSprite(surfaceId) {
+    if (_shadowSpriteCache.has(surfaceId)) return _shadowSpriteCache.get(surfaceId);
+    const style = GameVfx.getSurface(surfaceId);
+    const size = 128;
+    const c = typeof OffscreenCanvas !== 'undefined'
+      ? new OffscreenCanvas(size, size)
+      : (() => { const canvas = document.createElement('canvas'); canvas.width = canvas.height = size; return canvas; })();
+    const g = c.getContext('2d');
+    const grd = g.createRadialGradient(size / 2, size / 2, 6, size / 2, size / 2, size / 2);
+    grd.addColorStop(0, `rgba(${style.shadowRgb},1)`);
+    grd.addColorStop(0.52, `rgba(${style.shadowRgb},0.68)`);
+    grd.addColorStop(1, `rgba(${style.shadowRgb},0)`);
+    g.fillStyle = grd;
+    g.fillRect(0, 0, size, size);
+    _shadowSpriteCache.set(surfaceId, c);
+    return c;
+  }
+
+  function drawGroundShadow(x, y, width, height, options = {}) {
+    const surfaceId = options.surfaceId || 'neutral';
+    const style = GameVfx.getSurface(surfaceId);
+    const lift = Math.max(0, Math.min(1, options.lift || 0));
+    const lightningFade = 1 - Math.min(lightningFlash, 1) * 0.45;
+    const alpha = (options.alpha ?? style.shadowAlpha) * (1 - lift * 0.48) * lightningFade;
+    const offsetX = options.offsetX ?? width * 0.08;
+    const offsetY = options.offsetY ?? height * 0.16;
+    const sprite = _shadowSprite(surfaceId);
+
+    ctx.save();
+    ctx.globalAlpha = alpha * 0.55;
+    ctx.drawImage(sprite, x - width * 0.5 + offsetX, y - height * 0.5 + offsetY, width, height);
+    if (options.contact !== false) {
+      ctx.globalAlpha = alpha;
+      ctx.drawImage(sprite, x - width * 0.34, y - height * 0.24, width * 0.68, height * 0.48);
+    }
+    ctx.restore();
+  }
+
   // Environment sprite images
   const _ENV_SPRITES = {};
   const _ENV_SPRITE_SRCS = {
@@ -2994,18 +3037,19 @@ const Renderer = (() => {
     snowman:    { size: 0.80, sw: 0.22, sh: 0.07, base: 0.92 },
   };
 
-  function drawEnvSprite(type, cx, cy) {
+  function drawEnvSprite(type, cx, cy, surfaceId = 'grass') {
     const img = _ENV_SPRITES[type];
     if (!img || !img.complete || !img.naturalWidth) return false;
     const cfg    = _ENV_SPRITE_CFG[type] || { size: 0.85, sw: 0.28, sh: 0.08, base: 0.92 };
     const size   = CELL * cfg.size;
     const baseY  = cy - CELL * 0.5 + CELL * cfg.base; // ground contact
     const shadowY = baseY - CELL * (cfg.shadowLift || 0);
-    // Simple filled ellipse shadow (matches player shadow style)
-    ctx.fillStyle = 'rgba(0,0,0,0.18)';
-    ctx.beginPath();
-    ctx.ellipse(cx, shadowY, CELL * cfg.sw, CELL * cfg.sh, 0, 0, Math.PI * 2);
-    ctx.fill();
+    const tallCaster = type === 'tree' || type === 'pine' || type === 'cactus';
+    drawGroundShadow(cx, shadowY, CELL * cfg.sw * 2.15, CELL * cfg.sh * 2.7, {
+      surfaceId,
+      offsetX: CELL * (tallCaster ? 0.10 : 0.04),
+      offsetY: CELL * 0.02,
+    });
     // Sprite: image bottom sits at baseY
     ctx.drawImage(img, cx - size / 2, baseY - size, size, size);
     return true;
@@ -3608,11 +3652,12 @@ const Renderer = (() => {
         const bob    = Math.sin(t + coin.col * 1.3) * CELL * 0.07;
         const scaleX = Math.abs(Math.cos(t * 0.9 + coin.col * 0.7));
         const drawW  = size * Math.max(scaleX, 0.08);
-        // Shadow
-        ctx.fillStyle = 'rgba(0,0,0,0.22)';
-        ctx.beginPath();
-        ctx.ellipse(cx, cy + size * 0.46, drawW * 0.48, CELL * 0.055, 0, 0, Math.PI * 2);
-        ctx.fill();
+        drawGroundShadow(cx, cy + size * 0.46, drawW * 0.96, CELL * 0.12, {
+          surfaceId: _surfaceForRow(row).id,
+          alpha: 0.16,
+          offsetX: CELL * 0.02,
+          offsetY: 0,
+        });
         ctx.save();
         ctx.translate(cx, cy + bob);
 
@@ -3645,6 +3690,7 @@ const Renderer = (() => {
 
     // Decorations — wind/storm sway
     if (row.decorations) {
+      const decorationSurfaceId = _surfaceForRow(row).id;
       const windSway = (weatherState === 4 || weatherState === 3) && weatherRatio > 0.1
         ? Math.sin(_now * 0.003 + y * 0.05) * weatherRatio * (weatherState === 3 ? 4 : 3)
         : 0;
@@ -3658,26 +3704,23 @@ const Renderer = (() => {
                        : d.type === 'tumbleweed' ? cx + swayX * 2
                        : d.type === 'pine'       ? cx + swayX * 1.2
                        : cx;
-        if (!drawEnvSprite(d.type, spriteCx, cy)) {
-          if      (d.type === 'bush')       drawBush(spriteCx, cy, bi);
-          else if (d.type === 'tree')       drawTree(spriteCx, cy, bi);
-          else if (d.type === 'rock')       drawRock(cx, cy, bi);
-          else if (d.type === 'cactus')     drawCactus(spriteCx, cy, bi);
-          else if (d.type === 'tumbleweed') drawTumbleweed(spriteCx, cy, bi);
-          else if (d.type === 'pine')       drawPine(spriteCx, cy, bi);
-          else if (d.type === 'snowman')    drawSnowman(cx, cy, bi);
+        if (!drawEnvSprite(d.type, spriteCx, cy, decorationSurfaceId)) {
+          if      (d.type === 'bush')       drawBush(spriteCx, cy, bi, decorationSurfaceId);
+          else if (d.type === 'tree')       drawTree(spriteCx, cy, bi, decorationSurfaceId);
+          else if (d.type === 'rock')       drawRock(cx, cy, bi, decorationSurfaceId);
+          else if (d.type === 'cactus')     drawCactus(spriteCx, cy, bi, decorationSurfaceId);
+          else if (d.type === 'tumbleweed') drawTumbleweed(spriteCx, cy, bi, decorationSurfaceId);
+          else if (d.type === 'pine')       drawPine(spriteCx, cy, bi, decorationSurfaceId);
+          else if (d.type === 'snowman')    drawSnowman(cx, cy, bi, decorationSurfaceId);
         }
       }
     }
   }
 
   // ── Bush: round dark-green blob ────────────────────────────
-  function drawBush(cx, cy, bi) {
+  function drawBush(cx, cy, bi, surfaceId) {
     const r = CELL * 0.3;
-    ctx.fillStyle = 'rgba(0,0,0,0.15)';
-    ctx.beginPath();
-    ctx.ellipse(cx, cy + r * 0.9, r * 0.9, r * 0.28, 0, 0, Math.PI * 2);
-    ctx.fill();
+    drawGroundShadow(cx, cy + r * 0.9, r * 1.8, r * 0.56, { surfaceId, offsetX: CELL * 0.04, offsetY: 0 });
     const clusters = [
       {dx:  0,   dy: -r*0.1, r: r * 0.72},
       {dx: -r*0.45, dy:  r*0.15, r: r * 0.55},
@@ -3700,12 +3743,9 @@ const Renderer = (() => {
   }
 
   // ── Tree: trunk + round canopy ──────────────────────────────
-  function drawTree(cx, cy, bi) {
+  function drawTree(cx, cy, bi, surfaceId) {
     const r = CELL * 0.32;
-    ctx.fillStyle = 'rgba(0,0,0,0.18)';
-    ctx.beginPath();
-    ctx.ellipse(cx, cy + r * 0.7, r * 0.95, r * 0.3, 0, 0, Math.PI * 2);
-    ctx.fill();
+    drawGroundShadow(cx, cy + r * 0.7, r * 1.9, r * 0.60, { surfaceId, offsetX: CELL * 0.10, offsetY: CELL * 0.02 });
     const trunkW = r * 0.32, trunkH = r * 0.55;
     ctx.fillStyle = dcBiome('trunk', bi);
     ctx.fillRect(cx - trunkW/2, cy + r*0.15, trunkW, trunkH);
@@ -3728,12 +3768,9 @@ const Renderer = (() => {
   }
 
   // ── Rock: flat grey stone ───────────────────────────────────
-  function drawRock(cx, cy, bi) {
+  function drawRock(cx, cy, bi, surfaceId) {
     const rw = CELL * 0.3, rh = CELL * 0.22;
-    ctx.fillStyle = 'rgba(0,0,0,0.15)';
-    ctx.beginPath();
-    ctx.ellipse(cx, cy + rh * 0.9, rw * 0.9, rh * 0.35, 0, 0, Math.PI * 2);
-    ctx.fill();
+    drawGroundShadow(cx, cy + rh * 0.9, rw * 1.8, rh * 0.70, { surfaceId, offsetX: CELL * 0.03, offsetY: 0 });
     ctx.fillStyle = dcBiome('rockDk', bi);
     ctx.beginPath();
     ctx.ellipse(cx, cy, rw, rh, 0, 0, Math.PI * 2);
@@ -3741,13 +3778,9 @@ const Renderer = (() => {
   }
 
   // ── Cactus: tall green column with arms (desert) ────────────
-  function drawCactus(cx, cy, bi) {
+  function drawCactus(cx, cy, bi, surfaceId) {
     const h = CELL * 0.6, w = CELL * 0.12;
-    // Shadow
-    ctx.fillStyle = 'rgba(0,0,0,0.15)';
-    ctx.beginPath();
-    ctx.ellipse(cx, cy + h * 0.35, w * 2.5, h * 0.1, 0, 0, Math.PI * 2);
-    ctx.fill();
+    drawGroundShadow(cx, cy + h * 0.35, w * 5, h * 0.22, { surfaceId, offsetX: CELL * 0.10, offsetY: CELL * 0.02 });
     // Main trunk
     ctx.fillStyle = dcBiome('treeMd', bi);
     roundRect(ctx, cx - w/2, cy - h * 0.35, w, h, w/2);
@@ -3771,13 +3804,9 @@ const Renderer = (() => {
   }
 
   // ── Tumbleweed: round tangled ball (desert) ────────────────
-  function drawTumbleweed(cx, cy, bi) {
+  function drawTumbleweed(cx, cy, bi, surfaceId) {
     const r = CELL * 0.2;
-    // Shadow
-    ctx.fillStyle = 'rgba(0,0,0,0.12)';
-    ctx.beginPath();
-    ctx.ellipse(cx, cy + r * 0.7, r * 0.85, r * 0.25, 0, 0, Math.PI * 2);
-    ctx.fill();
+    drawGroundShadow(cx, cy + r * 0.7, r * 1.7, r * 0.50, { surfaceId, offsetX: CELL * 0.05, offsetY: 0 });
     // Body
     ctx.fillStyle = dcBiome('trunk', bi);
     ctx.beginPath();
@@ -3800,13 +3829,9 @@ const Renderer = (() => {
   }
 
   // ── Pine: triangular evergreen (snow) ──────────────────────
-  function drawPine(cx, cy, bi) {
+  function drawPine(cx, cy, bi, surfaceId) {
     const h = CELL * 0.55, w = CELL * 0.38;
-    // Shadow
-    ctx.fillStyle = 'rgba(0,0,0,0.15)';
-    ctx.beginPath();
-    ctx.ellipse(cx, cy + h * 0.35, w * 0.6, h * 0.08, 0, 0, Math.PI * 2);
-    ctx.fill();
+    drawGroundShadow(cx, cy + h * 0.35, w * 1.2, h * 0.16, { surfaceId, offsetX: CELL * 0.10, offsetY: CELL * 0.02 });
     // Trunk
     const trunkW = CELL * 0.08, trunkH = CELL * 0.12;
     ctx.fillStyle = dcBiome('trunk', bi);
@@ -3837,12 +3862,8 @@ const Renderer = (() => {
   }
 
   // ── Snowman: three stacked circles (snow) ──────────────────
-  function drawSnowman(cx, cy, bi) {
-    // Shadow
-    ctx.fillStyle = 'rgba(0,0,0,0.12)';
-    ctx.beginPath();
-    ctx.ellipse(cx, cy + CELL * 0.22, CELL * 0.22, CELL * 0.06, 0, 0, Math.PI * 2);
-    ctx.fill();
+  function drawSnowman(cx, cy, bi, surfaceId) {
+    drawGroundShadow(cx, cy + CELL * 0.22, CELL * 0.44, CELL * 0.12, { surfaceId, offsetX: CELL * 0.03, offsetY: 0 });
     // Bottom ball
     ctx.fillStyle = '#F0F0F5';
     ctx.beginPath();
@@ -3901,11 +3922,11 @@ const Renderer = (() => {
       const x = car.x;
       const y = rowY + (CELL - car.height) / 2;
 
-      // Soft ground shadow — grounds the sprite on the road
-      ctx.fillStyle = 'rgba(0,0,0,0.18)';
-      ctx.beginPath();
-      ctx.ellipse(x + car.width / 2, y + car.height * 0.92, car.width * 0.46, car.height * 0.18, 0, 0, Math.PI * 2);
-      ctx.fill();
+      drawGroundShadow(x + car.width / 2, y + car.height * 0.91, car.width * 0.94, car.height * 0.40, {
+        surfaceId: _surfaceForRow(row).id,
+        offsetX: car.width * 0.035,
+        offsetY: car.height * 0.025,
+      });
 
       // Use explicit spriteKey from world if available, else fall back to pool
       const isSiren    = car.isSirenCar === true;
@@ -4194,10 +4215,12 @@ const Renderer = (() => {
       // Лёгкое покачивание на воде + тень — бревно "сидит" в воде, а не парит
       const bob = Math.sin(waterTime * 2 + log.x * 0.01) * 1.5;
       const y = rowY + (CELL - log.height) / 2 + bob;
-      ctx.fillStyle = 'rgba(0,20,60,0.25)';
-      ctx.beginPath();
-      ctx.ellipse(x + log.width / 2, rowY + CELL * 0.8, log.width * 0.48, 5, 0, 0, Math.PI * 2);
-      ctx.fill();
+      drawGroundShadow(x + log.width / 2, rowY + CELL * 0.80, log.width * 0.96, CELL * 0.18, {
+        surfaceId: 'water',
+        alpha: 0.22,
+        offsetX: log.speed > 0 ? 3 : -3,
+        offsetY: 1,
+      });
       if (_logSpriteImg && _logSpriteImg.complete && _logSpriteImg.naturalWidth) {
         ctx.drawImage(_logSpriteImg, x, y, log.width, log.height);
         continue;
@@ -4830,10 +4853,11 @@ const Renderer = (() => {
     const centerY = rowY + CELL / 2;
 
     ctx.save();
-    ctx.fillStyle = 'rgba(0,0,0,0.24)';
-    ctx.beginPath();
-    ctx.ellipse(centerX, centerY + drawH * 0.13, drawW * 0.48, drawH * 0.26, 0, 0, Math.PI * 2);
-    ctx.fill();
+    drawGroundShadow(centerX, centerY + drawH * 0.14, drawW * 0.98, drawH * 0.56, {
+      surfaceId: 'railBed',
+      offsetX: dir * CELL * 0.05,
+      offsetY: CELL * 0.02,
+    });
 
     ctx.translate(centerX, centerY);
     ctx.scale(dir < 0 ? -1 : 1, 1);
@@ -5419,25 +5443,25 @@ const Renderer = (() => {
     const y    = ps.visualY;
     const fd   = ps.facingDir;
     const flip = fd === -1 ? -1 : 1;
+    const playerJumpT = ps.jumping ? Math.min(ps.jumpTimer / 0.16, 1) : 0;
+    const playerLift = ps.jumping ? Math.sin(Math.PI * playerJumpT) : 0;
+    const playerRow = World.getRow(ps.row);
+    drawGroundShadow(x, y + CELL * 0.22, CELL * (0.58 - playerLift * 0.18), CELL * (0.20 - playerLift * 0.05), {
+      surfaceId: _surfaceForRow(playerRow).id,
+      lift: playerLift,
+      offsetX: CELL * 0.04,
+      offsetY: CELL * 0.015,
+    });
 
     // ── Sprite-based render ───────────────────────────────
     if (playerImg) {
       const WALK_FREQ = 9;
       const walkPhase = walkTime * WALK_FREQ * Math.PI * 2;
-      const jumpArc   = ps.jumping
-        ? Math.sin(Math.PI * Math.min(ps.jumpTimer / 0.16, 1)) * CELL * 0.18
-        : 0;
+      const jumpArc   = playerLift * CELL * 0.18;
       const bobY = ps.jumping ? Math.abs(Math.sin(walkPhase)) * CELL * 0.025 : 0;
       const baseY = y - jumpArc;
 
       const size = CELL * 1.5;
-
-      // Shadow — under feet
-      const shadowScale = ps.jumping ? Math.max(0.5, 1 - jumpArc / (CELL * 0.3)) : 1;
-      ctx.fillStyle = 'rgba(0,0,0,0.22)';
-      ctx.beginPath();
-      ctx.ellipse(x, y + CELL * 0.2, CELL * 0.28 * shadowScale, CELL * 0.09 * shadowScale, 0, 0, Math.PI * 2);
-      ctx.fill();
 
       // ── Squash & stretch ──────────────────────────────────
       let sqX = 1, sqY = 1;
@@ -5511,18 +5535,9 @@ const Renderer = (() => {
     const walkPhase  = walkTime * WALK_FREQ * Math.PI * 2;
     const swing      = ps.jumping ? Math.sin(walkPhase) : 0;      // ±1 limb swing
     const bodyBob    = ps.jumping ? Math.abs(Math.sin(walkPhase)) * CELL * 0.025 : 0;
-    const jumpArc    = ps.jumping
-      ? Math.sin(Math.PI * Math.min(ps.jumpTimer / 0.16, 1)) * CELL * 0.18
-      : 0;  // body lift during jump arc
+    const jumpArc    = playerLift * CELL * 0.18;  // body lift during jump arc
 
     const baseY = y - jumpArc + idleBobYp;  // whole character lifts during jump / idle
-
-    // ── Shadow (squishes on jump peak) ───────────────────
-    const shadowScale = ps.jumping ? Math.max(0.5, 1 - jumpArc / (CELL * 0.3)) : 1;
-    ctx.fillStyle = 'rgba(0,0,0,0.18)';
-    ctx.beginPath();
-    ctx.ellipse(x, y + CELL * 0.3, CELL * 0.28 * shadowScale, CELL * 0.09 * shadowScale, 0, 0, Math.PI * 2);
-    ctx.fill();
 
     // Apply squash & stretch — scale around foot anchor, all coords below unchanged
     const _sqAnchorY = y + CELL * 0.2;

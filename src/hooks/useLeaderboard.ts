@@ -24,6 +24,7 @@ type LeaderboardWindow = Window & {
 export function useLeaderboard() {
   const { address } = useAccount();
   const sessionTokensRef = useRef(createRunSessionTokens());
+  const sessionGenerationRef = useRef(0);
 
   const fetchLeaderboard = useCallback(async (period: string = 'alltime') => {
     try {
@@ -57,8 +58,12 @@ export function useLeaderboard() {
 
   const submit = useCallback(async (runId: number, score: number, sessionCoins = 0) => {
     if (!address) return { ok: false, error: 'no_address' };
+    const submissionGeneration = sessionGenerationRef.current;
     try {
       const token = await sessionTokensRef.current.take(runId);
+      if (submissionGeneration !== sessionGenerationRef.current) {
+        return { ok: false, error: 'stale_session' };
+      }
       const res = await fetch('/api/score/submit', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -81,8 +86,13 @@ export function useLeaderboard() {
 
   useEffect(() => {
     const sessionTokens = sessionTokensRef.current;
-    sessionTokens.clear();
-    return () => sessionTokens.clear();
+    const invalidateSession = () => {
+      sessionGenerationRef.current += 1;
+      sessionTokens.clear();
+    };
+
+    invalidateSession();
+    return invalidateSession;
   }, [address]);
 
   useEffect(() => {

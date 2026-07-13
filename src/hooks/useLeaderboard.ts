@@ -59,9 +59,10 @@ export function useLeaderboard() {
   const submit = useCallback(async (runId: number, score: number, sessionCoins = 0) => {
     if (!address) return { ok: false, error: 'no_address' };
     const submissionGeneration = sessionGenerationRef.current;
+    const isStaleSession = () => submissionGeneration !== sessionGenerationRef.current;
     try {
       const token = await sessionTokensRef.current.take(runId);
-      if (submissionGeneration !== sessionGenerationRef.current) {
+      if (isStaleSession()) {
         return { ok: false, error: 'stale_session' };
       }
       const res = await fetch('/api/score/submit', {
@@ -75,7 +76,13 @@ export function useLeaderboard() {
         }),
       });
       const data = await res.json();
+      if (isStaleSession()) {
+        return { ok: false, error: 'stale_session' };
+      }
       await fetchLeaderboard();
+      if (isStaleSession()) {
+        return { ok: false, error: 'stale_session' };
+      }
       window.dispatchEvent(new CustomEvent('base-score-submitted', { detail: data }));
       return data;
     } catch (err) {

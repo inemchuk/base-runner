@@ -3255,23 +3255,39 @@ const Renderer = (() => {
     img.src = '/game/coin.png';
   }
 
-  // ── Car headlight / taillight pixel positions (allocated once) ──────────
-  const _CAR_LIGHT_MAP = {
-    taxi:        { front: [{x:92,y:8},{x:92,y:38}],  rear: [{x:5,y:8},{x:5,y:38}] },
-    police:      { front: [{x:90,y:8},{x:90,y:38}],  rear: [{x:6,y:8},{x:6,y:38}] },
-    orange:      { front: [{x:92,y:10},{x:92,y:36}], rear: [{x:7,y:8},{x:7,y:38}] },
-    green_taxi:  { front: [{x:93,y:12},{x:93,y:34}], rear: [{x:7,y:9},{x:7,y:37}] },
-    yellow_taxi: { front: [{x:92,y:8},{x:92,y:38}],  rear: [{x:7,y:8},{x:7,y:38}] },
-    ambulance:   { front: [{x:122,y:9},{x:122,y:38}],rear: [{x:4,y:7},{x:4,y:39}] },
-    truck:       { front: [{x:187,y:9},{x:187,y:36}],rear: [{x:3,y:9},{x:3,y:38}] },
-    firetruck:   { front: [{x:186,y:10},{x:186,y:35}],rear:[{x:4,y:8},{x:4,y:37}] },
-    bus:         { front: [{x:188,y:8},{x:188,y:38}],rear: [{x:3,y:9},{x:3,y:37}] },
-    black_suv:       { front: [{x:87,y:12},{x:87,y:35}], rear: [{x:8,y:10},{x:8,y:35}] },
-    blue_hatchback:  { front: [{x:83,y:12},{x:83,y:35}], rear: [{x:11,y:11},{x:11,y:35}] },
-    white_panel_van: { front: [{x:92,y:12},{x:92,y:35}], rear: [{x:4,y:11},{x:4,y:35}] },
-    orange_pickup:   { front: [{x:85,y:12},{x:85,y:36}], rear: [{x:8,y:9},{x:8,y:37}] },
-    silver_minivan:  { front: [{x:88,y:12},{x:88,y:35}], rear: [{x:8,y:10},{x:8,y:35}] },
-  };
+  // ── Vehicle light anchors in normalized sprite coordinates ──────────────
+  // Each profile is calibrated to the actual lamp clusters of its source
+  // sprite. Normalized points keep the anchors correct at every game scale
+  // and avoid the old hidden half-resolution coordinate convention.
+  const _lightProfile = (front, rear, beam, halo) => Object.freeze({
+    front: Object.freeze(front),
+    rear: Object.freeze(rear),
+    beam: Object.freeze(beam),
+    halo: Object.freeze(halo),
+  });
+  const _SEDAN_BEAM = Object.freeze({ length: 1.34, width: 0.74, offset: 0.038, alpha: 0.62 });
+  const _VAN_BEAM = Object.freeze({ length: 1.48, width: 0.68, offset: 0.042, alpha: 0.64 });
+  const _LONG_BEAM = Object.freeze({ length: 1.62, width: 0.64, offset: 0.046, alpha: 0.66 });
+  const _COMPACT_HALO = Object.freeze({ head: 0.225, tail: 0.135, dot: 0.060 });
+  const _LONG_HALO = Object.freeze({ head: 0.205, tail: 0.125, dot: 0.054 });
+
+  const _CAR_LIGHT_PROFILES = Object.freeze({
+    taxi:             _lightProfile([[0.940, 0.225], [0.940, 0.775]], [[0.075, 0.220], [0.075, 0.780]], _SEDAN_BEAM, _COMPACT_HALO),
+    yellow_taxi:      _lightProfile([[0.930, 0.220], [0.930, 0.780]], [[0.075, 0.250], [0.075, 0.750]], _SEDAN_BEAM, _COMPACT_HALO),
+    green_taxi:       _lightProfile([[0.940, 0.220], [0.940, 0.780]], [[0.055, 0.220], [0.055, 0.780]], _SEDAN_BEAM, _COMPACT_HALO),
+    orange:           _lightProfile([[0.925, 0.210], [0.925, 0.790]], [[0.055, 0.290], [0.055, 0.710]], _SEDAN_BEAM, _COMPACT_HALO),
+    police:           _lightProfile([[0.950, 0.300], [0.950, 0.700]], [[0.040, 0.200], [0.040, 0.800]], _SEDAN_BEAM, _COMPACT_HALO),
+    ambulance:        _lightProfile([[0.900, 0.315], [0.900, 0.680]], [[0.040, 0.205], [0.040, 0.795]], _VAN_BEAM, _COMPACT_HALO),
+    truck:            _lightProfile([[0.975, 0.215], [0.975, 0.780]], [[0.020, 0.220], [0.020, 0.780]], _LONG_BEAM, _LONG_HALO),
+    bus:              _lightProfile([[0.972, 0.200], [0.972, 0.800]], [[0.022, 0.220], [0.022, 0.780]], _LONG_BEAM, _LONG_HALO),
+    firetruck:        _lightProfile([[0.970, 0.255], [0.970, 0.745]], [[0.155, 0.330], [0.155, 0.660]], _LONG_BEAM, _LONG_HALO),
+    black_suv:        _lightProfile([[0.890, 0.280], [0.890, 0.690]], [[0.080, 0.220], [0.080, 0.780]], _SEDAN_BEAM, _COMPACT_HALO),
+    blue_hatchback:   _lightProfile([[0.860, 0.250], [0.860, 0.750]], [[0.115, 0.240], [0.115, 0.760]], _SEDAN_BEAM, _COMPACT_HALO),
+    white_panel_van:  _lightProfile([[0.890, 0.330], [0.890, 0.670]], [[0.045, 0.225], [0.045, 0.775]], _VAN_BEAM, _COMPACT_HALO),
+    silver_minivan:   _lightProfile([[0.855, 0.330], [0.855, 0.660]], [[0.090, 0.220], [0.090, 0.780]], _VAN_BEAM, _COMPACT_HALO),
+    orange_pickup:    _lightProfile([[0.900, 0.305], [0.900, 0.680]], [[0.090, 0.220], [0.090, 0.780]], _VAN_BEAM, _COMPACT_HALO),
+  });
+  const _DEFAULT_CAR_LIGHT_PROFILE = _CAR_LIGHT_PROFILES.taxi;
 
   // ── Car sprites loaded from embedded base64 ──────────────
   // Weighted sprite pool — police is rare, siren police is very rare

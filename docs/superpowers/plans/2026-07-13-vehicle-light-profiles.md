@@ -30,7 +30,7 @@
 - `beam` exposes `{ length, width, offset, alpha }` in world-cell ratios.
 - `halo` exposes `{ head, tail, dot }` as compact rendered-size ratios.
 
-- [ ] **Step 1: Write the failing source-contract test**
+- [x] **Step 1: Write the failing source-contract test**
 
   Create `scripts/test-vehicle-light-profiles.mjs`:
 
@@ -47,7 +47,7 @@
   ];
 
   assert.match(game, /const _CAR_LIGHT_PROFILES = Object\.freeze\(\{/);
-  assert.doesNotMatch(game, /_CAR_LIGHT_MAP/);
+  assert.doesNotMatch(game, /const _CAR_LIGHT_MAP =/);
 
   for (const id of ids) {
     assert.match(
@@ -60,7 +60,7 @@
   console.log('vehicle light profile assertions passed');
   ```
 
-- [ ] **Step 2: Run the test and verify it fails**
+- [x] **Step 2: Run the test and verify it fails**
 
   Run:
 
@@ -71,7 +71,7 @@
   Expected: failure on `_CAR_LIGHT_PROFILES`, because the renderer still uses
   `_CAR_LIGHT_MAP`.
 
-- [ ] **Step 3: Replace the legacy map with normalized sprite profiles**
+- [x] **Step 3: Replace the legacy map with normalized sprite profiles**
 
   In `public/game/game.js`, replace `_CAR_LIGHT_MAP` with the following
   helper, class presets, and complete calibrated table. The coordinates are
@@ -110,7 +110,7 @@
   const _DEFAULT_CAR_LIGHT_PROFILE = _CAR_LIGHT_PROFILES.taxi;
   ```
 
-- [ ] **Step 4: Run the profile contract and syntax check**
+- [x] **Step 4: Run the profile contract and syntax check**
 
   Run:
 
@@ -122,7 +122,7 @@
   Expected: both commands exit zero and the profile test prints
   `vehicle light profile assertions passed`.
 
-- [ ] **Step 5: Commit the profile data and contract**
+- [x] **Step 5: Commit the profile data and contract**
 
   ```bash
   git add public/game/game.js scripts/test-vehicle-light-profiles.mjs
@@ -149,6 +149,7 @@
 
   ```js
   assert.match(game, /const profile = _CAR_LIGHT_PROFILES\[imageKey\] \|\| _DEFAULT_CAR_LIGHT_PROFILE/);
+  assert.doesNotMatch(game, /_CAR_LIGHT_MAP/);
   assert.match(game, /function _lightPointToCanvas\(point, facingRight, x, y, width, height\)/);
   assert.match(game, /const frontLights = profile\.front\.map\(point => _lightPointToCanvas/);
   assert.match(game, /const rearLights = profile\.rear\.map\(point => _lightPointToCanvas/);

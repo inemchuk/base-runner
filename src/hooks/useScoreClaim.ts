@@ -50,13 +50,13 @@ export function useScoreClaim() {
   const { data: walletClient } = useWalletClient();
   const timeoutRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const activeClaimRef = useRef<ClaimIdentity | null>(null);
+  const fallbackClaimsRef = useRef(new Map<`0x${string}`, ClaimIdentity>());
   const [paymasterPending, setPaymasterPending] = useState(false);
 
   const {
     writeContract,
     data: txHash,
     isPending: isWritePending,
-    isError: isWriteError,
   } = useWriteContract();
   const {
     isLoading: isConfirming,
@@ -80,28 +80,27 @@ export function useScoreClaim() {
     clearMatchingClaim(identity);
   }, [clearMatchingClaim]);
 
-  // Confirm a regular user-paid transaction with the identity captured when
-  // the write began, not whichever result card happens to be visible now.
+  // Confirm a regular user-paid transaction through the identity registered
+  // for this exact transaction hash. Old receipt transitions cannot borrow a
+  // newer claim's active ref.
   useEffect(() => {
-    if (!isSuccess) return;
-    const identity = activeClaimRef.current;
+    if (!isSuccess || !txHash) return;
+    const identity = fallbackClaimsRef.current.get(txHash);
     if (!identity) return;
-    if (timeoutRef.current) {
-      clearInterval(timeoutRef.current);
-      timeoutRef.current = null;
-    }
+    fallbackClaimsRef.current.delete(txHash);
     dispatchClaimed(identity);
     clearMatchingClaim(identity);
-  }, [isSuccess, clearMatchingClaim]);
+  }, [isSuccess, txHash, clearMatchingClaim]);
 
-  // Wallet rejection, write failure, or reverted receipt restores retry for
-  // the same run and score only.
+  // A reverted receipt restores retry for the identity registered to that
+  // exact hash. Write/wallet errors use the per-mutation callback below.
   useEffect(() => {
-    if (!isWriteError && !isReceiptError) return;
-    const identity = activeClaimRef.current;
+    if (!isReceiptError || !txHash) return;
+    const identity = fallbackClaimsRef.current.get(txHash);
     if (!identity) return;
+    fallbackClaimsRef.current.delete(txHash);
     failClaim(identity);
-  }, [isWriteError, isReceiptError, failClaim]);
+  }, [isReceiptError, txHash, failClaim]);
 
   const isPending = isWritePending || isConfirming || paymasterPending;
 
@@ -198,13 +197,23 @@ export function useScoreClaim() {
         }
       }
 
-      writeContract({
-        address: SCORECLAIM_ADDRESS,
-        abi: SCORECLAIM_ABI,
-        functionName: 'claimScore',
-        args: [scoreBig],
-        dataSuffix: DATA_SUFFIX,
-      });
+      writeContract(
+        {
+          address: SCORECLAIM_ADDRESS,
+          abi: SCORECLAIM_ABI,
+          functionName: 'claimScore',
+          args: [scoreBig],
+          dataSuffix: DATA_SUFFIX,
+        },
+        {
+          onSuccess: (hash) => {
+            fallbackClaimsRef.current.set(hash, identity);
+          },
+          onError: () => {
+            failClaim(identity);
+          },
+        },
+      );
     } catch (error) {
       failClaim(identity);
       throw error;
@@ -235,6 +244,7 @@ export function useScoreClaim() {
       clearInterval(timeoutRef.current);
       timeoutRef.current = null;
     }
+    fallbackClaimsRef.current.clear();
   }, []);
 
   return { claim, isPending };

@@ -142,7 +142,7 @@
 - `drawCarLights(row, rowY, car)` obtains `_CAR_LIGHT_PROFILES[imageKey]` and
   applies that profile's `beam` and `halo` values.
 
-- [ ] **Step 1: Extend the failing contract for the new draw path**
+- [x] **Step 1: Extend the failing contract for the new draw path**
 
   Add these assertions before the final `console.log` in
   `scripts/test-vehicle-light-profiles.mjs`:
@@ -159,7 +159,7 @@
   assert.match(game, /const glowR = CELL \* profile\.halo\.tail/);
   ```
 
-- [ ] **Step 2: Run the test and verify it fails**
+- [x] **Step 2: Run the test and verify it fails**
 
   Run:
 
@@ -170,7 +170,7 @@
   Expected: failure on `const profile = ...`, because `drawCarLights` still
   derives lights from `nativeW`, `sx`, and `sy`.
 
-- [ ] **Step 3: Replace generic light conversion and beam rendering**
+- [x] **Step 3: Replace generic light conversion and beam rendering**
 
   Add this helper immediately before `drawCarLights`:
 
@@ -231,7 +231,7 @@
   helper, calculate `sirenSx` and `sirenSy` locally as it does today; it must
   not depend on the removed generic `sx` or `sy` variables.
 
-- [ ] **Step 4: Tune the cached light sprites and wet-road reflection**
+- [x] **Step 4: Tune the cached light sprites and wet-road reflection**
 
   In `_fxS()`, keep the cached `hlBeam` canvas but change its stops to a softer
   warm falloff:
@@ -257,7 +257,7 @@
   }
   ```
 
-- [ ] **Step 5: Run the focused visual-rendering regression set**
+- [x] **Step 5: Run the focused visual-rendering regression set**
 
   Run:
 
@@ -274,7 +274,7 @@
   Expected: all assertion and syntax commands pass; lint exits zero with only
   the repository's existing warnings.
 
-- [ ] **Step 6: Commit the renderer upgrade**
+- [x] **Step 6: Commit the renderer upgrade**
 
   ```bash
   git add public/game/game.js scripts/test-vehicle-light-profiles.mjs
@@ -284,9 +284,9 @@
 
 ## Completion Checklist
 
-- [ ] Every active traffic sprite has a front/rear light profile.
-- [ ] Headlights and taillights follow the correct sprite points after traffic reverses.
-- [ ] Long vehicles project from the cab/front rather than their body midpoint.
-- [ ] Headlight and taillight halos are compact, not circular blobs.
-- [ ] Police siren remains separate from ordinary vehicle lights.
-- [ ] No development server was started.
+- [x] Every active traffic sprite has a front/rear light profile.
+- [x] Headlights and taillights follow the correct sprite points after traffic reverses.
+- [x] Long vehicles project from the cab/front rather than their body midpoint.
+- [x] Headlight and taillight halos are compact, not circular blobs.
+- [x] Police siren remains separate from ordinary vehicle lights.
+- [x] No development server was started.

@@ -20,4 +20,14 @@ for (const id of ids) {
   );
 }
 
+assert.match(game, /const profile = _CAR_LIGHT_PROFILES\[imageKey\] \|\| _DEFAULT_CAR_LIGHT_PROFILE/);
+assert.doesNotMatch(game, /_CAR_LIGHT_MAP/);
+assert.match(game, /function _lightPointToCanvas\(point, facingRight, x, y, width, height\)/);
+assert.match(game, /const frontLights = profile\.front\.map\(point => _lightPointToCanvas/);
+assert.match(game, /const rearLights = profile\.rear\.map\(point => _lightPointToCanvas/);
+assert.match(game, /beamOriginX = beamMidX \+ direction \* car\.width \* profile\.beam\.offset/);
+assert.match(game, /ctx\.globalCompositeOperation = 'screen'/);
+assert.match(game, /const glowR = CELL \* profile\.halo\.head/);
+assert.match(game, /const glowR = CELL \* profile\.halo\.tail/);
+
 console.log('vehicle light profile assertions passed');

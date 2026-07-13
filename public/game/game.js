@@ -3839,9 +3839,9 @@ const Renderer = (() => {
     });
     const headlightBeam = mk(192, 96, (g) => {
       const grd = g.createLinearGradient(0, 48, 192, 48);
-      grd.addColorStop(0, 'rgba(255,240,190,0.20)');
-      grd.addColorStop(0.45, 'rgba(255,240,190,0.07)');
-      grd.addColorStop(1, 'rgba(255,240,190,0)');
+      grd.addColorStop(0, 'rgba(255,236,178,0.15)');
+      grd.addColorStop(0.30, 'rgba(255,231,164,0.07)');
+      grd.addColorStop(1, 'rgba(255,226,150,0)');
       g.fillStyle = grd;
       g.beginPath();
       g.moveTo(0, 40);
@@ -4224,6 +4224,13 @@ const Renderer = (() => {
     }
   }
 
+  function _lightPointToCanvas(point, facingRight, x, y, width, height) {
+    return {
+      x: x + (facingRight ? point[0] : 1 - point[0]) * width,
+      y: y + point[1] * height,
+    };
+  }
+
   function drawCarLights(row, rowY, car) {
     const isSiren = car.isSirenCar === true;
     if (nightRatio <= 0.15 && !isSiren) return;
@@ -4234,62 +4241,54 @@ const Renderer = (() => {
       ? 'police_siren'
       : (car.spriteKey || getSpriteName(row.idx * 7 + (car.spriteSlot || 0)));
     const imageKey = spriteName === 'police_siren' ? 'police' : spriteName;
-    const nativeW = spriteName === 'truck' || spriteName === 'firetruck' || spriteName === 'bus'
-      ? 192
-      : spriteName === 'ambulance' ? 128 : 96;
-    const sx = car.width / nativeW;
-    const sy = car.height / 46;
     const facingRight = car.speed > 0;
     const direction = facingRight ? 1 : -1;
-    const lights = _CAR_LIGHT_MAP[imageKey] || _CAR_LIGHT_MAP.taxi;
+    const profile = _CAR_LIGHT_PROFILES[imageKey] || _DEFAULT_CAR_LIGHT_PROFILE;
+    const frontLights = profile.front.map(point => _lightPointToCanvas(point, facingRight, x, y, car.width, car.height));
+    const rearLights = profile.rear.map(point => _lightPointToCanvas(point, facingRight, x, y, car.width, car.height));
     const fxs = _fxS();
     const alpha = Math.max(nightRatio * 0.85, isSiren ? 0.35 : 0);
-    const toCanvas = (lx, ly) => ({
-      x: facingRight ? x + lx * sx : x + (nativeW - lx) * sx,
-      y: y + ly * sy,
-    });
 
     ctx.save();
-    if (nightRatio > 0.15 && lights.front.length >= 2) {
-      const first = toCanvas(lights.front[0].x, lights.front[0].y);
-      const second = toCanvas(lights.front[1].x, lights.front[1].y);
-      const midX = (first.x + second.x) / 2;
-      const midY = (first.y + second.y) / 2;
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.globalAlpha = alpha;
+    if (nightRatio > 0.15 && frontLights.length >= 2) {
+      const beamMidX = (frontLights[0].x + frontLights[1].x) / 2;
+      const beamMidY = (frontLights[0].y + frontLights[1].y) / 2;
+      const beamOriginX = beamMidX + direction * car.width * profile.beam.offset;
+      const beamLength = CELL * profile.beam.length;
+      const beamWidth = CELL * profile.beam.width;
+      ctx.globalCompositeOperation = 'screen';
+      ctx.globalAlpha = alpha * profile.beam.alpha;
       ctx.save();
-      ctx.translate(midX, midY);
+      ctx.translate(beamOriginX, beamMidY);
       ctx.scale(direction, 1);
-      ctx.drawImage(fxs.hlBeam, 0, -CELL * 0.50, CELL * 1.65, CELL);
+      ctx.drawImage(fxs.hlBeam, 0, -beamWidth / 2, beamLength, beamWidth);
       ctx.restore();
 
-      for (const light of lights.front) {
-        const point = toCanvas(light.x, light.y);
-        const glowR = CELL * 0.50;
-        const dotR = Math.max(2, 4.5 * sx);
+      ctx.globalAlpha = alpha;
+      for (const point of frontLights) {
+        const glowR = CELL * profile.halo.head;
+        const dotR = Math.max(1.5, car.height * profile.halo.dot);
         ctx.drawImage(fxs.hlGlow, point.x - glowR, point.y - glowR, glowR * 2, glowR * 2);
         ctx.drawImage(fxs.hlDot, point.x - dotR, point.y - dotR, dotR * 2, dotR * 2);
       }
 
       if (_surfaceForRow(row).id === 'wetRoad') {
-        ctx.fillStyle = 'rgb(255,240,190)';
-        for (const light of lights.front) {
-          const point = toCanvas(light.x, light.y);
-          ctx.globalAlpha = alpha * 0.08 * Math.min(weatherRatio, 1);
+        ctx.fillStyle = 'rgb(255,235,180)';
+        ctx.globalAlpha = alpha * 0.055 * Math.min(weatherRatio, 1);
+        for (const point of frontLights) {
           ctx.beginPath();
-          ctx.ellipse(point.x, point.y + CELL * 0.10, CELL * 0.025, CELL * 0.10, 0, 0, Math.PI * 2);
+          ctx.ellipse(point.x, point.y + CELL * 0.075, CELL * 0.018, CELL * 0.070, 0, 0, Math.PI * 2);
           ctx.fill();
         }
       }
     }
 
     if (nightRatio > 0.15) {
-      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalCompositeOperation = 'screen';
       ctx.globalAlpha = alpha;
-      for (const light of lights.rear) {
-        const point = toCanvas(light.x, light.y);
-        const glowR = CELL * 0.22;
-        const dotR = Math.max(1.5, 2.5 * sx);
+      for (const point of rearLights) {
+        const glowR = CELL * profile.halo.tail;
+        const dotR = Math.max(1.2, car.height * profile.halo.dot * 0.58);
         ctx.drawImage(fxs.tlGlow, point.x - glowR, point.y - glowR, glowR * 2, glowR * 2);
         ctx.drawImage(fxs.tlDot, point.x - dotR, point.y - dotR, dotR * 2, dotR * 2);
       }

@@ -51,9 +51,9 @@ assert.match(gameShell, /id="btn-profile-skin-prev"/, 'Profile should let player
 assert.match(gameShell, /id="btn-profile-skin-next"/, 'Profile should let players cycle skins without opening shop');
 assert.match(gameShell, /id="btn-profile-trail-prev"/, 'Profile should let players cycle trails without opening shop');
 assert.match(gameShell, /id="btn-profile-trail-next"/, 'Profile should let players cycle trails without opening shop');
-assert.match(gameShell, /minHeight:\s*146/, 'Loadout skin/trail cards should be tall enough to feel like gear cards');
-assert.match(gameShell, /width:\s*82/, 'Loadout skin/trail previews should be visually prominent');
-assert.match(gameShell, /width:\s*28/, 'Loadout skin/trail card arrows should stay visually secondary');
+assert.match(globalCss, /\.loadout-gear-row\s*\{[\s\S]*?min-height:\s*146px/, 'Loadout skin/trail cards should be tall enough to feel like gear cards');
+assert.match(globalCss, /\.loadout-gear-preview\s*\{[\s\S]*?width:\s*82px/, 'Loadout skin/trail previews should be visually prominent');
+assert.match(globalCss, /\.loadout-arrow\s*\{[\s\S]*?width:\s*28px/, 'Loadout skin/trail card arrows should stay visually secondary');
 assert.match(globalCss, /grid-template-columns:\s*28px minmax\(0,\s*1fr\) 28px/, 'Loadout gear grid should reserve compact columns for arrows');
 assert.match(globalCss, /\.loadout-build-summary/, 'Loadout build summary should be styled');
 assert.match(globalCss, /\.hud-rail/, 'Gameplay HUD should style a single premium top rail');

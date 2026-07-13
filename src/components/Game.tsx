@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useState } from 'react';
 import Script from 'next/script';
 import { useCheckIn } from '@/hooks/useCheckIn';
 import { useLeaderboard } from '@/hooks/useLeaderboard';
@@ -97,24 +97,6 @@ export default function Game() {
       }
     };
   }, [runCompleteFlow]);
-
-  const loadoutGearCardStyle: CSSProperties = {
-    minHeight: 146,
-    gridTemplateRows: '82px auto',
-    gap: 8,
-    padding: '12px 8px 10px',
-  };
-  const loadoutGearArrowStyle: CSSProperties = {
-    width: 28,
-    height: 50,
-    fontSize: '1.1rem',
-  };
-  const loadoutGearPreviewStyle: CSSProperties = {
-    width: 82,
-    height: 80,
-    objectFit: 'contain',
-    imageRendering: 'pixelated',
-  };
 
   return (
     <div id="game-container" className="game-container">
@@ -235,55 +217,87 @@ export default function Game() {
       <div id="screen-loadout" className="screen hidden loadout-screen">
         <div className="loadout-panel">
           <div className="loadout-head">
-            <h2 className="loadout-title">LOADOUT</h2>
+            <h2 id="loadout-title" className="loadout-title">LOADOUT</h2>
             <div className="loadout-balance">
               <img src="/game/coin.png" alt="coin" />
               <span id="loadout-coin-count">0</span>
             </div>
           </div>
-          <div className="loadout-gear" id="loadout-gear">
-            <div className="loadout-gear-row" id="loadout-skin-card" style={loadoutGearCardStyle}>
-              <button className="loadout-arrow" id="btn-loadout-skin-prev" aria-label="Previous skin" style={loadoutGearArrowStyle}>‹</button>
-              <img id="loadout-skin-preview" className="loadout-gear-preview" src="/game/chars/cryptokid.png" alt="Selected skin" style={loadoutGearPreviewStyle} />
-              <div className="loadout-gear-info">
-                <span className="loadout-gear-label">Skin</span>
-                <span className="loadout-gear-name" id="loadout-skin-name">Genesis Runner</span>
-                <span className="loadout-gear-count" id="loadout-skin-count">1/1</span>
+          <div id="loadout-scroll" className="loadout-scroll">
+            <section id="run-complete-result" className="run-complete-result hidden" aria-label="Run results">
+              <div className="run-complete-score">
+                <span className="run-complete-score-label">STEPS</span>
+                <strong id="go-score">0</strong>
               </div>
-              <button className="loadout-arrow" id="btn-loadout-skin-next" aria-label="Next skin" style={loadoutGearArrowStyle}>›</button>
-            </div>
-            <div className="loadout-gear-row" id="loadout-trail-card" style={loadoutGearCardStyle}>
-              <button className="loadout-arrow" id="btn-loadout-trail-prev" aria-label="Previous trail" style={loadoutGearArrowStyle}>‹</button>
-              <img id="loadout-trail-preview" className="loadout-gear-preview" src="/nft/images/trail_default.png" alt="Selected trail" style={loadoutGearPreviewStyle} />
-              <div className="loadout-gear-info">
-                <span className="loadout-gear-label">Trail</span>
-                <span className="loadout-gear-name" id="loadout-trail-name">Default</span>
-                <span className="loadout-gear-count" id="loadout-trail-count">1/1</span>
+              <div className="run-complete-record">
+                <span id="go-record-label" className="run-complete-record-label">RECORD</span>
+                <strong id="go-best">0</strong>
+                <span id="go-record-state" className="run-complete-record-state hidden">NEW RECORD</span>
               </div>
-              <button className="loadout-arrow" id="btn-loadout-trail-next" aria-label="Next trail" style={loadoutGearArrowStyle}>›</button>
+              <div id="go-rating-row" className="go-rating-row">
+                <span id="go-rating-label" className="go-rating-label">Good Run</span>
+              </div>
+              <p id="go-coins-row" className="go-coins-row">
+                <img src="/game/coin.png" alt="" aria-hidden="true" />
+                <span>+<strong id="go-coins-earned">0</strong> COINS</span>
+              </p>
+              <div id="go-xp-row" className="go-xp-row">
+                <span className="go-xp-main"><img className="go-xp-icon ui-icon" src="/game/ui-icons/celebration.png" alt="" aria-hidden="true" />+<span id="go-xp-earned">0</span> XP</span>
+                <span id="go-xp-multi" className="go-xp-multi"></span>
+                <span id="go-xp-bonus" className="go-xp-bonus"></span>
+              </div>
+              <button type="button" id="go-quest-notify" className="quest-notify run-complete-quest">
+                <img className="quest-notify-icon ui-icon" src="/game/ui-icons/quests.png" alt="" aria-hidden="true" />
+                Quest complete! Tap to claim
+              </button>
+              <button type="button" className="btn btn-claim-score" id="btn-claim-score">CLAIM ONCHAIN</button>
+            </section>
+
+            <div className="loadout-gear" id="loadout-gear">
+              <div className="loadout-gear-row" id="loadout-skin-card">
+                <button className="loadout-arrow" id="btn-loadout-skin-prev" aria-label="Previous skin">‹</button>
+                <img id="loadout-skin-preview" className="loadout-gear-preview" src="/game/chars/cryptokid.png" alt="Selected skin" />
+                <div className="loadout-gear-info">
+                  <span className="loadout-gear-label">Skin</span>
+                  <span className="loadout-gear-name" id="loadout-skin-name">Genesis Runner</span>
+                  <span className="loadout-gear-count" id="loadout-skin-count">1/1</span>
+                </div>
+                <button className="loadout-arrow" id="btn-loadout-skin-next" aria-label="Next skin">›</button>
+              </div>
+              <div className="loadout-gear-row" id="loadout-trail-card">
+                <button className="loadout-arrow" id="btn-loadout-trail-prev" aria-label="Previous trail">‹</button>
+                <img id="loadout-trail-preview" className="loadout-gear-preview" src="/nft/images/trail_default.png" alt="Selected trail" />
+                <div className="loadout-gear-info">
+                  <span className="loadout-gear-label">Trail</span>
+                  <span className="loadout-gear-name" id="loadout-trail-name">Default</span>
+                  <span className="loadout-gear-count" id="loadout-trail-count">1/1</span>
+                </div>
+                <button className="loadout-arrow" id="btn-loadout-trail-next" aria-label="Next trail">›</button>
+              </div>
             </div>
-          </div>
-          <div className="loadout-grid">
-            <button id="loadout-boost-magnet" className="loadout-card" data-id="boost_magnet">
-              <img src="/game/boosters/coin_magnet.png" alt="Coin Magnet" className="loadout-icon" />
-              <span className="loadout-name">Coin Magnet</span>
-              <span className="loadout-count" id="loadout-count-magnet">×0</span>
-            </button>
-            <button id="loadout-boost-double" className="loadout-card" data-id="boost_double">
-              <img src="/game/boosters/double_coins.png" alt="Double Coins" className="loadout-icon" />
-              <span className="loadout-name">Double Coins</span>
-              <span className="loadout-count" id="loadout-count-double">×0</span>
-            </button>
-            <button id="loadout-boost-shield" className="loadout-card" data-id="boost_shield">
-              <img src="/game/boosters/second_chance.png" alt="Second Chance" className="loadout-icon" />
-              <span className="loadout-name">Second Chance</span>
-              <span className="loadout-count" id="loadout-count-shield">×0</span>
-            </button>
-          </div>
-          <div id="loadout-build-summary" className="loadout-build-summary loadout-build-empty">
-            <span className="loadout-build-kicker">Run build</span>
-            <span id="loadout-build-title" className="loadout-build-title">No boosters selected</span>
-            <span id="loadout-build-hint" className="loadout-build-hint">Pick boosters to shape this run</span>
+            <div className="loadout-grid">
+              <button id="loadout-boost-magnet" className="loadout-card" data-id="boost_magnet">
+                <img src="/game/boosters/coin_magnet.png" alt="Coin Magnet" className="loadout-icon" />
+                <span className="loadout-name">Coin Magnet</span>
+                <span className="loadout-count" id="loadout-count-magnet">×0</span>
+              </button>
+              <button id="loadout-boost-double" className="loadout-card" data-id="boost_double">
+                <img src="/game/boosters/double_coins.png" alt="Double Coins" className="loadout-icon" />
+                <span className="loadout-name">Double Coins</span>
+                <span className="loadout-count" id="loadout-count-double">×0</span>
+              </button>
+              <button id="loadout-boost-shield" className="loadout-card" data-id="boost_shield">
+                <img src="/game/boosters/second_chance.png" alt="Second Chance" className="loadout-icon" />
+                <span className="loadout-name">Second Chance</span>
+                <span className="loadout-count" id="loadout-count-shield">×0</span>
+              </button>
+            </div>
+            <div id="loadout-build-summary" className="loadout-build-summary loadout-build-empty">
+              <span className="loadout-build-kicker">Run build</span>
+              <span id="loadout-build-title" className="loadout-build-title">No boosters selected</span>
+              <span id="loadout-build-hint" className="loadout-build-hint">Pick boosters to shape this run</span>
+            </div>
+            <div id="loadout-inline-message" className="loadout-inline-message" role="status" aria-live="polite" aria-atomic="true"></div>
           </div>
           <div className="loadout-actions">
             <button className="btn btn-start" id="btn-loadout-start">START RUN</button>
@@ -422,32 +436,6 @@ export default function Game() {
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Game Over Screen */}
-      <div id="screen-gameover" className="screen hidden" style={{justifyContent:'center'}}>
-        <h2 style={{color:'#fff',fontSize:'clamp(1.5rem,7vw,2.5rem)',marginBottom:'8px',letterSpacing:'3px'}}>GAME OVER</h2>
-        <p style={{color:'#4D8FFF',marginBottom:'6px',fontSize:'clamp(0.9rem,4vw,1.2rem)',letterSpacing:'2px'}}>
-          SCORE: <span id="go-score">0</span>
-        </p>
-        <p style={{color:'rgba(255,255,255,0.5)',marginBottom:'8px',fontSize:'clamp(0.75rem,3vw,1rem)',letterSpacing:'2px'}}>
-          BEST: <span id="go-best">0</span>
-        </p>
-        <div id="go-rating-row" className="go-rating-row" style={{display:'none'}}>
-          <span id="go-rating-label" className="go-rating-label">Good Run</span>
-        </div>
-        <p id="go-coins-row" style={{color:'#FFD700',marginBottom:'8px',fontSize:'clamp(0.85rem,3.5vw,1.1rem)',letterSpacing:'2px',display:'none',alignItems:'center',justifyContent:'center',gap:'5px'}}>
-          <img src="/game/coin.png" alt="coin" style={{width:'18px',height:'18px',objectFit:'contain'}} /> +<span id="go-coins-earned">0</span> COINS
-        </p>
-        <div id="go-xp-row" className="go-xp-row" style={{display:'none'}}>
-          <span className="go-xp-main"><img className="go-xp-icon ui-icon" src="/game/ui-icons/celebration.png" alt="" aria-hidden="true" />+<span id="go-xp-earned">0</span> XP</span>
-          <span id="go-xp-multi" className="go-xp-multi" style={{display:'none'}}></span>
-          <span id="go-xp-bonus" className="go-xp-bonus" style={{display:'none'}}></span>
-        </div>
-        <p id="go-quest-notify" className="quest-notify" style={{display:'none'}}><img className="quest-notify-icon ui-icon" src="/game/ui-icons/quests.png" alt="" aria-hidden="true" />Quest complete! Tap to claim</p>
-        <button className="btn btn-claim-score" id="btn-claim-score" style={{display:'none'}}>CLAIM ONCHAIN</button>
-        <button className="btn btn-restart" id="btn-restart">↺ PLAY AGAIN</button>
-        <button className="btn btn-back" id="btn-go-menu">← MENU</button>
       </div>
 
       {/* XP Rewards Sheet */}

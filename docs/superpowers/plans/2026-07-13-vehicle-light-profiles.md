@@ -57,12 +57,6 @@
     );
   }
 
-  assert.match(game, /function _lightPointToCanvas\(point, facingRight, x, y, width, height\)/);
-  assert.match(game, /ctx\.globalCompositeOperation = 'screen'/);
-  assert.match(game, /profile\.beam\.offset/);
-  assert.match(game, /profile\.halo\.head/);
-  assert.match(game, /profile\.halo\.tail/);
-
   console.log('vehicle light profile assertions passed');
   ```
 
@@ -155,9 +149,11 @@
 
   ```js
   assert.match(game, /const profile = _CAR_LIGHT_PROFILES\[imageKey\] \|\| _DEFAULT_CAR_LIGHT_PROFILE/);
+  assert.match(game, /function _lightPointToCanvas\(point, facingRight, x, y, width, height\)/);
   assert.match(game, /const frontLights = profile\.front\.map\(point => _lightPointToCanvas/);
   assert.match(game, /const rearLights = profile\.rear\.map\(point => _lightPointToCanvas/);
   assert.match(game, /beamOriginX = beamMidX \+ direction \* car\.width \* profile\.beam\.offset/);
+  assert.match(game, /ctx\.globalCompositeOperation = 'screen'/);
   assert.match(game, /const glowR = CELL \* profile\.halo\.head/);
   assert.match(game, /const glowR = CELL \* profile\.halo\.tail/);
   ```

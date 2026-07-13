@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, type CSSProperties } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import Script from 'next/script';
 import { useCheckIn } from '@/hooks/useCheckIn';
 import { useLeaderboard } from '@/hooks/useLeaderboard';
@@ -12,16 +12,27 @@ import { useDailySpin } from '@/hooks/useDailySpin';
 import { useNftMint } from '@/hooks/useNftMint';
 import { useScoreClaim } from '@/hooks/useScoreClaim';
 import { useEconomySync } from '@/hooks/useEconomySync';
+import {
+  createRunCompleteFlow,
+  type RunCompleteFlow,
+} from '@/lib/client/runCompleteFlow';
 
 type GameWindow = Window & {
   Renderer?: {
     resize?: () => void;
   };
   __BASE_CHECKIN_CLAIM?: () => void;
-  __BASE_SUBMIT_SCORE?: (score: number, sessionCoins?: number) => Promise<unknown>;
+  __BASE_SUBMIT_SCORE?: (
+    runId: number,
+    score: number,
+    sessionCoins?: number,
+  ) => Promise<unknown>;
+  __BASE_RUN_COMPLETE_FLOW?: RunCompleteFlow;
 };
 
 export default function Game() {
+  const [runCompleteFlow] = useState(createRunCompleteFlow);
+
   useCheckIn();
   useLeaderboard();
   useCoinLeaderboard();
@@ -35,6 +46,7 @@ export default function Game() {
 
   useEffect(() => {
     const gameWindow = window as GameWindow;
+    gameWindow.__BASE_RUN_COMPLETE_FLOW = runCompleteFlow;
 
     // Resize canvas on mount
     const handleResize = () => {
@@ -54,11 +66,25 @@ export default function Game() {
 
     // Auto-submit score after game over (offchain)
     const handleAutoSubmit = (e: Event) => {
-      const detail = (e as CustomEvent<{ score?: number; sessionCoins?: number }>).detail;
+      const detail = (e as CustomEvent<{
+        runId?: number;
+        score?: number;
+        sessionCoins?: number;
+      }>).detail;
+      const runId = detail?.runId;
       const score = detail?.score;
       const sessionCoins = detail?.sessionCoins;
       const submitFn = gameWindow.__BASE_SUBMIT_SCORE;
-      if (submitFn && score) submitFn(score, sessionCoins);
+      if (
+        submitFn
+        && Number.isSafeInteger(runId)
+        && (runId ?? 0) > 0
+        && typeof score === 'number'
+        && Number.isFinite(score)
+        && score > 0
+      ) {
+        submitFn(runId as number, score, sessionCoins);
+      }
     };
     window.addEventListener('base-auto-submit-score', handleAutoSubmit);
 
@@ -66,8 +92,11 @@ export default function Game() {
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('base-checkin-claim', handleClaim);
       window.removeEventListener('base-auto-submit-score', handleAutoSubmit);
+      if (gameWindow.__BASE_RUN_COMPLETE_FLOW === runCompleteFlow) {
+        delete gameWindow.__BASE_RUN_COMPLETE_FLOW;
+      }
     };
-  }, []);
+  }, [runCompleteFlow]);
 
   const loadoutGearCardStyle: CSSProperties = {
     minHeight: 146,

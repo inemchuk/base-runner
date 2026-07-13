@@ -17,6 +17,7 @@ import {
   setFocus,
   topUpFragments,
 } from '../src/lib/economy/core.ts';
+import { LEVEL_REWARDS } from '../src/lib/economy/levels.ts';
 
 function sumCheckinWeek() {
   return CHECKIN_REWARDS.reduce((sum, reward) => {
@@ -68,6 +69,13 @@ for (const [itemId, tier, price, craftFee] of approvedSkinCatalog) {
 
 assert.equal(getCraftMeta('trail_coins')?.craftFee, 220);
 assert.equal(getCraftMeta('death_dramatic')?.craftFee, 220);
+
+assert.deepEqual(LEVEL_REWARDS[20], {
+  type: 'bundle',
+  value: { coins: 150, fragments: 20 },
+  iconSrc: '/game/ui-icons/fragments.png',
+  label: '+150 coins + 20 fragments',
+});
 
 const base = normalizeShopData({ owned: ['skin_cryptokid'], equipped: 'skin_cryptokid' });
 const firefighterPurchase = buyShopItem(base, 'skin_9', 850);

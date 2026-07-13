@@ -46,7 +46,7 @@ export const LEVEL_REWARDS: Record<number, LevelReward> = {
   12: { type: 'trail', value: 'trail_hearts', sprite: '/nft/images/trail_hearts.png', label: 'Hearts Trail unlocked!' },
   15: { type: 'bundle', value: { coins: 120, fragments: 8 }, iconSrc: '/game/ui-icons/fragments.png', label: '+120 coins + 8 fragments' },
   18: { type: 'trail', value: 'trail_fire', sprite: '/nft/images/trail_fire.png', label: 'Fire Trail unlocked!' },
-  20: { type: 'skin', value: 'skin_founder', sprite: '/game/chars/founder.png', label: 'Vitalik Buterin unlocked!' },
+  20: { type: 'bundle', value: { coins: 150, fragments: 20 }, iconSrc: '/game/ui-icons/fragments.png', label: '+150 coins + 20 fragments' },
   25: { type: 'bundle', value: { container: 'epic_crate' }, iconSrc: '/game/ui-icons/starter-pack.png', label: 'Epic Crate' },
   30: { type: 'bundle', value: { container: 'legendary_crate' }, iconSrc: '/game/ui-icons/crown.png', label: 'Legendary Crate' },
   35: { type: 'bundle', value: { container: 'legendary_focus_bundle' }, iconSrc: '/game/ui-icons/crown.png', label: 'Legendary Focus Bundle' },

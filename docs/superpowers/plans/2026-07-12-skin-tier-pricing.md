@@ -15,6 +15,7 @@
 - Direct purchases stay enabled only for Common, Rare, and Epic skins.
 - Brian Armstrong, Vitalik Buterin, and Base King are Legendary and require 60 fragments plus a 500-coin craft fee; direct purchase is disabled.
 - The 300-coin Epic craft fee applies only to Epic skins; Epic trail and death-effect craft fees stay at 220 coins.
+- Level 20 grants `+150 coins +20 fragments` and never unlocks Vitalik directly.
 - Do not start the local dev server. Verify with the existing Node checks and any already-running local app only.
 
 ---
@@ -31,7 +32,7 @@
 - `getCraftMeta(itemId)` returns the item-specific fee when present, otherwise `ECONOMY_TIERS[tier].craftFee`.
 - `buyShopItem(state, itemId, coins)` continues to reject every `SHOP_PURCHASES` entry whose `price` is `null`.
 
-- [ ] **Step 1: Add the failing server-economy assertions**
+- [x] **Step 1: Add the failing server-economy assertions**
 
   In `scripts/test-economy-core.mjs`, import `CRAFT_CONFIG` and `SHOP_PURCHASES` from the config module, and import `buyShopItem` from the core module:
 
@@ -99,17 +100,17 @@
   assert.equal(vitalikPurchase.error, 'direct_buy_disabled');
   ```
 
-- [ ] **Step 2: Run the new assertions and confirm the expected failure**
+- [x] **Step 2: Run the new assertions and confirm the expected failure**
 
   Run:
 
   ```bash
-  node scripts/test-economy-core.mjs
+  node --experimental-strip-types scripts/test-economy-core.mjs
   ```
 
   Expected: failure on `skin_2 tier`, because Justin Sun is currently Rare rather than Epic.
 
-- [ ] **Step 3: Add item-level craft-fee overrides and update the server catalog**
+- [x] **Step 3: Add item-level craft-fee overrides and update the server catalog**
 
   In `src/lib/economy/config.ts`, change the config type and `getCraftMeta` support:
 
@@ -166,7 +167,7 @@
     name: config.name,
     sprite: config.sprite,
     fragments: tier.fragments,
-    craftFee: config.craftFee ?? tier.craftFee,
+    craftFee: ('craftFee' in config ? config.craftFee : undefined) ?? tier.craftFee,
     topUpCost: tier.topUpCost,
     topUpCapPct: tier.topUpCapPct,
     poolCapPct: tier.poolCapPct,
@@ -174,19 +175,23 @@
   };
   ```
 
-- [ ] **Step 4: Run server and economy regression checks**
+- [x] **Step 4: Run server and economy regression checks**
 
   Run:
 
   ```bash
-  node scripts/test-economy-core.mjs
+  node --experimental-strip-types scripts/test-economy-core.mjs
   node scripts/verify-economy-server-authority.mjs
   npx tsc --noEmit
   ```
 
-  Expected: every command exits zero. The client shop-sink check is deliberately deferred to Task 2 because it asserts the canvas catalog that has not changed yet.
+  Expected: the Node assertions pass. `npx tsc --noEmit` has known pre-existing
+  errors in `src/lib/economy/quests.test.ts`; it must report no new errors in
+  the changed economy files. The client shop-sink check is deliberately
+  deferred to Task 2 because it asserts the canvas catalog that has not
+  changed yet.
 
-- [ ] **Step 5: Commit the server authority change**
+- [x] **Step 5: Commit the server authority change**
 
   ```bash
   git add src/lib/economy/config.ts src/lib/economy/core.ts scripts/test-economy-core.mjs
@@ -207,7 +212,7 @@
 - Canvas `getCraftMeta(itemId)` resolves `cfg.craftFee` before the tier default.
 - `_directBuyAvailable(itemId)` continues to disable all Legendary direct-buy buttons.
 
-- [ ] **Step 1: Add a failing client-mirror regression test**
+- [x] **Step 1: Add a failing client-mirror regression test**
 
   Create `scripts/test-skin-tier-pricing.mjs`:
 
@@ -263,17 +268,17 @@
   assert.match(game, /skin_founder',\s+name:\s+'Vitalik Buterin',\s+price:\s+null/, 'client shop UI should disable Vitalik direct purchase');
   ```
 
-- [ ] **Step 2: Run the client-mirror test and confirm the expected failure**
+- [x] **Step 2: Run the client-mirror test and confirm the expected failure**
 
   Run:
 
   ```bash
-  node scripts/test-skin-tier-pricing.mjs
+  node --experimental-strip-types scripts/test-skin-tier-pricing.mjs
   ```
 
   Expected: failure on Justin Sun’s client price or tier, because the canvas shop still lists him as a Rare 750-coin skin.
 
-- [ ] **Step 3: Update canvas prices, tiers, and item-level craft fees**
+- [x] **Step 3: Update canvas prices, tiers, and item-level craft fees**
 
   In `public/game/game.js`, replace the active `ITEMS` skin rows with this rarity-ordered catalog. Leave the free Genesis Runner first and do not re-add retired `skin_1`:
 
@@ -325,13 +330,13 @@
   };
   ```
 
-- [ ] **Step 4: Verify client rendering contracts and full regression set**
+- [x] **Step 4: Verify client rendering contracts and full regression set**
 
   Run:
 
   ```bash
-  node scripts/test-skin-tier-pricing.mjs
-  node scripts/test-economy-core.mjs
+  node --experimental-strip-types scripts/test-skin-tier-pricing.mjs
+  node --experimental-strip-types scripts/test-economy-core.mjs
   node scripts/verify-economy-shop-sinks.mjs
   node scripts/test-runner-hub.mjs
   node scripts/test-reward-labels.mjs
@@ -343,7 +348,7 @@
 
   Expected: all assertion and syntax commands pass; lint exits zero with only pre-existing warnings.
 
-- [ ] **Step 5: Commit the canvas mirror and regression test**
+- [x] **Step 5: Commit the canvas mirror and regression test**
 
   ```bash
   git add public/game/game.js scripts/test-skin-tier-pricing.mjs scripts/verify-economy-shop-sinks.mjs
@@ -351,11 +356,45 @@
   git commit -m "feat(shop): align skin catalog pricing"
   ```
 
+### Task 3: Preserve Legendary exclusivity at level 20
+
+**Files:**
+- Modify: `src/lib/economy/levels.ts:40-53`
+- Modify: `public/game/game.js:9565-9578`
+- Modify: `scripts/test-economy-core.mjs:1-90`
+- Modify: `scripts/test-skin-tier-pricing.mjs:1-55`
+
+- [x] **Step 1: Add a server assertion for the approved level-20 bundle**
+
+  `scripts/test-economy-core.mjs` imports `LEVEL_REWARDS` and asserts that
+  level 20 is exactly `{ coins: 150, fragments: 20 }`, rather than a
+  `skin_founder` reward.
+
+- [x] **Step 2: Confirm the server assertion fails against the old reward**
+
+  `node --experimental-strip-types scripts/test-economy-core.mjs` failed with
+  the previous `Vitalik Buterin unlocked!` skin reward.
+
+- [x] **Step 3: Replace the server and canvas level-20 rewards**
+
+  Both reward tables now use a `bundle` with `150` coins and `20` fragments,
+  using the fragments icon and matching label.
+
+- [x] **Step 4: Add and run the canvas-mirror assertion**
+
+  `scripts/test-skin-tier-pricing.mjs` extracts the XP module and verifies the
+  local level-20 bundle. It failed before the canvas change and passes after.
+
+- [x] **Step 5: Include the level-20 rule in final regression and commit**
+
+  Run the Task 2 regression suite, then commit the canvas mirror, level reward,
+  and source-contract coverage together.
+
 ## Completion Checklist
 
-- [ ] Firefighter and Police Officer are Rare, directly purchasable skins.
-- [ ] Justin Sun and Ape Holder are Epic and cost 35 fragments plus 300 coins to craft.
-- [ ] Brian Armstrong, Vitalik Buterin, and Base King are Legendary and cannot be bought directly.
-- [ ] Epic non-skin cosmetics still use the 220-coin craft fee.
-- [ ] Local and server catalogs have matching active-skin tiers and direct prices.
-- [ ] Existing ownership data remains untouched.
+- [x] Firefighter and Police Officer are Rare, directly purchasable skins.
+- [x] Justin Sun and Ape Holder are Epic and cost 35 fragments plus 300 coins to craft.
+- [x] Brian Armstrong, Vitalik Buterin, and Base King are Legendary and cannot be bought directly.
+- [x] Epic non-skin cosmetics still use the 220-coin craft fee.
+- [x] Local and server catalogs have matching active-skin tiers and direct prices.
+- [x] Existing ownership data remains untouched.

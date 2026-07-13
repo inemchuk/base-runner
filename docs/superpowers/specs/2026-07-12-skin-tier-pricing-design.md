@@ -37,6 +37,8 @@ significance, and scarcity.
   and death-effect fees remain unchanged at 220 coins.
 - Common, Rare, and Epic skins retain a direct-buy option as an alternative to
   crafting.
+- Level 20 grants `+150 coins +20 fragments`; it must not directly unlock
+  Vitalik or any other Legendary skin.
 - Existing ownership, equipped skins, fragments, and past purchases remain
   valid. The change must never revoke an owned item or issue a retroactive
   debit/refund.
@@ -59,3 +61,4 @@ global Epic tier fee would incorrectly reprice Epic trails and death effects.
 - Epic non-skin cosmetics continue to consume 35 fragments and 220 coins.
 - The local canvas catalog and economy/server catalog agree on all active skin
   tiers and direct prices.
+- Server and canvas level-20 rewards agree on `+150 coins +20 fragments`.

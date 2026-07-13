@@ -42,4 +42,5 @@ assert.match(game, /_runEconomyAction\('buyItem'/, 'game should call server econ
 assert.match(game, /_runEconomyAction\('buyBoosterPack'/, 'game should call server economy action for booster packs');
 assert.match(game, /no_address[\s\S]*localFallback/, 'server-first helper should keep local fallback for disconnected local testing');
 assert.match(game, /Craft only/, 'legendary direct-buy cards should show fragment-only state instead of coin buy');
-assert.match(game, /skin_1',\s+name:\s+'Neon Runner',\s+price:\s+750/, 'client shop UI should mirror canonical rare pricing');
+assert.match(game, /skin_2',\s+name:\s+'Justin Sun',\s+price:\s+1200/, 'client shop UI should mirror Justin Sun epic pricing');
+assert.match(game, /skin_founder',\s+name:\s+'Vitalik Buterin',\s+price:\s+null/, 'client shop UI should disable Vitalik direct purchase');

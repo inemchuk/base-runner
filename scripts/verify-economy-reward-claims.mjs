@@ -24,7 +24,7 @@ assert.match(storage, /export async function readQuestState/, 'storage should re
 assert.match(storage, /export async function writeQuestState/, 'storage should write server quest state');
 assert.match(storage, /export async function readLevelState/, 'storage should read server level state');
 assert.match(storage, /export async function writeLevelState/, 'storage should write server level state');
-assert.match(storage, /export async function writeBestScore/, 'storage should migrate legacy best score to server leaderboard storage');
+assert.doesNotMatch(storage, /export async function writeBestScore/, 'storage should not accept unverified legacy scores for the leaderboard');
 
 assert.match(quests, /export const QUEST_DEFS/, 'shared quest config should exist server-side');
 assert.match(quests, /export function updateQuestProgressFromRun/, 'server should derive quest progress from accepted runs');
@@ -58,7 +58,7 @@ assert.match(hydrateRoute, /mergeLegacyShop/, 'hydrate should merge legacy shop 
 assert.match(hydrateRoute, /mergeLegacyQuests/, 'hydrate should merge legacy quest progress and claims');
 assert.match(hydrateRoute, /mergeLegacyLevels/, 'hydrate should merge legacy XP level state');
 assert.match(hydrateRoute, /level <= legacy\.level[\s\S]*claimed\.add\(level\)/, 'hydrate should mark already reached legacy level rewards claimed');
-assert.match(hydrateRoute, /writeBestScore/, 'hydrate should preserve legacy best score');
+assert.doesNotMatch(hydrateRoute, /writeBestScore/, 'hydrate should not migrate unverified legacy best scores');
 
 assert.match(scoreSubmit, /updateQuestProgressFromRun/, 'score submit should update server quest progress after anti-cheat validation');
 assert.match(scoreSubmit, /updateLevelProgressFromRun/, 'score submit should update server XP progress after anti-cheat validation');
@@ -83,6 +83,7 @@ const checkinHandlerEnd = game.indexOf("_bind('btn-ci-back'", checkinHandlerStar
 const checkinHandler = game.slice(checkinHandlerStart, checkinHandlerEnd === -1 ? undefined : checkinHandlerEnd);
 
 assert.match(game, /function applyCheckinRewardServerClaim\(\)[\s\S]*__BASE_ECONOMY_CLAIM/, 'server check-in helper should call economy claim bridge');
+assert.match(game, /function claimCheckinWithRetry\([\s\S]*applyCheckinRewardServerClaim/, 'check-in retry helper should retain the server claim path');
 assert.match(game, /serverRejected/, 'game should not local-fallback when the server rejects a reward claim');
 assert.match(game, /applyQuestRewardServerClaim/, 'quest claims should prefer server economy claim');
 assert.match(game, /base-auto-submit-score[\s\S]*sessionCoins/, 'game should submit session coins with score for quest progress');
@@ -90,7 +91,7 @@ assert.match(game, /claimReward\(level,\s*reward\)[\s\S]*source:\s*'level'/, 'le
 assert.match(game, /applyServerState\(serverState\)/, 'game should hydrate XP state from the server');
 assert.doesNotMatch(game, /updateLevelProgressFromRun/, 'game should not contain the server XP mutator');
 assert.match(game, /window\.Save = Save[\s\S]*window\.Shop = Shop[\s\S]*window\.Quests = Quests[\s\S]*window\.Xp = Xp[\s\S]*window\.RewardEconomy = RewardEconomy/, 'game modules should be exposed for React sync/hydration bridges');
-assert.match(checkinHandler, /applyCheckinRewardServerClaim/, 'confirmed check-in handler should prefer server reward claim');
+assert.match(checkinHandler, /claimCheckinWithRetry/, 'confirmed check-in handler should prefer the server reward-claim retry path');
 assert.match(checkinHandler, /applyCheckinRewardLocalFallback/, 'confirmed check-in handler should keep local fallback for dev/no-wallet');
 assert.doesNotMatch(
   checkinHandler,

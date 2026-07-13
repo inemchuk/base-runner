@@ -6025,7 +6025,7 @@ const UI = (() => {
   const SCREENS = {
     menu:     document.getElementById('screen-menu'),
     loadout:  document.getElementById('screen-loadout'),
-    gameover: document.getElementById('screen-gameover'),
+    runcomplete: document.getElementById('screen-loadout'),
     lb:       document.getElementById('screen-lb'),
     ci:       document.getElementById('screen-ci'),
     shop:     document.getElementById('screen-shop'),
@@ -6153,17 +6153,21 @@ const UI = (() => {
     if (badge) badge.classList.remove('visible');
   }
 
-  // ===== Показать экран Game Over =====
-  function showGameOver(score, best, xpEarned, xpBreakdown, rating) {
+  function renderRunComplete(snapshot) {
+    if (!snapshot) return;
     const goScore = document.getElementById('go-score');
     const goBest  = document.getElementById('go-best');
-    if (goScore) goScore.textContent = score;
-    if (goBest)  goBest.textContent  = best;
+    const recordLabel = document.getElementById('go-record-label');
+    const recordState = document.getElementById('go-record-state');
+    if (goScore) goScore.textContent = snapshot.score;
+    if (goBest)  goBest.textContent  = snapshot.best;
+    if (recordLabel) recordLabel.textContent = snapshot.isNewRecord ? 'PERSONAL BEST' : 'RECORD';
+    if (recordState) recordState.classList.toggle('hidden', !snapshot.isNewRecord);
 
-    // Rating badge (скрыт для casual — без бейджа за низкий счёт)
     const ratingRow   = document.getElementById('go-rating-row');
     const ratingLabel = document.getElementById('go-rating-label');
-    const showRating  = rating && rating.id && rating.id !== 'casual';
+    const rating = snapshot.rating;
+    const showRating = rating && rating.id && rating.id !== 'casual';
     if (showRating && ratingLabel && ratingRow) {
       ratingLabel.textContent = `${rating.label || rating.id} Run`;
       ratingRow.style.display = 'flex';
@@ -6171,25 +6175,27 @@ const UI = (() => {
       ratingRow.style.display = 'none';
     }
 
-    // Coins row
     const coinsRow    = document.getElementById('go-coins-row');
     const coinsEarned = document.getElementById('go-coins-earned');
-    if (_sessionCoins > 0) {
-      if (coinsEarned) coinsEarned.textContent = _sessionCoins;
+    if (snapshot.sessionCoins > 0) {
+      if (coinsEarned) coinsEarned.textContent = snapshot.sessionCoins;
       if (coinsRow)    coinsRow.style.display   = 'flex';
     } else {
       if (coinsRow) coinsRow.style.display = 'none';
     }
 
-    // XP row with breakdown
     const xpRow      = document.getElementById('go-xp-row');
     const xpEarnedEl = document.getElementById('go-xp-earned');
     const xpMultiEl  = document.getElementById('go-xp-multi');
     const xpBonusEl  = document.getElementById('go-xp-bonus');
-    if (xpEarned > 0 && xpBreakdown) {
-      if (xpEarnedEl) xpEarnedEl.textContent = xpEarned;
-      if (xpMultiEl) xpMultiEl.style.display = 'none';
-      // Bonus chips
+    const xpBreakdown = snapshot.xpBreakdown;
+    if (snapshot.xpEarned > 0 && xpBreakdown) {
+      if (xpEarnedEl) xpEarnedEl.textContent = snapshot.xpEarned;
+      const multiplier = Number(xpBreakdown.multi) || 1;
+      if (xpMultiEl) {
+        xpMultiEl.textContent = multiplier > 1 ? `×${multiplier}` : '';
+        xpMultiEl.style.display = multiplier > 1 ? '' : 'none';
+      }
       const bonuses = [];
       if (xpBreakdown.recordBonus)  bonuses.push(`${_uiIconHtml('leaderboard', 'go-xp-bonus-icon', 'record')} +${xpBreakdown.recordBonus}`);
       if (xpBreakdown.streakBonus)  bonuses.push(`${_uiIconHtml('fire', 'go-xp-bonus-icon', 'streak')} +${xpBreakdown.streakBonus}`);
@@ -6203,28 +6209,45 @@ const UI = (() => {
       if (xpRow) xpRow.style.display = 'none';
     }
 
-    // Quest notification
     const questNotify = document.getElementById('go-quest-notify');
     if (questNotify) {
-      questNotify.style.display = Quests.hasClaimable() ? 'inline-flex' : 'none';
+      questNotify.style.display = snapshot.hasClaimableQuest ? 'inline-flex' : 'none';
     }
 
-    // Onchain score-claim button — visible only with a connected wallet & real score
     const claimScoreBtn = document.getElementById('btn-claim-score');
     if (claimScoreBtn) {
-      const canClaim = Boolean(window.__BASE_WALLET) && score > 0;
-      claimScoreBtn.style.display = canClaim ? '' : 'none';
-      if (canClaim) {
-        claimScoreBtn.dataset.score = String(score);
-        claimScoreBtn.dataset.claimed = '';
-        claimScoreBtn.dataset.claiming = '';
-        claimScoreBtn.disabled = false;
-        claimScoreBtn.style.opacity = '1';
-        claimScoreBtn.textContent = 'CLAIM ONCHAIN';
+      claimScoreBtn.style.display = snapshot.canClaimOnchain ? '' : 'none';
+      claimScoreBtn.setAttribute('aria-live', 'polite');
+      if (snapshot.canClaimOnchain) {
+        claimScoreBtn.dataset.runId = String(snapshot.runId);
+        claimScoreBtn.dataset.score = String(snapshot.score);
+        claimScoreBtn.dataset.claimState = snapshot.claimState;
+        const labels = {
+          idle: 'CLAIM ONCHAIN',
+          claiming: 'CLAIMING...',
+          confirming: 'CONFIRMING...',
+          claimed: 'CLAIMED',
+        };
+        claimScoreBtn.disabled = snapshot.claimState !== 'idle';
+        claimScoreBtn.style.opacity = snapshot.claimState === 'claiming' || snapshot.claimState === 'confirming' ? '0.55' : '1';
+        claimScoreBtn.textContent = labels[snapshot.claimState] || labels.idle;
+      } else {
+        delete claimScoreBtn.dataset.runId;
+        delete claimScoreBtn.dataset.score;
+        delete claimScoreBtn.dataset.claimState;
       }
     }
+  }
 
-    show('gameover');
+  function presentRunComplete(snapshot) {
+    renderRunComplete(snapshot);
+    Loadout.showRunComplete();
+  }
+
+  function patchRunComplete(runId, snapshot) {
+    const flow = window.__BASE_RUN_COMPLETE_FLOW;
+    if (!flow || !snapshot || snapshot.runId !== runId || !flow.isPresentedRun(runId)) return;
+    renderRunComplete(snapshot);
   }
 
   // ===== Check-in screen =====
@@ -6490,7 +6513,7 @@ const UI = (() => {
     el.classList.add('used');
   }
 
-  return { show, updateScore, updateBest, showGameOver, showCheckIn, showLeaderboard, updateCoins, setRunBoosters, triggerRunBoosterFeedback, markRunBoosterUsed };
+  return { show, updateScore, updateBest, presentRunComplete, patchRunComplete, showCheckIn, showLeaderboard, updateCoins, setRunBoosters, triggerRunBoosterFeedback, markRunBoosterUsed };
 
 })();
 
@@ -8223,6 +8246,8 @@ const Loadout = (() => {
 
   let selected = new Set();
   let active = {};
+  let mode = 'standalone';
+  let starting = false;
 
   function isActive(id) { return !!active[id]; }
 
@@ -8243,6 +8268,30 @@ const Loadout = (() => {
     const next = document.getElementById(nextId);
     if (prev) prev.disabled = !enabled;
     if (next) next.disabled = !enabled;
+  }
+
+  function setInlineMessage(message = '') {
+    const el = document.getElementById('loadout-inline-message');
+    if (el) el.textContent = message;
+  }
+
+  function setMode(nextMode) {
+    mode = nextMode;
+    const screen = document.getElementById('screen-loadout');
+    const title = document.getElementById('loadout-title');
+    const result = document.getElementById('run-complete-result');
+    const startBtn = document.getElementById('btn-loadout-start');
+    const backBtn = document.getElementById('btn-loadout-back');
+    const scroll = document.getElementById('loadout-scroll');
+    const isRunComplete = mode === 'runcomplete';
+
+    if (screen) screen.classList.toggle('loadout-run-complete', isRunComplete);
+    if (title) title.textContent = isRunComplete ? 'RUN COMPLETE' : 'LOADOUT';
+    if (result) result.classList.toggle('hidden', !isRunComplete);
+    if (startBtn) startBtn.textContent = isRunComplete ? 'START NEXT RUN' : 'START RUN';
+    if (backBtn) backBtn.textContent = isRunComplete ? 'MENU' : '← MENU';
+    if (scroll) scroll.scrollTop = 0;
+    setInlineMessage();
   }
 
   function renderGear() {
@@ -8321,15 +8370,28 @@ const Loadout = (() => {
   }
 
   function show() {
+    mode = 'standalone';
     selected = new Set();
+    starting = false;
+    setMode(mode);
     render();
     if (typeof UI !== 'undefined') UI.show('loadout');
+  }
+
+  function showRunComplete() {
+    mode = 'runcomplete';
+    selected = new Set();
+    starting = false;
+    setMode(mode);
+    render();
+    if (typeof UI !== 'undefined') UI.show('runcomplete');
   }
 
   function toggle(id) {
     if (typeof Shop === 'undefined' || Shop.getBoosterCount(id) <= 0) return;
     if (selected.has(id)) selected.delete(id);
     else selected.add(id);
+    setInlineMessage();
     render();
   }
 
@@ -8346,6 +8408,27 @@ const Loadout = (() => {
   }
 
   function startRun() {
+    if (starting) return;
+    starting = true;
+
+    const flow = window.__BASE_RUN_COMPLETE_FLOW;
+    if (!flow || typeof flow.beginRun !== 'function') {
+      setInlineMessage('Game is still loading. Try again.');
+      starting = false;
+      return;
+    }
+
+    const unavailable = typeof Shop === 'undefined'
+      ? [...selected]
+      : [...selected].filter(id => Shop.getBoosterCount(id) <= 0);
+    if (unavailable.length > 0) {
+      for (const id of unavailable) selected.delete(id);
+      render();
+      setInlineMessage('A selected booster is no longer available. Review your loadout.');
+      starting = false;
+      return;
+    }
+
     active = {};
     if (typeof Shop !== 'undefined') {
       for (const id of selected) {
@@ -8360,12 +8443,13 @@ const Loadout = (() => {
     if (typeof UI !== 'undefined' && UI.setRunBoosters) UI.setRunBoosters(active);
     selected = new Set();
     render();
-    _requestSessionToken();
     initGame();
   }
 
   function back() {
     selected = new Set();
+    starting = false;
+    setInlineMessage();
     render();
     goToMenu();
   }
@@ -8380,7 +8464,7 @@ const Loadout = (() => {
     _bind('btn-loadout-back', 'click', back);
   }
 
-  return { show, render, renderGear, bind, isActive };
+  return { show, showRunComplete, render, renderGear, bind, isActive };
 })();
 
 
@@ -9843,11 +9927,25 @@ const GameState = {
 let currentState    = GameState.MENU;
 let lastTime        = 0;
 let deathTriggered  = false;  // tracks if death anim was started this game
+let _activeRunId    = null;
 // Generation token: every loop start bumps it; a running loop stops as soon as
 // it sees a newer generation. Prevents the menu loop and game loop from ever
 // running at once (they share lastTime — two live loops corrupt dt and freeze
 // the background). See initGame / initMenuBackground.
 let _loopGen        = 0;
+
+function _getRunCompleteFlow() {
+  return window.__BASE_RUN_COMPLETE_FLOW || null;
+}
+
+function _leaveActiveRun() {
+  const runId = _activeRunId;
+  const flow = _getRunCompleteFlow();
+  if (flow && Number.isSafeInteger(runId)) flow.leaveRun(runId);
+  _activeRunId = null;
+  hideContinueOverlay();
+  _clearLevelUpState();
+}
 
 // ===== ФОНОВАЯ АНИМАЦИЯ МЕНЮ =====
 function initMenuBackground() {
@@ -9893,6 +9991,7 @@ function menuLoop(timestamp, gen) {
 // are left untouched (no scene reset / no double loop).
 function goToMenu() {
   const wasMenu = currentState === GameState.MENU;
+  _leaveActiveRun();
   currentState = GameState.MENU;
   if (typeof UI !== 'undefined') UI.show('menu');
   if (!wasMenu) initMenuBackground();
@@ -9928,9 +10027,12 @@ function _markDeathCause(row) {
 const CONTINUE_COST   = 100;
 let _continueUsed     = false;
 let _continueInterval = null;
+let _continueRunId    = null;
 
-function showContinueOverlay() {
+function showContinueOverlay(runId) {
+  if (_continueInterval) clearInterval(_continueInterval);
   currentState = GameState.CONTINUE;
+  _continueRunId = runId;
   let _countdownSec = 5;
   const timerEl   = document.getElementById('continue-timer');
   const costEl    = document.getElementById('continue-cost');
@@ -9944,19 +10046,25 @@ function showContinueOverlay() {
     _countdownSec--;
     if (timerEl) timerEl.textContent = Math.max(0, _countdownSec);
     if (_countdownSec <= 0) {
+      if (_continueRunId !== runId || currentState !== GameState.CONTINUE) return;
       hideContinueOverlay();
-      onGameOver();
+      onGameOver(runId);
     }
   }, 1000);
 }
 
 function hideContinueOverlay() {
   if (_continueInterval) { clearInterval(_continueInterval); _continueInterval = null; }
+  _continueRunId = null;
   const el = document.getElementById('screen-continue');
   if (el) el.classList.add('hidden');
 }
 
 function initGame() {
+  const flow = _getRunCompleteFlow();
+  if (!flow || typeof flow.beginRun !== 'function') return false;
+  _clearLevelUpState();
+  _activeRunId = flow.beginRun();
   _sessionCoins    = 0;
   _continueUsed    = false;
   _recordBonusUsed = false;
@@ -9972,6 +10080,7 @@ function initGame() {
   if (typeof Sound !== 'undefined') Sound.init();
   if (typeof Music !== 'undefined') Music.init();
 
+  _requestSessionToken(_activeRunId);
   currentState = GameState.PLAYING;
   UI.show('game');
   UI.updateBest(Save.getBest());
@@ -9979,12 +10088,14 @@ function initGame() {
 
   lastTime = performance.now();
   const gen = ++_loopGen;
-  requestAnimationFrame((ts) => gameLoop(ts, gen));
+  const runId = _activeRunId;
+  requestAnimationFrame((ts) => gameLoop(ts, gen, runId));
+  return true;
 }
 
 // ===== ГЛАВНЫЙ ИГРОВОЙ ЦИКЛ =====
-function gameLoop(timestamp, gen) {
-  if (gen !== _loopGen) return; // superseded by a newer loop (e.g. returned to menu)
+function gameLoop(timestamp, gen, runId) {
+  if (gen !== _loopGen || runId !== _activeRunId) return;
   const dt = Math.min((timestamp - lastTime) / 1000, 0.05);
   lastTime = timestamp;
 
@@ -10002,6 +10113,8 @@ function gameLoop(timestamp, gen) {
     if (!Player.isAlive()) {
       // Trigger animation exactly once
       if (!deathTriggered) {
+        const flow = _getRunCompleteFlow();
+        if (!flow || !flow.markEnding(runId)) return;
         deathTriggered = true;
         const ps = Player.getState();
         const row = World.getRow(ps.row);
@@ -10029,10 +10142,10 @@ function gameLoop(timestamp, gen) {
       if (Renderer.deathDone()) {
         Renderer.stopDeath();
         if (!_continueUsed && Save.getCoins() >= CONTINUE_COST) {
-          showContinueOverlay();
+          showContinueOverlay(runId);
           // Don't return — keep rendering frozen world behind the overlay
         } else {
-          onGameOver();
+          onGameOver(runId);
           return;
         }
       }
@@ -10041,20 +10154,56 @@ function gameLoop(timestamp, gen) {
 
   Renderer.updateCamera(dt);
   Renderer.draw(dt);
-  requestAnimationFrame((ts) => gameLoop(ts, gen));
+  requestAnimationFrame((ts) => gameLoop(ts, gen, runId));
 }
 
 // ===== КОНЕЦ ИГРЫ =====
 let _levelUpQueue = [];
+let _levelUpRunId = null;
+let _levelUpTimer = null;
 
-function _showNextLevelUp() {
-  if (_levelUpQueue.length === 0) return;
-  const item   = _levelUpQueue.shift();
+function _isPresentedRun(runId) {
+  const flow = _getRunCompleteFlow();
+  return Boolean(flow && flow.isPresentedRun(runId));
+}
+
+function _hideLevelUpModal() {
   const modal  = document.getElementById('levelup-modal');
+  const nftRow = document.getElementById('levelup-nft-row');
+  if (modal) modal.classList.add('hidden');
+  if (nftRow) {
+    nftRow.innerHTML = '';
+    nftRow.classList.add('hidden');
+  }
+}
+
+function _clearLevelUpState() {
+  if (_levelUpTimer) {
+    clearTimeout(_levelUpTimer);
+    _levelUpTimer = null;
+  }
+  _levelUpQueue = [];
+  _levelUpRunId = null;
+  _hideLevelUpModal();
+}
+
+function _scheduleNextLevelUp(runId, delay) {
+  if (_levelUpTimer) clearTimeout(_levelUpTimer);
+  if (_levelUpRunId !== runId || _levelUpQueue.length === 0 || !_isPresentedRun(runId)) return;
+  _levelUpTimer = setTimeout(() => {
+    _levelUpTimer = null;
+    _showNextLevelUp(runId);
+  }, delay);
+}
+
+function _showNextLevelUp(runId) {
+  if (_levelUpRunId !== runId || _levelUpQueue.length === 0 || !_isPresentedRun(runId)) return;
+  const modal  = document.getElementById('levelup-modal');
+  if (!modal) return;
+  const item   = _levelUpQueue.shift();
   const iconEl = document.getElementById('levelup-icon');
   const lvlEl  = document.getElementById('levelup-level');
   const rwdEl  = document.getElementById('levelup-reward');
-  if (!modal) return;
 
   const r = item.reward;
 
@@ -10108,11 +10257,11 @@ function _showNextLevelUp() {
 }
 
 function _closeLevelUp() {
-  const modal  = document.getElementById('levelup-modal');
-  const nftRow = document.getElementById('levelup-nft-row');
-  if (modal)  modal.classList.add('hidden');
-  if (nftRow) { nftRow.innerHTML = ''; nftRow.classList.add('hidden'); }
-  if (_levelUpQueue.length > 0) setTimeout(_showNextLevelUp, 300);
+  const runId = _levelUpRunId;
+  _hideLevelUpModal();
+  if (Number.isSafeInteger(runId) && _levelUpQueue.length > 0) {
+    _scheduleNextLevelUp(runId, 300);
+  }
 }
 
 // Локальный рейтинг забега из общего конфига (rating-config.js, грузится до game.js).
@@ -10143,15 +10292,15 @@ function _calculateLocalRunXp(score, isNewRecord) {
   };
 }
 
-function _submitScoreToServer(score, sessionCoins) {
+function _submitScoreToServer(runId, score, sessionCoins) {
   const submitFn = window.__BASE_SUBMIT_SCORE;
   if (typeof submitFn === 'function') {
-    return Promise.resolve(submitFn(score, sessionCoins)).catch((err) => {
+    return Promise.resolve().then(() => submitFn(runId, score, sessionCoins)).catch((err) => {
       console.warn('score submit failed:', err);
       return { ok: false, error: 'submit_failed' };
     });
   }
-  window.dispatchEvent(new CustomEvent('base-auto-submit-score', { detail: { score, sessionCoins } }));
+  window.dispatchEvent(new CustomEvent('base-auto-submit-score', { detail: { runId, score, sessionCoins } }));
   return Promise.resolve(null);
 }
 
@@ -10187,7 +10336,12 @@ function _claimLevelRewards(queue) {
   }
 }
 
-async function onGameOver() {
+let _latestReconciledRunId = 0;
+
+async function onGameOver(runId) {
+  const flow = _getRunCompleteFlow();
+  if (!flow || !Number.isSafeInteger(runId) || !flow.finalizeRun(runId)) return;
+
   currentState = GameState.GAMEOVER;
   const score   = Player.getScore();
   const prevBest = Save.getBest();
@@ -10200,50 +10354,72 @@ async function onGameOver() {
   const syncFn = window.__BASE_SYNC_COINS;
   if (syncFn) syncFn(Save.getCoins());
   window.dispatchEvent(new CustomEvent('base-game-run-summary', {
-    detail: { score, sessionCoins: _sessionCoins, summary: _runSummary },
+    detail: { runId, score, sessionCoins: _sessionCoins, summary: _runSummary },
   }));
-  const scoreSubmitPromise = _submitScoreToServer(score, _sessionCoins);
+  const scoreSubmitPromise = _submitScoreToServer(runId, score, _sessionCoins);
   const localXp = _calculateLocalRunXp(score, isNewRecord);
   const localRating = _getLocalRunRating(score);
   const localRatingObj = { id: localRating.id, label: localRating.label };
 
-  // Show the game-over screen immediately with local estimates. We must NOT
-  // block the UI on the server round-trip — on a slow link that stalls the
-  // screen (and the loadout after it) for several seconds. Authoritative XP,
-  // levels, quests and rating are reconciled in the background below.
-  setTimeout(() => {
-    UI.showGameOver(score, best, localXp.xpEarned, localXp.xpBreakdown, localRatingObj);
-  }, 600);
+  const presentedSnapshot = flow.presentRun(runId, {
+    score,
+    previousBest: prevBest,
+    best,
+    isNewRecord,
+    sessionCoins: _sessionCoins,
+    xpEarned: localXp.xpEarned,
+    xpBreakdown: localXp.xpBreakdown,
+    rating: localRatingObj,
+    hasClaimableQuest: Quests.hasClaimable(),
+    canClaimOnchain: Boolean(window.__BASE_WALLET) && score > 0,
+  });
+  if (presentedSnapshot) UI.presentRunComplete(presentedSnapshot);
 
   const submitResult = await scoreSubmitPromise;
+  const canApplyAuthoritative = Boolean(
+    submitResult
+    && submitResult.ok
+    && runId >= _latestReconciledRunId,
+  );
+  if (canApplyAuthoritative) _latestReconciledRunId = runId;
 
   // Reconcile locally-bumped quest progress with the server's authoritative
   // state so claimable state can't drift from what the server will honor.
-  if (submitResult && submitResult.ok && submitResult.quests && typeof Quests !== 'undefined' && Quests.applyServerData) {
+  if (canApplyAuthoritative && submitResult.quests && typeof Quests !== 'undefined' && Quests.applyServerData) {
     Quests.applyServerData(submitResult.quests);
   }
 
-  if (submitResult && submitResult.ok && submitResult.levels && typeof Xp !== 'undefined') {
+  let levelUps = [];
+  if (canApplyAuthoritative && submitResult.levels && typeof Xp !== 'undefined') {
     Xp.applyServerState && Xp.applyServerState(submitResult.levels);
-    _levelUpQueue = _queueFromServerLevelUps(submitResult.levelUps);
-    _claimLevelRewards(_levelUpQueue);
+    levelUps = _queueFromServerLevelUps(submitResult.levelUps);
+    _claimLevelRewards(levelUps);
   } else if (!submitResult || submitResult.error === 'no_address') {
-    _levelUpQueue = typeof Xp !== 'undefined' ? Xp.add(localXp.xpEarned) : [];
-  } else {
-    _levelUpQueue = [];
+    levelUps = typeof Xp !== 'undefined' ? Xp.add(localXp.xpEarned) : [];
+  } else if (!submitResult.ok) {
     console.warn('server XP update rejected:', submitResult.error || 'unknown');
   }
 
-  // Refresh the game-over card with authoritative server values if the player
-  // is still looking at it (server XP/rating may differ from the estimate).
-  if (currentState === GameState.GAMEOVER && submitResult && submitResult.ok) {
-    const srvXp = (submitResult.xp && typeof submitResult.xp.earned === 'number') ? submitResult.xp.earned : localXp.xpEarned;
-    const srvBreakdown = (submitResult.xp && submitResult.xp.breakdown) ? submitResult.xp.breakdown : localXp.xpBreakdown;
-    const srvRating = (submitResult.rating && submitResult.rating.id) ? submitResult.rating : localRatingObj;
-    UI.showGameOver(score, best, srvXp, srvBreakdown, srvRating);
+  if (submitResult && submitResult.ok) {
+    const patch = { hasClaimableQuest: Quests.hasClaimable() };
+    if (submitResult.xp && typeof submitResult.xp.earned === 'number') {
+      patch.xpEarned = submitResult.xp.earned;
+    }
+    if (submitResult.xp && submitResult.xp.breakdown && typeof submitResult.xp.breakdown === 'object') {
+      patch.xpBreakdown = submitResult.xp.breakdown;
+    }
+    if (submitResult.rating && submitResult.rating.id) {
+      patch.rating = submitResult.rating;
+    }
+    const patchedSnapshot = flow.patchRun(runId, patch);
+    if (patchedSnapshot) UI.patchRunComplete(runId, patchedSnapshot);
   }
 
-  if (_levelUpQueue.length > 0) setTimeout(_showNextLevelUp, 900);
+  if (levelUps.length > 0 && flow.isPresentedRun(runId)) {
+    _levelUpQueue = levelUps;
+    _levelUpRunId = runId;
+    _scheduleNextLevelUp(runId, 900);
+  }
 }
 
 // ===================================================
@@ -10602,9 +10778,9 @@ function _initSettingsScreen() {
   if (vibToggle) vibToggle.checked = Vibrate.isEnabled();
 }
 
-function _requestSessionToken() {
+function _requestSessionToken(runId) {
   if (typeof window.__BASE_SESSION_START === 'function') {
-    window.__BASE_SESSION_START(); // async, non-blocking
+    window.__BASE_SESSION_START(runId); // async, non-blocking
   }
 }
 
@@ -10747,57 +10923,59 @@ function _initUI() {
   window.addEventListener('touchstart', _armMusicOnGesture);
   window.addEventListener('keydown', _armMusicOnGesture);
 
-  // Кнопки game over
-  _bind('btn-restart', 'click', () => Loadout.show());
-  _bind('btn-go-menu', 'click', () => goToMenu());
-  // Coins are auto-synced at game over, no claim button needed
-
-  // Onchain score claim (game over) — fires a paymaster tx via the React bridge
+  // Onchain score claim — every transition is scoped to the exact run + score.
   _bind('btn-claim-score', 'click', () => {
     const btn = document.getElementById('btn-claim-score');
-    if (!btn || btn.disabled || btn.dataset.claimed === '1') return;
+    if (!btn || btn.disabled) return;
+    const runId = Number(btn.dataset.runId);
     const score = parseInt(btn.dataset.score || '0', 10);
-    if (!score || typeof window.__BASE_CLAIM_SCORE !== 'function') return;
-    btn.dataset.claiming = '1';
-    btn.disabled = true;
-    btn.style.opacity = '0.5';
-    btn.textContent = 'CLAIMING...';
-    Promise.resolve(window.__BASE_CLAIM_SCORE(score)).catch(() => {
-      // send failed to even start — revert to idle so the player can retry
-      if (btn.dataset.claimed === '1') return;
-      btn.dataset.claiming = '';
-      btn.disabled = false;
-      btn.style.opacity = '1';
-      btn.textContent = 'CLAIM ONCHAIN';
+    const flow = _getRunCompleteFlow();
+    const claimScore = window.__BASE_CLAIM_SCORE;
+    if (!Number.isSafeInteger(runId) || runId <= 0 || !score || !flow || typeof claimScore !== 'function') return;
+    if (!flow.beginClaim(runId, score)) return;
+
+    const claimingSnapshot = flow.getSnapshot();
+    if (claimingSnapshot) UI.patchRunComplete(runId, claimingSnapshot);
+    Promise.resolve().then(() => claimScore(runId, score)).catch(() => {
+      const idleSnapshot = flow.applyClaimState(runId, score, 'idle');
+      if (idleSnapshot) UI.patchRunComplete(runId, idleSnapshot);
     });
   });
-  window.addEventListener('base-score-claimed', () => {
-    const btn = document.getElementById('btn-claim-score');
-    if (!btn) return;
-    btn.dataset.claimed = '1';
-    btn.dataset.claiming = '';
-    btn.disabled = true;
-    btn.style.opacity = '1';
-    btn.textContent = 'CLAIMED';
+
+  window.addEventListener('base-score-claimed', (event) => {
+    const detail = event.detail || {};
+    const runId = Number(detail.runId);
+    const score = Number(detail.score);
+    const flow = _getRunCompleteFlow();
+    if (!flow) return;
+    const claimedSnapshot = flow.applyClaimState(runId, score, 'claimed');
+    if (claimedSnapshot) UI.patchRunComplete(runId, claimedSnapshot);
   });
-  // Onchain claim in progress — show a "Confirming" status while the tx is
-  // sending / being mined (mirrors check-in & mint). Only acts once a claim has
-  // been started (data-claiming) and hasn't completed yet.
-  window.addEventListener('base-score-claim-state', (e) => {
-    const btn = document.getElementById('btn-claim-score');
-    if (!btn || btn.dataset.claimed === '1' || btn.dataset.claiming !== '1') return;
-    const pending = e.detail && e.detail.isPending;
-    if (pending) {
-      btn.disabled      = true;
-      btn.style.opacity = '0.5';
-      btn.textContent   = '⏳ CONFIRMING...';
-    }
+
+  window.addEventListener('base-score-claim-state', (event) => {
+    const detail = event.detail || {};
+    const runId = Number(detail.runId);
+    const score = Number(detail.score);
+    const state = detail.state;
+    if (state !== 'confirming' && state !== 'idle') return;
+    const flow = _getRunCompleteFlow();
+    if (!flow) return;
+    const claimSnapshot = flow.applyClaimState(runId, score, state);
+    if (claimSnapshot) UI.patchRunComplete(runId, claimSnapshot);
   });
 
   // Continue screen
   _bind('btn-do-continue', 'click', () => {
     if (currentState !== GameState.CONTINUE) return;
-    if (Save.getCoins() < CONTINUE_COST) { hideContinueOverlay(); onGameOver(); return; }
+    const runId = _continueRunId;
+    if (!Number.isSafeInteger(runId)) return;
+    if (Save.getCoins() < CONTINUE_COST) {
+      hideContinueOverlay();
+      onGameOver(runId);
+      return;
+    }
+    const flow = _getRunCompleteFlow();
+    if (!flow || !flow.resumeRun(runId)) return;
     hideContinueOverlay();
     Save.addCoins(-CONTINUE_COST);
     UI.updateCoins(Save.getCoins(), _sessionCoins);
@@ -10810,8 +10988,10 @@ function _initUI() {
   });
   _bind('btn-skip-continue', 'click', () => {
     if (currentState !== GameState.CONTINUE) return;
+    const runId = _continueRunId;
+    if (!Number.isSafeInteger(runId)) return;
     hideContinueOverlay();
-    onGameOver();
+    onGameOver(runId);
   });
 
   if (typeof Loadout !== 'undefined') Loadout.bind();
@@ -10946,7 +11126,11 @@ function _initUI() {
   _bind('btn-quests-back', 'click', () => goToMenu());
 
   // Quest notify on game over — tap to go to quests
-  _bind('go-quest-notify', 'click', () => { Quests.render(); UI.show('quests'); });
+  _bind('go-quest-notify', 'click', () => {
+    _leaveActiveRun();
+    Quests.render();
+    UI.show('quests');
+  });
 
   // Profile
   _bind('btn-profile', 'click', () => { _renderProfile(); UI.show('profile'); });

@@ -140,6 +140,23 @@ test('ignores stale claim events even when a newer run reuses the score', () => 
   assert.equal(flow.applyClaimState(newRunId, localResult.score, 'claimed')?.claimState, 'claimed');
 });
 
+test('keeps claimed terminal when late claim states arrive', () => {
+  for (const lateState of ['idle', 'confirming', 'claiming'] as const) {
+    const flow = createRunCompleteFlow();
+    const { runId } = finishRun(flow);
+    assert.equal(flow.beginClaim(runId, localResult.score), true);
+    assert.equal(flow.applyClaimState(runId, localResult.score, 'claimed')?.claimState, 'claimed');
+    const beforeLateState = flow.getSnapshot();
+
+    const afterLateState = flow.applyClaimState(runId, localResult.score, lateState);
+
+    assert.deepEqual(afterLateState, beforeLateState);
+    assert.notEqual(afterLateState, beforeLateState);
+    assert.equal(flow.getSnapshot()?.claimState, 'claimed');
+    assert.equal(flow.beginClaim(runId, localResult.score), false);
+  }
+});
+
 test('returns snapshots that cannot mutate coordinator state', () => {
   const flow = createRunCompleteFlow();
   const { snapshot } = finishRun(flow);

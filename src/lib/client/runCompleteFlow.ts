@@ -26,6 +26,13 @@ export type RunCompleteSnapshot = {
 type RunCompleteResult = Omit<RunCompleteSnapshot, 'runId' | 'claimState'>;
 type RunCompletePatch = Partial<Omit<RunCompleteResult, 'score'>>;
 
+const claimStateTransitions: Record<RunClaimState, readonly RunClaimState[]> = {
+  idle: ['idle'],
+  claiming: ['confirming', 'claimed', 'idle'],
+  confirming: ['confirming', 'claimed', 'idle'],
+  claimed: ['claimed'],
+};
+
 function cloneSnapshot(snapshot: RunCompleteSnapshot): RunCompleteSnapshot {
   return {
     ...snapshot,
@@ -149,7 +156,9 @@ export function createRunCompleteFlow() {
       return null;
     }
 
-    snapshot.claimState = claimState;
+    if (claimStateTransitions[snapshot.claimState].includes(claimState)) {
+      snapshot.claimState = claimState;
+    }
     return cloneSnapshot(snapshot);
   }
 

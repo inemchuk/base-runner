@@ -96,6 +96,27 @@ assert.match(gameRuntime, /function drawWeatherNear\(W, H\)/);
 assert.match(gameRuntime, /function drawWorldEmissive\(\)/);
 assert.match(gameRuntime, /function drawCarLights\(row, rowY, car\)/);
 
+const precipitationStart = gameRuntime.indexOf('function drawPrecipitationLayer(W, H, layer)');
+const windStart = gameRuntime.indexOf('function drawWind(W, H)');
+const precipitationBody = gameRuntime.slice(precipitationStart, windStart);
+const desertPrecipitation = precipitationBody.slice(
+  precipitationBody.indexOf("if (mode === 'desert')"),
+  precipitationBody.indexOf("} else if (mode === 'snow')"),
+);
+const windEnd = gameRuntime.indexOf('// ── Landing Trails', windStart);
+const windBody = gameRuntime.slice(windStart, windEnd);
+const desertWind = windBody.slice(
+  windBody.indexOf('if (isDesert) {'),
+  windBody.indexOf('} else {', windBody.indexOf('if (isDesert) {')),
+);
+
+assert.match(gameRuntime, /function drawSandGrainCluster\(x, y, size, alpha, seed\)/);
+assert.match(desertPrecipitation, /drawSandGrainCluster\(/);
+assert.doesNotMatch(desertPrecipitation, /ctx\.lineTo\(/);
+assert.match(windBody, /const isDesert = _precipBiome\(\) === 'desert';/);
+assert.match(windBody, /if \(isDesert\) \{[\s\S]*?drawSandGrainCluster\(/);
+assert.doesNotMatch(desertWind, /ctx\.lineTo\(/);
+
 const drawStart = gameRuntime.indexOf('function draw(dt)');
 const drawEnd = gameRuntime.indexOf('// ── Stars', drawStart);
 const drawBody = gameRuntime.slice(drawStart, drawEnd);

@@ -3627,6 +3627,15 @@ const Renderer = (() => {
     } else if (weatherState === 4) drawWind(W, H);
   }
 
+  function drawSandGrainCluster(x, y, size, alpha, seed) {
+    ctx.globalAlpha = alpha;
+    ctx.beginPath();
+    ctx.arc(x, y, size * 0.72, 0, Math.PI * 2);
+    ctx.arc(x - size * (1.35 + (seed % 0.45)), y + size * 0.22, size * 0.42, 0, Math.PI * 2);
+    ctx.arc(x + size * 0.95, y - size * 0.28, size * 0.30, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
   function drawPrecipitationLayer(W, H, layer) {
     const intensity = Math.min(weatherRatio * 1.5, 1);
     const mode = _precipBiome();
@@ -3638,7 +3647,27 @@ const Renderer = (() => {
     const sway = _now * 0.0012;
 
     ctx.save();
-    if (mode === 'snow') {
+    if (mode === 'desert') {
+      ctx.fillStyle = nightRatio > 0.5 ? 'rgb(160,126,76)' : 'rgb(231,197,132)';
+      if (near) {
+        ctx.globalAlpha = intensity * 0.05;
+        ctx.beginPath();
+        ctx.ellipse(W * 0.28, H * 0.34, W * 0.46, H * 0.045, -0.04, 0, Math.PI * 2);
+        ctx.ellipse(W * 0.78, H * 0.64, W * 0.42, H * 0.04, -0.04, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      for (let i = start; i < end; i++) {
+        const p = rainParticles[i];
+        const size = Math.max(0.55, (p.width || 1) * scale);
+        drawSandGrainCluster(
+          p.x * W,
+          p.y * H,
+          size,
+          p.alpha * intensity * (near ? 0.72 : 0.4) * 0.78,
+          i * 0.173 + p.x * 11,
+        );
+      }
+    } else if (mode === 'snow') {
       ctx.fillStyle = 'rgb(240,248,255)';
       for (let i = start; i < end; i++) {
         const p = rainParticles[i];
@@ -3650,18 +3679,17 @@ const Renderer = (() => {
         ctx.fill();
       }
     } else {
-      const isSand = mode === 'desert';
-      ctx.strokeStyle = isSand ? 'rgb(214,178,110)' : (nightRatio > 0.5 ? 'rgb(150,180,255)' : 'rgb(185,215,255)');
+      ctx.strokeStyle = nightRatio > 0.5 ? 'rgb(150,180,255)' : 'rgb(185,215,255)';
       for (let i = start; i < end; i++) {
         const p = rainParticles[i];
         const px = p.x * W;
         const py = p.y * H;
         const len = p.len * H * scale * (weatherState === 3 ? 1.25 : 1);
-        ctx.globalAlpha = p.alpha * intensity * (near ? 0.72 : 0.40) * (isSand ? 0.7 : 1);
+        ctx.globalAlpha = p.alpha * intensity * (near ? 0.72 : 0.40);
         ctx.lineWidth = (p.width || 1) * scale;
         ctx.beginPath();
         ctx.moveTo(px, py);
-        ctx.lineTo(px - len * (isSand ? 2.6 : weatherState === 3 ? 0.45 : 0.2), py + len * (isSand ? 0.5 : 1));
+        ctx.lineTo(px - len * (weatherState === 3 ? 0.45 : 0.2), py + len);
         ctx.stroke();
       }
     }
@@ -4649,27 +4677,34 @@ const Renderer = (() => {
     ctx.save();
 
     const isNight = nightRatio > 0.5;
-    if (_precipBiome() === 'desert') {
-      // Sand-tinted gusts instead of pale air streaks
-      ctx.strokeStyle = isNight
-        ? `rgba(140,115,70,${intensity * 0.35})`
-        : `rgba(214,184,120,${intensity * 0.3})`;
+    const isDesert = _precipBiome() === 'desert';
+    if (isDesert) {
+      ctx.fillStyle = isNight ? 'rgb(160,126,76)' : 'rgb(231,197,132)';
+      for (let i = 0; i < windParticles.length; i++) {
+        const p = windParticles[i];
+        drawSandGrainCluster(
+          p.x * W,
+          p.y * H,
+          Math.max(0.5, p.len * W * 0.035),
+          p.alpha * intensity * 1.7,
+          i * 0.271 + p.y * 9,
+        );
+      }
     } else {
       ctx.strokeStyle = isNight
         ? `rgba(150,170,200,${intensity * 0.3})`
         : `rgba(200,220,240,${intensity * 0.25})`;
-    }
-    ctx.lineWidth = 1;
-
-    for (const p of windParticles) {
-      const px  = p.x * W;
-      const py  = p.y * H;
-      const len = p.len * W;
-      ctx.globalAlpha = p.alpha * intensity;
-      ctx.beginPath();
-      ctx.moveTo(px, py);
-      ctx.lineTo(px + len, py + len * 0.05);
-      ctx.stroke();
+      ctx.lineWidth = 1;
+      for (const p of windParticles) {
+        const px  = p.x * W;
+        const py  = p.y * H;
+        const len = p.len * W;
+        ctx.globalAlpha = p.alpha * intensity;
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        ctx.lineTo(px + len, py + len * 0.05);
+        ctx.stroke();
+      }
     }
 
     ctx.globalAlpha = 1;

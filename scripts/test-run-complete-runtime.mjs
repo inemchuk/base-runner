@@ -218,6 +218,14 @@ check('claim interactions use coordinator run and score identity', () => {
   doesNotMatch(initUi, /dataset\.claiming|dataset\.claimed/);
 });
 
+check('claim action remains visible even when a wallet is not connected', () => {
+  const render = extractFunction('renderRunComplete');
+  doesNotMatch(render, /claimScoreBtn\.style\.display\s*=\s*snapshot\.canClaimOnchain\s*\?\s*''\s*:\s*'none'/);
+  match(render, /claimScoreBtn\.style\.display\s*=\s*''/);
+  match(render, /CONNECT WALLET TO CLAIM/);
+  match(render, /claimScoreBtn\.disabled\s*=\s*!snapshot\.canClaimOnchain/);
+});
+
 check('leaving and level-up work are scoped to the presented run', () => {
   const menu = extractFunction('goToMenu');
   const showLevel = extractFunction('_showNextLevelUp');

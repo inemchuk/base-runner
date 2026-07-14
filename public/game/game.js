@@ -6216,7 +6216,7 @@ const UI = (() => {
 
     const claimScoreBtn = document.getElementById('btn-claim-score');
     if (claimScoreBtn) {
-      claimScoreBtn.style.display = snapshot.canClaimOnchain ? '' : 'none';
+      claimScoreBtn.style.display = '';
       claimScoreBtn.setAttribute('aria-live', 'polite');
       if (snapshot.canClaimOnchain) {
         claimScoreBtn.dataset.runId = String(snapshot.runId);
@@ -6235,6 +6235,9 @@ const UI = (() => {
         delete claimScoreBtn.dataset.runId;
         delete claimScoreBtn.dataset.score;
         delete claimScoreBtn.dataset.claimState;
+        claimScoreBtn.disabled = !snapshot.canClaimOnchain;
+        claimScoreBtn.style.opacity = '0.55';
+        claimScoreBtn.textContent = snapshot.score > 0 ? 'CONNECT WALLET TO CLAIM' : 'CLAIM UNAVAILABLE';
       }
     }
   }

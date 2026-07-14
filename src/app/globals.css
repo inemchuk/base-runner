@@ -2869,17 +2869,25 @@
       touch-action: pan-y;
       padding: max(28px, calc(env(safe-area-inset-top, 0px) + 18px)) 16px max(126px, calc(116px + env(safe-area-inset-bottom, 0px)));
     }
-    .hub-screen-heading {
+    .runner-hub-scroll .hub-screen-heading {
+      position: sticky;
+      top: env(safe-area-inset-top, 0px);
+      z-index: 12;
       width: min(360px, 92vw);
       display: grid;
       grid-template-columns: auto minmax(0, 1fr) auto;
-      align-items: flex-end;
+      align-items: center;
       gap: 11px;
+      min-height: 60px;
       margin: 0 0 16px;
+      padding: 8px 10px 10px;
+      background: linear-gradient(180deg, rgba(5,8,20,0.99), rgba(5,8,20,0.96));
+      border-bottom: 1px solid rgba(77,143,255,0.18);
+      box-shadow: 0 10px 18px rgba(0,0,0,0.2);
     }
     .hub-home-btn {
-      min-height: 34px;
-      align-self: end;
+      min-height: 44px;
+      align-self: center;
       display: inline-flex;
       align-items: center;
       justify-content: center;

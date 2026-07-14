@@ -250,7 +250,7 @@ export default function Game() {
                 <img className="quest-notify-icon ui-icon" src="/game/ui-icons/quests.png" alt="" aria-hidden="true" />
                 Quest complete! Tap to claim
               </button>
-              <button type="button" className="btn btn-claim-score" id="btn-claim-score">CLAIM ONCHAIN</button>
+              <button type="button" className="btn claim-action btn-claim-score" id="btn-claim-score">CLAIM ONCHAIN</button>
             </section>
 
             <div className="loadout-gear" id="loadout-gear">
@@ -503,7 +503,7 @@ export default function Game() {
             <div id="spin-nft-section" className="spin-nft-section hidden">
               <div className="spin-nft-divider" />
               <div className="spin-nft-sub">Claim as NFT on Base</div>
-              <button className="spin-nft-btn" id="btn-spin-nft">Claim</button>
+              <button className="spin-nft-btn claim-action" id="btn-spin-nft">CLAIM ONCHAIN</button>
               <button className="spin-nft-later" id="btn-spin-nft-later">Later →</button>
             </div>
           </div>
@@ -690,7 +690,7 @@ export default function Game() {
               <span className="starter-item-type">Booster</span>
             </div>
           </div>
-          <button id="btn-starter-claim" className="starter-claim-btn">Claim for Free</button>
+          <button id="btn-starter-claim" className="starter-claim-btn claim-action">CLAIM FREE</button>
           <button id="btn-starter-skip" className="starter-skip-btn">Skip for now →</button>
         </div>
       </div>
@@ -708,7 +708,7 @@ export default function Game() {
         <div className="ci-status-box">
           <span id="ci-status-text" className="ci-status"></span>
         </div>
-        <button className="btn btn-start" id="btn-do-ci">Claim</button>
+        <button className="btn claim-action" id="btn-do-ci">CLAIM</button>
         <button className="btn btn-back" id="btn-ci-back">← BACK</button>
       </div>
 

@@ -334,6 +334,29 @@
       border-color: rgba(136,170,255,0.34);
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), 0 8px 22px rgba(0,82,255,0.24);
     }
+    .claim-action {
+      background: var(--button-blue);
+      color: #fff;
+      border-color: rgba(136,170,255,0.34);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), 0 8px 22px rgba(0,82,255,0.24);
+      font-family: inherit;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: transform 0.1s, box-shadow 0.12s, opacity 0.12s;
+    }
+    .claim-action:active {
+      transform: translateY(1px) scale(0.98);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+    }
+    .claim-action:disabled {
+      opacity: 0.55;
+      cursor: default;
+      box-shadow: none;
+    }
+    .claim-action:focus-visible {
+      outline: 2px solid #fff;
+      outline-offset: 2px;
+    }
     .btn-lb,
     .btn-ci,
     .btn-quest,
@@ -344,10 +367,6 @@
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.055);
     }
     #btn-do-ci {
-      background: var(--button-blue);
-      color: #fff;
-      border: 1px solid rgba(136,170,255,0.34);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), 0 8px 22px rgba(0,82,255,0.24);
       position: relative;
       transform: translateZ(0);
       will-change: transform;
@@ -423,12 +442,6 @@
       color:#fff;
       border-color: rgba(136,170,255,0.34);
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), 0 8px 22px rgba(0,82,255,0.24);
-    }
-    .btn-claim-score {
-      background: rgba(0,82,255,0.06);
-      color: #8AAFFF;
-      border-color: rgba(77,143,255,0.62);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
     }
     .btn-claim-score:disabled { cursor: default; }
     .btn-claim-coins {
@@ -3361,14 +3374,8 @@
     .spin-nft-btn {
       font-size: 0.9rem; font-weight: 700; letter-spacing: 1px;
       padding: 8px 24px; border-radius: 10px;
-      border: 1px solid rgba(77,143,255,0.24);
-      background: rgba(77,143,255,0.12);
-      color: rgba(190,212,255,0.9); cursor: pointer; width: 100%;
-      transition: background 0.15s;
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.055);
+      width: 100%;
     }
-    .spin-nft-btn:active  { background: rgba(77,143,255,0.2); }
-    .spin-nft-btn:disabled { opacity: 0.55; cursor: not-allowed; }
     .spin-nft-later {
       background: none; border: none; color: rgba(255,255,255,0.35);
       font-size: 0.75rem; cursor: pointer;
@@ -3560,26 +3567,11 @@
     .starter-claim-btn {
       width: 100%;
       padding: 14px;
-      border: 1px solid rgba(136,170,255,0.34);
       border-radius: 10px;
-      background: var(--button-blue);
-      color: #fff;
       font-size: 1rem;
       font-weight: 800;
       letter-spacing: 1.5px;
-      cursor: pointer;
       margin-bottom: 10px;
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), 0 8px 22px rgba(0,82,255,0.24);
-      transition: transform 0.1s, box-shadow 0.1s;
-    }
-    .starter-claim-btn:active {
-      transform: translateY(1px) scale(0.98);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
-    }
-    .starter-claim-btn:disabled {
-      opacity: 0.55;
-      cursor: not-allowed;
-      box-shadow: none;
     }
 
     .starter-skip-btn {

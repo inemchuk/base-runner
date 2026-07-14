@@ -37,4 +37,19 @@ assert.match(
   'Home needs a 44 px touch target',
 );
 
+for (const [id, label] of [
+  ['btn-do-ci', 'CLAIM'],
+  ['btn-starter-claim', 'CLAIM FREE'],
+  ['btn-spin-nft', 'CLAIM ONCHAIN'],
+]) {
+  const button = new RegExp(`<button(?=[^>]*id="${id}")(?=[^>]*className="[^"]*claim-action[^"]*")[^>]*>[\\s\\S]*?${label}`);
+  assert.match(shell, button, `${id} should use the shared claim action`);
+}
+
+assert.match(
+  css,
+  /\.claim-action\s*\{[\s\S]*?background:\s*var\(--button-blue\)[\s\S]*?color:\s*#fff/,
+  'Claim actions should use the Base-blue primary treatment',
+);
+
 console.log('navigation and claim UI checks passed');

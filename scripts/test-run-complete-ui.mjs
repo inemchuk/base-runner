@@ -112,7 +112,13 @@ assert.match(
   'Reduced motion should remove result translation and scaling',
 );
 assert.doesNotMatch(globalCss, /\.btn-restart\s*\{/, 'Run Complete should not retain a red restart treatment');
-assert.match(globalCss, /\.btn-claim-score\s*\{[\s\S]*?background:\s*rgba\(0,82,255,0\.06\)[\s\S]*?border-color:/, 'Claim should use an outlined Base treatment');
+assert.match(
+  gameShell,
+  /className="btn claim-action btn-claim-score"[^>]*id="btn-claim-score"/,
+  'Run Complete should use the shared claim action',
+);
+assert.match(globalCss, /\.claim-action\s*\{[\s\S]*?background:\s*var\(--button-blue\)[\s\S]*?color:\s*#fff/, 'Claim actions should use the Base-blue primary treatment');
+assert.doesNotMatch(globalCss, /\.btn-claim-score\s*\{[\s\S]*?background:\s*rgba\(0,82,255,0\.06\)/, 'Run Complete should not retain the former onchain-only outline');
 assert.match(globalCss, /\.btn-start\s*\{[\s\S]*?background:\s*var\(--button-blue\)/, 'Start should keep the Base blue primary treatment');
 assert.match(globalCss, /\.run-complete-record-state\.hidden\s*\{\s*display:\s*none/, 'New-record state should remain hidden until the runtime reveals it');
 assert.match(globalCss, /\.run-complete-result \.run-complete-quest\s*\{[\s\S]*?color:\s*#69F0AE[\s\S]*?animation:\s*none/, 'Run Complete quest should use mint without the legacy continuous pulse');

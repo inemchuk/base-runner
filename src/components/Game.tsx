@@ -242,7 +242,7 @@ export default function Game() {
                 <span>+<strong id="go-coins-earned">0</strong> COINS</span>
               </p>
               <div id="go-xp-row" className="go-xp-row">
-                <span className="go-xp-main"><img className="go-xp-icon ui-icon" src="/game/ui-icons/celebration.png" alt="" aria-hidden="true" />+<span id="go-xp-earned">0</span> XP</span>
+                <span className="go-xp-main"><img className="go-xp-icon ui-icon" src="/game/ui-icons/xp.png" alt="" aria-hidden="true" />+<span id="go-xp-earned">0</span> XP</span>
                 <span id="go-xp-multi" className="go-xp-multi"></span>
                 <span id="go-xp-bonus" className="go-xp-bonus"></span>
               </div>

@@ -8123,6 +8123,14 @@ const RewardEconomy = (() => {
       `<span class="reward-inline-plus">+</span><span class="reward-inline-value">${value}</span></span>`;
   }
 
+  function xpHtml(amount) {
+    const value = Math.max(0, Math.floor(Number(amount) || 0));
+    if (!value) return '';
+    return `<span class="reward-inline reward-inline-xp">` +
+      _uiIconHtml('xp', 'reward-inline-icon reward-inline-icon-xp', 'XP') +
+      `<span class="reward-inline-plus">+</span><span class="reward-inline-value">${value}</span><span class="reward-inline-label">XP</span></span>`;
+  }
+
   function _textRewardHtml(text) {
     return `<span class="reward-inline reward-inline-text">${_escapeHtml(text)}</span>`;
   }
@@ -8143,7 +8151,7 @@ const RewardEconomy = (() => {
     if (totals.coins) parts.push(currencyHtml('coins', totals.coins));
     if (totals.fragments) parts.push(currencyHtml('fragments', totals.fragments));
     if (totals.boosters) parts.push(_textRewardHtml(`+${totals.boosters} booster${totals.boosters === 1 ? '' : 's'}`));
-    if (totals.xp) parts.push(_textRewardHtml(`+${totals.xp} XP`));
+    if (totals.xp) parts.push(xpHtml(totals.xp));
     return parts.join('<span class="reward-separator">&middot;</span>') || _escapeHtml(label(bundle));
   }
 

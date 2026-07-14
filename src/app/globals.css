@@ -1319,6 +1319,10 @@
       font-weight: 900;
       font-variant-numeric: tabular-nums;
     }
+    .reward-inline-label {
+      color: rgba(210,225,255,0.72);
+      font-weight: 800;
+    }
     .reward-separator {
       color: rgba(210,225,255,0.34);
       margin: 0 4px;

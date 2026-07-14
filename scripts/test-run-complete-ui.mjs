@@ -83,6 +83,11 @@ assert.match(
   /<button[^>]*id="btn-loadout-back"[^>]*>[\s\S]*?MENU[\s\S]*?<\/button>/,
   'Menu should be an accessible text button',
 );
+assert.match(
+  gameShell,
+  /className="go-xp-main">\s*<img[^>]*src="\/game\/ui-icons\/xp\.png"[^>]*>\+<span id="go-xp-earned">0<\/span> XP/,
+  'Run Complete XP reward should pair the XP icon with its named amount',
+);
 
 assert.doesNotMatch(gameShell, /type CSSProperties/, 'Loadout dimensions should live in responsive CSS');
 assert.doesNotMatch(gameShell, /loadoutGear(?:Card|Arrow|Preview)Style/, 'Loadout should not use inline size objects');

@@ -45,9 +45,12 @@ All reward claims use the same blue primary action treatment. The treatment uses
 | Quest reward | `CLAIM` | Shared blue claim button within the quest card. |
 | Daily Check-in | `CLAIM` plus earned-reward chips | Shared blue claim button; keeps the reward chips already needed for the check-in context. |
 | Starter Pack | `CLAIM FREE` | Shared blue claim button, full-width inside the pack overlay. |
-| Daily Chest in Shop | `CLAIM` | Shared blue claim button within its shop card. |
-| Owned onchain Shop item | `CLAIM ONCHAIN` | Same blue claim button, with explicit onchain wording. |
+| Shop NFT asset | `CLAIM ONCHAIN` | Same blue claim button, with explicit onchain wording. |
 | Run Complete score | `CLAIM ONCHAIN` | Same blue claim button, with explicit onchain wording. |
+| Daily Spin NFT reward | `CLAIM ONCHAIN` | Same blue claim button in the prize flow. |
+| Level-up NFT reward | `CLAIM ONCHAIN` | Same blue claim button in the level-up flow. |
+
+The Daily Chest in Shop is a coin purchase, not a claim. Its price and purchase treatment remain gold because it spends a visible currency rather than granting an already-earned reward.
 
 `ONCHAIN` is a label, not a separate visual category: a player is still collecting a reward. Wallet requirements are communicated by the button state rather than a different colour.
 

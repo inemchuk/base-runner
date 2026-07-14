@@ -6226,7 +6226,7 @@ const UI = (() => {
           idle: 'CLAIM ONCHAIN',
           claiming: 'CLAIMING...',
           confirming: 'CONFIRMING...',
-          claimed: 'CLAIMED',
+          claimed: '✓ CLAIMED',
         };
         claimScoreBtn.disabled = snapshot.claimState !== 'idle';
         claimScoreBtn.style.opacity = snapshot.claimState === 'claiming' || snapshot.claimState === 'confirming' ? '0.55' : '1';
@@ -6406,7 +6406,7 @@ const UI = (() => {
         claimBtn.disabled      = false;
         claimBtn.style.opacity = '1';
         claimBtn.style.display = '';
-        claimBtn.innerHTML     = `<span class="ci-claim-content"><span class="ci-claim-copy">Claim</span>${_rewardChipsHtml(todayReward, 'ci-reward-chips-claim')}</span>`;
+        claimBtn.innerHTML     = `<span class="ci-claim-content"><span class="ci-claim-copy">CLAIM</span>${_rewardChipsHtml(todayReward, 'ci-reward-chips-claim')}</span>`;
       }
     } else {
       if (statusEl) statusEl.className = 'ci-status unavail';
@@ -6535,8 +6535,8 @@ function _markNftClaimed(itemId) {
 // Render an NFT button or claimed badge for an owned item
 function _nftBtnHtml(itemId) {
   if (!window.__NFT_DEPLOYED) return '';
-  if (_isNftClaimed(itemId)) return '<span class="shop-nft-claimed">✓ On-chain</span>';
-  return `<button class="shop-nft-btn" data-id="${itemId}">Claim</button>`;
+  if (_isNftClaimed(itemId)) return '<span class="shop-nft-claimed">✓ CLAIMED</span>';
+  return `<button class="shop-nft-btn claim-action" data-id="${itemId}">CLAIM ONCHAIN</button>`;
 }
 // Bind click handlers on all .shop-nft-btn inside a container
 function _bindNftBtns(container) {
@@ -6545,7 +6545,7 @@ function _bindNftBtns(container) {
       const itemId = btn.dataset.id;
       const mintFn = window.__NFT_MINT;
       if (!mintFn || window.__NFT_PENDING) return;
-      btn.textContent = 'Claiming...';
+      btn.textContent = 'CLAIMING...';
       btn.disabled = true;
       mintFn(itemId);
     });
@@ -7653,7 +7653,7 @@ const Shop = (() => {
 
       // Info row: show claimed badge for claimed skins; nothing for unclaimed/free
       const nftInfoHtml = (isOwned && window.__NFT_DEPLOYED && !_FREE_SKINS.includes(item.id))
-        ? `<div class="shop-nft-row">${isUnlocked ? '<span class="shop-nft-claimed">✓ On-chain</span>' : ''}</div>`
+        ? `<div class="shop-nft-row">${isUnlocked ? '<span class="shop-nft-claimed">✓ CLAIMED</span>' : ''}</div>`
         : '';
 
       // Action: equipped → ON | owned+unlocked → Equip | owned+locked → Claim to Equip | not owned → Buy
@@ -7663,7 +7663,7 @@ const Shop = (() => {
       } else if (isOwned && isUnlocked) {
         actionHtml = `<button class="shop-btn shop-btn-equip" data-id="${item.id}">Equip</button>`;
       } else if (needsClaim) {
-        actionHtml = `<button class="shop-btn shop-btn-claim-equip" data-id="${item.id}">Claim</button>`;
+        actionHtml = `<button class="shop-btn claim-action shop-btn-claim-equip" data-id="${item.id}">CLAIM ONCHAIN</button>`;
       } else if (!canDirectBuy) {
         actionHtml = '<span class="shop-badge-owned">Craft only</span>';
       } else {
@@ -7701,7 +7701,7 @@ const Shop = (() => {
       btn.addEventListener('click', () => {
         const mintFn = window.__NFT_MINT;
         if (!mintFn || window.__NFT_PENDING) return;
-        btn.textContent = 'Claiming...';
+        btn.textContent = 'CLAIMING...';
         btn.disabled    = true;
         mintFn(btn.dataset.id);
       });
@@ -7878,7 +7878,7 @@ const Shop = (() => {
 
       // Info row: show claimed badge for claimed trails; nothing for unclaimed
       const nftInfoHtml = (isOwned && window.__NFT_DEPLOYED)
-        ? `<div class="shop-nft-row">${isUnlocked ? '<span class="shop-nft-claimed">✓ On-chain</span>' : ''}</div>`
+        ? `<div class="shop-nft-row">${isUnlocked ? '<span class="shop-nft-claimed">✓ CLAIMED</span>' : ''}</div>`
         : '';
 
       // Action: equipped → ON | owned+unlocked → Equip | owned+locked → Claim to Equip | not owned → Buy
@@ -7888,7 +7888,7 @@ const Shop = (() => {
       } else if (isOwned && isUnlocked) {
         actionHtml = `<button class="shop-btn shop-btn-equip-trail" data-id="${item.id}">Equip</button>`;
       } else if (needsClaim) {
-        actionHtml = `<button class="shop-btn shop-btn-claim-equip-trail" data-id="${item.id}">Claim</button>`;
+        actionHtml = `<button class="shop-btn claim-action shop-btn-claim-equip-trail" data-id="${item.id}">CLAIM ONCHAIN</button>`;
       } else if (canDirectBuy) {
         actionHtml = `<button class="shop-btn shop-btn-buy${canAfford ? '' : ' disabled'}" data-id="${item.id}" data-price="${item.price}" style="display:inline-flex;flex-direction:row;align-items:center;justify-content:center;gap:4px;"><img src="/game/coin.png" style="width:14px;height:14px;object-fit:contain;display:block;flex-shrink:0;"> ${item.price}</button>`;
       } else {
@@ -7925,7 +7925,7 @@ const Shop = (() => {
       btn.addEventListener('click', () => {
         const mintFn = window.__NFT_MINT;
         if (!mintFn || window.__NFT_PENDING) return;
-        btn.textContent = 'Claiming...';
+        btn.textContent = 'CLAIMING...';
         btn.disabled    = true;
         mintFn(btn.dataset.id);
       });
@@ -8780,9 +8780,9 @@ const Quests = (() => {
       <div class="quest-progress">
         <span class="quest-progress-text">${Math.min(progress, target)} / ${target}</span>
         ${isMaxed || claimed
-          ? '<span class="quest-done">COMPLETED</span>'
+          ? '<span class="quest-done">✓ CLAIMED</span>'
           : canClaim
-            ? `<button class="quest-claim-btn" data-id="${context.questId}"${isPending ? ' disabled' : ''}>${isPending ? 'CLAIMING...' : 'CLAIM'}</button>`
+            ? `<button class="quest-claim-btn claim-action" data-id="${context.questId}"${isPending ? ' disabled' : ''}>${isPending ? 'CLAIMING...' : 'CLAIM'}</button>`
             : `<span class="quest-progress-text">${pct}%</span>`}
       </div>`;
     return card;
@@ -9431,7 +9431,7 @@ const DailySpin = (() => {
     _mintItemId = null;
     if (nftSection) {
       nftSection.classList.add('hidden');
-      if (mintBtn) { mintBtn.textContent = 'Claim'; mintBtn.disabled = false; }
+      if (mintBtn) { mintBtn.textContent = 'CLAIM ONCHAIN'; mintBtn.disabled = false; }
       const laterBtn = document.getElementById('btn-spin-nft-later');
       if (laterBtn) laterBtn.style.display = '';
 
@@ -9651,7 +9651,7 @@ const DailySpin = (() => {
     if (!mintFn || window.__NFT_PENDING || !_mintItemId) return;
     const mintBtn  = document.getElementById('btn-spin-nft');
     const laterBtn = document.getElementById('btn-spin-nft-later');
-    if (mintBtn)  { mintBtn.textContent = '⏳ Claiming…'; mintBtn.disabled = true; }
+    if (mintBtn)  { mintBtn.textContent = 'CLAIMING...'; mintBtn.disabled = true; }
     if (laterBtn) laterBtn.style.display = 'none';
     mintFn(_mintItemId);
   }
@@ -10249,13 +10249,13 @@ function _showNextLevelUp(runId) {
     nftRow.classList.add('hidden');
     if (window.__NFT_DEPLOYED && r && (r.type === 'skin' || r.type === 'trail') && r.value && !_isNftClaimed(r.value)) {
       const btn = document.createElement('button');
-      btn.className = 'levelup-nft-btn';
-      btn.textContent = 'Claim';
+      btn.className = 'levelup-nft-btn claim-action';
+      btn.textContent = 'CLAIM ONCHAIN';
       btn.dataset.id = r.value;
       btn.addEventListener('click', () => {
         const mintFn = window.__NFT_MINT;
         if (!mintFn || window.__NFT_PENDING) return;
-        btn.textContent = '⏳ Claiming…';
+        btn.textContent = 'CLAIMING...';
         btn.disabled = true;
         mintFn(r.value);
       });
@@ -11122,7 +11122,7 @@ function _initUI() {
     if (claimBtn) {
       claimBtn.disabled      = true;
       claimBtn.style.opacity = '0.35';
-      claimBtn.textContent   = '✓ Claimed today';
+      claimBtn.textContent   = '✓ CLAIMED';
     }
 
     // Wait for React to re-render window.__BASE_CHECKIN, then full re-render
@@ -11193,7 +11193,12 @@ function _initUI() {
     // ── Reset spin NFT claim button on success ──────────────────────────
     const spinMintBtn  = document.getElementById('btn-spin-nft');
     const spinNftSec   = document.getElementById('spin-nft-section');
-    if (spinMintBtn) { spinMintBtn.textContent = '✓ Claimed!'; spinMintBtn.disabled = true; }
+    if (spinMintBtn) { spinMintBtn.textContent = '✓ CLAIMED'; spinMintBtn.disabled = true; }
+    const levelupMintBtn = document.querySelector('.levelup-nft-btn');
+    if (levelupMintBtn?.dataset.id === itemId) {
+      levelupMintBtn.textContent = '✓ CLAIMED';
+      levelupMintBtn.disabled = true;
+    }
     const spinLater = document.getElementById('btn-spin-nft-later');
     if (spinLater) spinLater.style.display = 'none';
     if (spinNftSec) setTimeout(() => spinNftSec.classList.add('hidden'), 1500);
@@ -11221,27 +11226,33 @@ function _initUI() {
     // Reset starter pack claim button if it was the one minting
     const claimBtn = document.getElementById('btn-starter-claim');
     if (claimBtn && claimBtn.disabled) {
-      claimBtn.textContent = 'Claim for Free';
+      claimBtn.textContent = 'CLAIM FREE';
       claimBtn.disabled    = false;
     }
     // Reset any stuck "Claiming…" shop buttons
     document.querySelectorAll('.shop-nft-btn').forEach(btn => {
-      btn.textContent = 'Claim';
+      btn.textContent = 'CLAIM ONCHAIN';
       btn.disabled    = false;
     });
     // Reset spin NFT claim button on error
     const spinMintBtn = document.getElementById('btn-spin-nft');
     if (spinMintBtn && spinMintBtn.disabled) {
-      spinMintBtn.textContent = 'Claim';
+      spinMintBtn.textContent = 'CLAIM ONCHAIN';
       spinMintBtn.disabled    = false;
     }
+    document.querySelectorAll('.levelup-nft-btn').forEach(btn => {
+      if (btn.disabled) {
+        btn.textContent = 'CLAIM ONCHAIN';
+        btn.disabled = false;
+      }
+    });
   });
 
   // ── Starter Pack wiring ─────────────────────────────────────────────
   _bind('btn-starter-claim', 'click', () => {
     if (typeof window.__NFT_MINT !== 'function') return;
     const claimBtn = document.getElementById('btn-starter-claim');
-    if (claimBtn) { claimBtn.textContent = 'Claiming…'; claimBtn.disabled = true; }
+    if (claimBtn) { claimBtn.textContent = 'CLAIMING...'; claimBtn.disabled = true; }
     window.__NFT_MINT('skin_cryptokid');
   });
   _bind('btn-starter-skip', 'click', () => {

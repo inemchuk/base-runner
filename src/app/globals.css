@@ -337,7 +337,7 @@
     .claim-action {
       background: var(--button-blue);
       color: #fff;
-      border-color: rgba(136,170,255,0.34);
+      border: 1px solid rgba(136,170,255,0.34);
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), 0 8px 22px rgba(0,82,255,0.24);
       font-family: inherit;
       text-transform: uppercase;
@@ -1921,14 +1921,9 @@
     }
     .shop-btn-buy.disabled { opacity: 0.4; cursor: not-allowed; }
     .shop-btn-claim-equip, .shop-btn-claim-equip-trail {
-      background: rgba(77,143,255,0.12);
-      border-color: rgba(77,143,255,0.24);
-      color: rgba(190,212,255,0.92);
       font-size: 0.78rem;
       padding: 6px 10px;
     }
-    .shop-btn-claim-equip:active, .shop-btn-claim-equip-trail:active { background: rgba(77,143,255,0.2); }
-    .shop-btn-claim-equip:disabled, .shop-btn-claim-equip-trail:disabled { opacity: 0.5; cursor: not-allowed; }
 
     /* NFT claim row inside shop items */
     .shop-nft-row {
@@ -1940,15 +1935,8 @@
       letter-spacing: 0.5px;
       padding: 3px 10px;
       border-radius: 8px;
-      border: 1px solid rgba(77,143,255,0.24);
-      background: rgba(77,143,255,0.12);
-      color: rgba(190,212,255,0.88);
-      cursor: pointer;
-      transition: background 0.15s, color 0.15s;
       white-space: nowrap;
     }
-    .shop-nft-btn:active { background: rgba(77,143,255,0.2); }
-    .shop-nft-btn:disabled { opacity: 0.55; cursor: not-allowed; }
     .shop-nft-claimed {
       font-size: 0.72rem;
       font-weight: 700;
@@ -2184,14 +2172,12 @@
     .quest-progress { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
     .quest-progress-text { color: rgba(210,225,255,0.5); font-size: 0.7rem; font-weight: 700; white-space: nowrap; }
     .quest-claim-btn {
-      background: var(--button-gold); color: #1a0a00; border: 1px solid rgba(255,230,100,0.42); border-radius: 9px;
-      padding: 6px 11px; font-size: 0.74rem; font-weight: 900; cursor: pointer;
+      border-radius: 9px;
+      padding: 6px 11px; font-size: 0.74rem; font-weight: 900;
       display: inline-flex; align-items: center; justify-content: center; font-family: inherit;
       min-width: 96px; min-height: 36px; flex: 0 0 auto;
       letter-spacing: 0.8px; white-space: nowrap; text-transform: uppercase;
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.25);
     }
-    .quest-claim-btn:active { transform: translateY(1px) scale(0.97); }
     .quest-done { color: #69F0AE; font-size: 0.72rem; font-weight: 900; letter-spacing: 0.5px; }
     .quest-notify {
       color: #FFD700; font-size: clamp(0.8rem,3vw,1rem); margin-bottom: 12px;
@@ -2880,23 +2866,39 @@
     .runner-hub-scroll {
       width: 100%;
       touch-action: pan-y;
-      padding: max(28px, calc(env(safe-area-inset-top, 0px) + 18px)) 16px max(126px, calc(116px + env(safe-area-inset-bottom, 0px)));
+      padding: 0 16px max(126px, calc(116px + env(safe-area-inset-bottom, 0px)));
     }
     .runner-hub-scroll .hub-screen-heading {
       position: sticky;
-      top: env(safe-area-inset-top, 0px);
+      top: 0;
       z-index: 12;
+      isolation: isolate;
       width: min(360px, 92vw);
       display: grid;
       grid-template-columns: auto minmax(0, 1fr) auto;
       align-items: center;
       gap: 11px;
-      min-height: 60px;
+      min-height: max(60px, calc(env(safe-area-inset-top, 0px) + 60px));
       margin: 0 0 16px;
-      padding: 8px 10px 10px;
+      padding: max(8px, calc(env(safe-area-inset-top, 0px) + 8px)) 10px 10px;
+    }
+    .runner-hub-scroll .hub-screen-heading::before {
+      content: '';
+      position: absolute;
+      z-index: 0;
+      top: 0;
+      bottom: 0;
+      left: 50%;
+      width: 100vw;
+      transform: translateX(-50%);
       background: linear-gradient(180deg, rgba(5,8,20,0.99), rgba(5,8,20,0.96));
       border-bottom: 1px solid rgba(77,143,255,0.18);
       box-shadow: 0 10px 18px rgba(0,0,0,0.2);
+      pointer-events: none;
+    }
+    .runner-hub-scroll .hub-screen-heading > * {
+      position: relative;
+      z-index: 1;
     }
     .hub-home-btn {
       min-height: 44px;
@@ -3192,7 +3194,6 @@
     @media (max-height: 720px) {
       #screen-menu { padding-bottom: max(94px, calc(86px + env(safe-area-inset-bottom, 0px))); }
       .runner-hub-nav { bottom: max(6px, env(safe-area-inset-bottom, 0px)); }
-      .runner-hub-scroll { padding-top: max(18px, calc(env(safe-area-inset-top, 0px) + 10px)); }
       .shop-runner-stage { height: 152px; min-height: 152px; max-height: 152px; flex-basis: 152px; }
       #shop-stage-preview { height: 114px; }
     }
@@ -3405,15 +3406,9 @@
     .levelup-nft-row.hidden { display: none; }
     .levelup-nft-btn {
       width: 100%; padding: 8px; border-radius: 10px;
-      border: 1px solid rgba(77,143,255,0.24);
-      background: rgba(77,143,255,0.12);
-      color: rgba(190,212,255,0.9); font-size: 0.85rem; font-weight: 700;
-      letter-spacing: 1px; cursor: pointer;
-      transition: background 0.15s;
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.055);
+      font-size: 0.85rem; font-weight: 700;
+      letter-spacing: 1px;
     }
-    .levelup-nft-btn:active  { background: rgba(77,143,255,0.2); }
-    .levelup-nft-btn:disabled { opacity: 0.55; cursor: not-allowed; }
 
     /* ── Spin button ── */
     #btn-do-spin {
@@ -3572,6 +3567,39 @@
       font-weight: 800;
       letter-spacing: 1.5px;
       margin-bottom: 10px;
+    }
+
+    /* Claim variants only define layout above. Their visual language stays shared. */
+    .shop-btn.claim-action,
+    .shop-nft-btn.claim-action,
+    .quest-claim-btn.claim-action,
+    .levelup-nft-btn.claim-action,
+    #btn-do-ci.claim-action {
+      background: var(--button-blue);
+      color: #fff;
+      border: 1px solid rgba(136,170,255,0.34);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), 0 8px 22px rgba(0,82,255,0.24);
+      cursor: pointer;
+      transition: transform 0.1s, box-shadow 0.12s, opacity 0.12s;
+    }
+    .shop-btn.claim-action:active,
+    .shop-nft-btn.claim-action:active,
+    .quest-claim-btn.claim-action:active,
+    .levelup-nft-btn.claim-action:active,
+    #btn-do-ci.claim-action:active {
+      transform: translateY(1px) scale(0.98);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+    }
+    .shop-btn.claim-action:disabled,
+    .shop-nft-btn.claim-action:disabled,
+    .quest-claim-btn.claim-action:disabled,
+    .levelup-nft-btn.claim-action:disabled,
+    #btn-do-ci.claim-action:disabled {
+      background: var(--button-blue);
+      border: 1px solid rgba(136,170,255,0.34);
+      box-shadow: none;
+      cursor: default;
+      opacity: 0.55;
     }
 
     .starter-skip-btn {

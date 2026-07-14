@@ -224,6 +224,7 @@ check('claim action remains visible even when a wallet is not connected', () => 
   match(render, /claimScoreBtn\.style\.display\s*=\s*''/);
   match(render, /CONNECT WALLET TO CLAIM/);
   match(render, /claimScoreBtn\.disabled\s*=\s*!snapshot\.canClaimOnchain/);
+  match(render, /claimed:\s*'✓ CLAIMED'/);
 });
 
 check('leaving and level-up work are scoped to the presented run', () => {

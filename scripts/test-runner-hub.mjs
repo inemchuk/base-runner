@@ -40,4 +40,7 @@ const questClaimRule = globalStyles.match(/\.quest-claim-btn\s*\{([^}]*)\}/)?.[1
 assert.match(questClaimRule, /white-space:\s*nowrap/, 'Claim CTA never wraps');
 assert.match(questClaimRule, /min-width:\s*96px/, 'Claim CTA keeps a compact stable footprint');
 
+const collectionItemRule = globalStyles.match(/\.profile-collection-rail > div\s*\{([^}]*)\}/)?.[1] || '';
+assert.match(collectionItemRule, /text-align:\s*center/, 'Collection counters should be centered within their cards');
+
 console.log('runner hub shell assertions passed');

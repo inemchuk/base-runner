@@ -3148,7 +3148,7 @@
       border-radius: 11px;
       border: 1px solid rgba(77,143,255,0.16);
       background: rgba(7,15,36,0.72);
-      text-align: left;
+      text-align: center;
     }
     .profile-collection-rail span { display: block; color: #4D8FFF; font-size: 0.78rem; font-weight: 900; margin-bottom: 2px; }
     .profile-collection-rail small { color: rgba(210,225,255,0.42); font-size: 0.52rem; text-transform: uppercase; }

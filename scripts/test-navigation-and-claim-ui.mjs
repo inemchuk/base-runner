@@ -31,6 +31,11 @@ assert.doesNotMatch(
   /@media \(max-height: 720px\)\s*\{[\s\S]*?\.runner-hub-scroll\s*\{[^}]*padding-top:/,
   'Compact displays should not reintroduce an empty gap above the sticky strip',
 );
+assert.doesNotMatch(
+  css,
+  /\.profile-scroll\s*\{[^}]*padding-top:/,
+  'Profile should not reintroduce an empty gap above the shared sticky strip',
+);
 assert.match(
   css,
   /\.runner-hub-scroll\s+\.hub-screen-heading\s*\{[\s\S]*?position:\s*sticky[\s\S]*?top:\s*0[\s\S]*?padding:\s*max\(8px, calc\(env\(safe-area-inset-top, 0px\) \+ 8px\)\) 10px 10px/,

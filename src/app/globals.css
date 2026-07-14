@@ -3058,7 +3058,6 @@
     .shop-item-equipped { box-shadow: inset 3px 0 0 #FFD700, inset 0 1px 0 rgba(255,255,255,0.055); }
 
     /* Profile: identity and performance stay prominent; activity becomes Career. */
-    .profile-scroll { padding-top: max(28px, calc(env(safe-area-inset-top, 0px) + 18px)); }
     .profile-header,
     .profile-xp,
     .profile-stats,

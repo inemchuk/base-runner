@@ -3601,6 +3601,19 @@
       opacity: 0.55;
     }
 
+    .shop-nft-unlock-hint {
+      color: rgba(255,215,0,0.92);
+      font-size: 0.7rem;
+      animation: shop-nft-unlock-glow 2.4s ease-in-out infinite;
+    }
+    @keyframes shop-nft-unlock-glow {
+      0%, 100% { opacity: 0.5; text-shadow: 0 0 0 rgba(255,215,0,0); }
+      50% { opacity: 1; text-shadow: 0 0 10px rgba(255,215,0,0.62); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .shop-nft-unlock-hint { animation: none; }
+    }
+
     .starter-skip-btn {
       width: 100%;
       min-height: 38px;

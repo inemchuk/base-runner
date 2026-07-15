@@ -85,8 +85,8 @@ assert.doesNotMatch(
 const runtime = readFileSync('public/game/game.js', 'utf8');
 
 assert.match(runtime, /class="shop-nft-btn claim-action"[^>]*data-id="\$\{itemId\}">CLAIM ONCHAIN/, 'Generic Shop NFT claims should use the shared onchain action');
-assert.match(runtime, /class="shop-btn claim-action shop-btn-claim-equip"[^>]*>CLAIM ONCHAIN/, 'Skin NFT claims should use the shared onchain action');
-assert.match(runtime, /class="shop-btn claim-action shop-btn-claim-equip-trail"[^>]*>CLAIM ONCHAIN/, 'Trail NFT claims should use the shared onchain action');
+assert.match(runtime, /class="shop-btn claim-action shop-btn-claim-equip"[^>]*>CLAIM<\/button>/, 'Skin NFT claims should use the compact shared action');
+assert.match(runtime, /class="shop-btn claim-action shop-btn-claim-equip-trail"[^>]*>CLAIM<\/button>/, 'Trail NFT claims should use the compact shared action');
 assert.match(runtime, /class="quest-claim-btn claim-action"[^>]*>\$\{isPending \? 'CLAIMING\.\.\.' : 'CLAIM'\}/, 'Quest claims should use the shared claim action');
 assert.match(runtime, /btn\.className = 'levelup-nft-btn claim-action';[\s\S]*?btn\.textContent = 'CLAIM ONCHAIN';/, 'Level-up NFT claims should use the shared onchain action');
 assert.match(runtime, /mintBtn\.textContent = 'CLAIM ONCHAIN';/, 'Daily Spin should restore explicit onchain copy after state changes');

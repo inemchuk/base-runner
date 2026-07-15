@@ -7698,7 +7698,7 @@ const Shop = (() => {
       } else if (isOwned && isUnlocked) {
         actionHtml = `<button class="shop-btn shop-btn-equip" data-id="${item.id}">Equip</button>`;
       } else if (needsClaim) {
-        actionHtml = `<button class="shop-btn claim-action shop-btn-claim-equip" data-id="${item.id}">CLAIM ONCHAIN</button>`;
+        actionHtml = `<button class="shop-btn claim-action shop-btn-claim-equip" data-id="${item.id}">CLAIM</button>`;
       } else if (!canDirectBuy) {
         actionHtml = '<span class="shop-badge-owned">Craft only</span>';
       } else {
@@ -7712,7 +7712,7 @@ const Shop = (() => {
         ${iconHtml}
         <div class="shop-info">
           <span class="shop-name">${item.name}</span>
-          <span class="shop-desc">${item.desc}${needsClaim ? '<br><span style="color:rgba(180,140,255,0.7);font-size:0.7rem;">Claim NFT to unlock</span>' : ''}</span>
+          <span class="shop-desc">${item.desc}${needsClaim ? '<br><span class="shop-nft-unlock-hint">Claim NFT to unlock</span>' : ''}</span>
           ${nftInfoHtml}
           ${_shopEconomyHtml(item.id, isOwned)}
         </div>
@@ -7923,7 +7923,7 @@ const Shop = (() => {
       } else if (isOwned && isUnlocked) {
         actionHtml = `<button class="shop-btn shop-btn-equip-trail" data-id="${item.id}">Equip</button>`;
       } else if (needsClaim) {
-        actionHtml = `<button class="shop-btn claim-action shop-btn-claim-equip-trail" data-id="${item.id}">CLAIM ONCHAIN</button>`;
+        actionHtml = `<button class="shop-btn claim-action shop-btn-claim-equip-trail" data-id="${item.id}">CLAIM</button>`;
       } else if (canDirectBuy) {
         actionHtml = `<button class="shop-btn shop-btn-buy${canAfford ? '' : ' disabled'}" data-id="${item.id}" data-price="${item.price}" style="display:inline-flex;flex-direction:row;align-items:center;justify-content:center;gap:4px;"><img src="/game/coin.png" style="width:14px;height:14px;object-fit:contain;display:block;flex-shrink:0;"> ${item.price}</button>`;
       } else {
@@ -7937,7 +7937,7 @@ const Shop = (() => {
         ${trailIconHtml}
         <div class="shop-info">
           <span class="shop-name">${item.name}</span>
-          <span class="shop-desc">${item.desc}${needsClaim ? '<br><span style="color:rgba(180,140,255,0.7);font-size:0.7rem;">Claim NFT to unlock</span>' : ''}</span>
+          <span class="shop-desc">${item.desc}${needsClaim ? '<br><span class="shop-nft-unlock-hint">Claim NFT to unlock</span>' : ''}</span>
           ${nftInfoHtml}
           ${_shopEconomyHtml(item.id, isOwned)}
         </div>

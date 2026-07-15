@@ -40,6 +40,18 @@ const questClaimRule = globalStyles.match(/\.quest-claim-btn\s*\{([^}]*)\}/)?.[1
 assert.match(questClaimRule, /white-space:\s*nowrap/, 'Claim CTA never wraps');
 assert.match(questClaimRule, /min-width:\s*96px/, 'Claim CTA keeps a compact stable footprint');
 
+assert.equal((gameRuntime.match(/shop-btn-claim-equip(?:-trail)?[^`]*>CLAIM<\/button>/g) || []).length, 2, 'Skin and trail claims use the compact CLAIM label');
+assert.doesNotMatch(gameRuntime, /shop-btn-claim-equip(?:-trail)?[^`]*>CLAIM ONCHAIN<\/button>/, 'Shop no longer shows the longer claim label');
+assert.equal((gameRuntime.match(/class="shop-nft-unlock-hint">Claim NFT to unlock<\/span>/g) || []).length, 2, 'Skin and trail pending claims share the animated hint');
+
+const shopClaimRule = globalStyles.match(/\.shop-btn-claim-equip, \.shop-btn-claim-equip-trail\s*\{([^}]*)\}/)?.[1] || '';
+assert.match(shopClaimRule, /font-size:\s*0\.78rem/, 'Shop claims retain their compact type size');
+assert.match(shopClaimRule, /padding:\s*6px 10px/, 'Shop claims retain their compact padding');
+const shopUnlockHintRule = globalStyles.match(/\.shop-nft-unlock-hint\s*\{([^}]*)\}/)?.[1] || '';
+assert.match(shopUnlockHintRule, /animation:\s*shop-nft-unlock-glow/, 'Pending Shop claim hint softly glows');
+assert.match(globalStyles, /@keyframes shop-nft-unlock-glow/, 'Shop hint glow keyframes exist');
+assert.match(globalStyles, /@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.shop-nft-unlock-hint\s*\{[\s\S]*?animation:\s*none/, 'Reduced motion disables the Shop hint animation');
+
 const collectionItemRule = globalStyles.match(/\.profile-collection-rail > div\s*\{([^}]*)\}/)?.[1] || '';
 assert.match(collectionItemRule, /text-align:\s*center/, 'Collection counters should be centered within their cards');
 

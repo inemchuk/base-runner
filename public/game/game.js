@@ -10393,8 +10393,10 @@ async function onGameOver(runId) {
   const best    = Save.addScore(score);
   const isNewRecord = score > 0 && score === best && score > prevBest;
 
-  // Quest progress
-  Quests.onGameOver(score, _sessionCoins);
+  // Connected runs wait for the authoritative score submission to update quest
+  // progress. Otherwise a locally-complete quest could be claimed before the
+  // server sees the run, and its reward would be rolled back.
+  if (!window.__BASE_WALLET) Quests.onGameOver(score, _sessionCoins);
   // Sync coins
   const syncFn = window.__BASE_SYNC_COINS;
   if (syncFn) syncFn(Save.getCoins());

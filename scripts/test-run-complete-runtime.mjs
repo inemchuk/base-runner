@@ -62,7 +62,7 @@ async function checkAsync(name, fn) {
   }
 }
 
-function createCompletionHarness(submitScore) {
+function createCompletionHarness(submitScore, wallet = '0x1234') {
   const counters = {
     finalize: 0,
     addScore: 0,
@@ -114,13 +114,13 @@ function createCompletionHarness(submitScore) {
       hasClaimable: () => false,
       applyServerData() {},
     },
-    Xp: {},
+    Xp: { add: () => [] },
     UI: {
       presentRunComplete: () => { counters.presentUi += 1; },
       patchRunComplete: () => { counters.patchUi += 1; },
     },
     window: {
-      __BASE_WALLET: '0x1234',
+      __BASE_WALLET: wallet,
       __BASE_SYNC_COINS() {},
       dispatchEvent() {},
     },
@@ -239,15 +239,22 @@ check('leaving and level-up work are scoped to the presented run', () => {
   match(source, /_bind\('go-quest-notify',[\s\S]*_leaveActiveRun\(\)/);
 });
 
-await checkAsync('repeated terminal callbacks execute completion side effects once', async () => {
+await checkAsync('connected runs wait for server quest progress before surfacing a claim', async () => {
   const harness = createCompletionHarness(async () => ({ ok: false, error: 'submit_failed' }));
   await Promise.all([harness.run(1), harness.run(1), harness.run(1)]);
   assert.equal(harness.counters.finalize, 3);
   assert.equal(harness.counters.addScore, 1);
-  assert.equal(harness.counters.quests, 1);
+  assert.equal(harness.counters.quests, 0);
   assert.equal(harness.counters.submit, 1);
   assert.equal(harness.counters.presentFlow, 1);
   assert.equal(harness.counters.presentUi, 1);
+});
+
+await checkAsync('offline runs retain local quest progress', async () => {
+  const harness = createCompletionHarness(async () => ({ ok: false, error: 'no_address' }), null);
+  await harness.run(1);
+  assert.equal(harness.counters.quests, 1);
+  assert.equal(harness.counters.submit, 1);
 });
 
 await checkAsync('a stale server response cannot patch or reopen the visible screen', async () => {

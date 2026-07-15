@@ -8010,6 +8010,23 @@ const Shop = (() => {
     };
   }
 
+  // Full catalog with ownership/NFT flags, for the profile collection shelf.
+  function getCollectionItems() {
+    const owned = getOwned();
+    const ownedTrails = getTrailPacks();
+    return {
+      skins: ITEMS.map(item => ({
+        id: item.id, name: item.name, sprite: item.sprite,
+        owned: owned.includes(item.id), nft: _isNftClaimed(item.id),
+      })),
+      trails: [DEFAULT_TRAIL, ...TRAIL_PACKS].map(item => ({
+        id: item.id, name: item.name, sprite: item.sprite,
+        owned: item.id === 'default' || ownedTrails.includes(item.id),
+        nft: item.id !== 'default' && _isNftClaimed(item.id),
+      })),
+    };
+  }
+
   function refreshVisible() {
     const screen = document.getElementById('screen-shop');
     if (screen && !screen.classList.contains('hidden')) render();
@@ -8065,6 +8082,7 @@ const Shop = (() => {
     equipTrailLocal,
     getTrailPacks,
     getCollectionSummary,
+    getCollectionItems,
     own,
     ownTrailPack,
     addBoosterCharges,
@@ -8859,7 +8877,21 @@ const Quests = (() => {
     });
   }
 
-  return { onGameOver, hasClaimable, claim, render, applyServerData };
+  // Progress toward the next unclaimed career level, for the profile career bars.
+  function getCareerNext(questId) {
+    const context = _claimContext(_loadData(), questId);
+    if (!context || context.scope !== 'career') return null;
+    if (context.complete) return { progress: context.entry.progress, complete: true };
+    return { progress: context.entry.progress, target: context.target, level: context.level, complete: false };
+  }
+
+  // Claimed-level counts per career branch, for the profile medal row.
+  function getCareerMedals() {
+    const data = _loadData();
+    return DEFS.map(def => ({ id: def.id, name: def.name, iconSrc: def.iconSrc, level: _getLevel(data[def.id]), max: def.levels.length }));
+  }
+
+  return { onGameOver, hasClaimable, claim, render, applyServerData, getCareerNext, getCareerMedals };
 })();
 
 
@@ -9706,6 +9738,23 @@ const Xp = (() => {
   // XP needed to advance FROM level N (i.e. N→N+1 costs 100*N)
   function xpNeeded(level) { return 100 * level; }
 
+  // Named runner titles by level; thresholds loosely track LEVEL_REWARDS milestones.
+  const RUNNER_TITLES = [
+    { min: 1,  name: 'Rookie',           color: '#9AA7BD' },
+    { min: 3,  name: 'Street Runner',    color: '#6FD66F' },
+    { min: 6,  name: 'City Sprinter',    color: '#4D8FFF' },
+    { min: 10, name: 'Highway Hero',     color: '#38BDF8' },
+    { min: 15, name: 'Night Marathoner', color: '#A78BFA' },
+    { min: 20, name: 'Base Legend',      color: '#FFD700' },
+    { min: 28, name: 'Onchain Immortal', color: '#FF7A5C' },
+  ];
+
+  function getTitle(level) {
+    let title = RUNNER_TITLES[0];
+    for (const entry of RUNNER_TITLES) if (level >= entry.min) title = entry;
+    return title;
+  }
+
   const LEVEL_REWARDS = {
     2:  { type: 'bundle', value: { coins: 75, boosters: 1 }, iconSrc: '/game/ui-icons/starter-pack.png', label: '+75 coins + booster' },
     3:  { type: 'skin',  value: 'skin_street_runner', sprite: '/game/chars/street_runner.png', label: 'City Runner unlocked!' },
@@ -9867,6 +9916,12 @@ const Xp = (() => {
         ? `Lv.${nextLevel} · ${LEVEL_REWARDS[nextLevel].label}`
         : 'All milestone rewards unlocked';
     }
+    const heroTitleEl = document.getElementById('profile-hero-title');
+    if (heroTitleEl) {
+      const title = getTitle(level);
+      heroTitleEl.textContent = title.name.toUpperCase();
+      heroTitleEl.style.color = title.color;
+    }
     _updateBadge(level);
   }
 
@@ -9927,7 +9982,7 @@ const Xp = (() => {
     if (modal) modal.classList.add('hidden');
   }
 
-  return { add, getLevel, getTotalXp, getProgress, getReward, applyServerState, claimReward, renderProfile, showRewards, hideRewards };
+  return { add, getLevel, getTotalXp, getProgress, getReward, getTitle, applyServerState, claimReward, renderProfile, showRewards, hideRewards };
 })();
 
 
@@ -10647,10 +10702,9 @@ function renderProfileGear() {
   const skinMeta = Shop.getSkinMeta(skinId);
   const skinIndex = Math.max(0, skinOptions.indexOf(skinId));
 
-  _setProfileGearImage('equipped-skin-sprite', skinMeta.sprite, skinMeta.name);
-  _setProfileGearText('equipped-skin-name', skinMeta.name);
-  _setProfileGearText('equipped-skin-count', `${skinIndex + 1}/${skinOptions.length}`);
-  _setProfileGearArrows('btn-profile-skin-prev', 'btn-profile-skin-next', skinOptions.length > 1);
+  _setProfileGearImage('profile-hero-sprite', skinMeta.sprite, skinMeta.name);
+  _setProfileGearText('profile-hero-skin', `${skinMeta.name} · ${skinIndex + 1}/${skinOptions.length}`);
+  _setProfileGearArrows('btn-hero-skin-prev', 'btn-hero-skin-next', skinOptions.length > 1);
 
   const trailOptions = Shop.getTrailOptions();
   const currentTrail = Shop.getEquippedTrail();
@@ -10662,9 +10716,9 @@ function renderProfileGear() {
 
   if (iconEl) {
     if (trailMeta.sprite) {
-      iconEl.innerHTML = `<img src="${trailMeta.sprite}" alt="${trailMeta.name}" style="width:52px;height:52px;object-fit:contain;image-rendering:pixelated;display:block;">`;
+      iconEl.innerHTML = `<img src="${trailMeta.sprite}" alt="${trailMeta.name}" class="equipped-trail-icon-img">`;
     } else {
-      iconEl.innerHTML = '<img src="/nft/images/trail_default.png" alt="Default trail" style="width:52px;height:52px;object-fit:contain;image-rendering:pixelated;display:block;">';
+      iconEl.innerHTML = '<img src="/nft/images/trail_default.png" alt="Default trail" class="equipped-trail-icon-img">';
     }
   }
   _setProfileGearText('equipped-trail-name', trailMeta.name);
@@ -10678,6 +10732,12 @@ function renderProfileGear() {
     bubbleEl.style.borderColor = glow.replace('0.5)', '0.35)');
     bubbleEl.style.boxShadow = trailId === 'default' ? 'none' : `0 0 14px ${glow}`;
   }
+
+  const heroGlowEl = document.getElementById('profile-hero-glow');
+  if (heroGlowEl) {
+    const heroGlow = (trailId !== 'default' && trailMeta.glow) ? trailMeta.glow : 'rgba(77,143,255,0.38)';
+    heroGlowEl.style.background = `radial-gradient(circle, ${heroGlow} 0%, transparent 68%)`;
+  }
 }
 
 function cycleProfileGear(type, dir) {
@@ -10689,6 +10749,49 @@ function cycleProfileGear(type, dir) {
   const nextId = options[(currentIndex + dir + options.length) % options.length];
   if (type === 'skin') Shop.equipSkinLocal(nextId);
   else Shop.equipTrailLocal(nextId);
+}
+
+const _MEDAL_TIER = (level) => level >= 7 ? 'gold' : level >= 4 ? 'silver' : level >= 1 ? 'bronze' : 'none';
+
+function _renderCareerMedals() {
+  const holder = document.getElementById('career-medals');
+  if (!holder || typeof Quests === 'undefined' || typeof Quests.getCareerMedals !== 'function') return;
+  holder.innerHTML = Quests.getCareerMedals().map(medal => `
+    <div class="career-medal medal-${_MEDAL_TIER(medal.level)}" title="${_escapeHtml(medal.name)}">
+      <span class="career-medal-ring">${_imgHtml(medal.iconSrc, 'career-medal-icon ui-icon', medal.name, ' aria-hidden="true"')}</span>
+      <small>${medal.level}/${medal.max}</small>
+    </div>`).join('');
+}
+
+function _renderCollectionShelf() {
+  if (typeof Shop === 'undefined' || typeof Shop.getCollectionItems !== 'function') return;
+  const skinsEl = document.getElementById('collection-shelf-skins');
+  const trailsEl = document.getElementById('collection-shelf-trails');
+  const metaEl = document.getElementById('profile-collection-meta');
+  if (!skinsEl && !trailsEl) return;
+  const { skins, trails } = Shop.getCollectionItems();
+  if (metaEl) {
+    const ownedSkins = skins.filter(item => item.owned).length;
+    const ownedTrails = trails.filter(item => item.owned).length;
+    metaEl.textContent = `${ownedSkins}/${skins.length} skins · ${ownedTrails}/${trails.length} trails`;
+  }
+  const cellHtml = (item) => `
+    <div class="collection-cell${item.owned ? '' : ' locked'}" title="${_escapeHtml(item.name)}">
+      ${_imgHtml(item.sprite, 'collection-cell-img', item.name, ' loading="lazy"')}
+      ${item.nft ? '<span class="collection-nft">NFT</span>' : ''}
+      ${item.owned ? '' : `<span class="collection-lock">${_uiIconHtml('lock', 'collection-lock-img', 'locked')}</span>`}
+    </div>`;
+  const shelves = [[skinsEl, skins, 'skins'], [trailsEl, trails, 'trails']];
+  for (const [holder, items, shopTab] of shelves) {
+    if (!holder) continue;
+    holder.innerHTML = items.map(cellHtml).join('');
+    holder.querySelectorAll('.collection-cell.locked').forEach(cellEl => {
+      cellEl.addEventListener('click', () => {
+        Shop.show();
+        Shop.setTab(shopTab);
+      });
+    });
+  }
 }
 
 function _renderProfile() {
@@ -10739,17 +10842,41 @@ function _renderProfile() {
   if (el('stat-streak'))   el('stat-streak').textContent   = checkin.streak || 0;
   if (el('stat-checkins')) el('stat-checkins').textContent = checkin.total || 0;
 
+  // Career mini progress bars toward the next career quest level
+  const _setCareerBar = (key, progress, target) => {
+    const fill = el(`career-bar-${key}`);
+    const next = el(`career-next-${key}`);
+    const tile = el(`career-tile-${key}`);
+    if (!fill || !next) return;
+    if (!target) {
+      fill.style.width = '100%';
+      next.textContent = 'MAX';
+      if (tile) tile.classList.add('career-max');
+      return;
+    }
+    fill.style.width = `${Math.min(100, (progress / target) * 100)}%`;
+    next.textContent = `next ${target}`;
+    if (tile) tile.classList.remove('career-max');
+  };
+  if (typeof Quests !== 'undefined' && typeof Quests.getCareerNext === 'function') {
+    for (const key of ['games', 'rows', 'coins']) {
+      const info = Quests.getCareerNext(key);
+      if (info) _setCareerBar(key, info.progress, info.complete ? 0 : info.target);
+    }
+  }
+  const CHECKIN_MILESTONES = [7, 14, 30, 60, 100, 180, 365];
+  const checkinTotal = checkin.total || 0;
+  _setCareerBar('checkins', checkinTotal, CHECKIN_MILESTONES.find(m => m > checkinTotal) || 0);
+
   // XP bar
   if (typeof Xp !== 'undefined') Xp.renderProfile();
 
+  // Career medals and collection shelf
+  _renderCareerMedals();
+  _renderCollectionShelf();
+
   // Booster charges
   if (typeof Shop !== 'undefined') {
-    if (typeof Shop.getCollectionSummary === 'function') {
-      const collection = Shop.getCollectionSummary();
-      if (el('profile-collection-skins')) el('profile-collection-skins').textContent = `${collection.skinsOwned} / ${collection.skinsTotal}`;
-      if (el('profile-collection-trails')) el('profile-collection-trails').textContent = `${collection.trailsOwned} / ${collection.trailsTotal}`;
-      if (el('profile-collection-boosters')) el('profile-collection-boosters').textContent = collection.boosters;
-    }
     for (const key of ['magnet', 'double', 'shield']) {
       const count  = Shop.getBoosterCount(`boost_${key}`);
       const pillEl = el(`profile-boost-${key}`);
@@ -10868,8 +10995,8 @@ function _initUI() {
   _bind('shop-tab-effects',  'click', () => Shop.setTab('effects'));
 
   // Profile — direct equipped item cycling
-  _bind('btn-profile-skin-prev', 'click', () => cycleProfileGear('skin', -1));
-  _bind('btn-profile-skin-next', 'click', () => cycleProfileGear('skin', 1));
+  _bind('btn-hero-skin-prev', 'click', () => cycleProfileGear('skin', -1));
+  _bind('btn-hero-skin-next', 'click', () => cycleProfileGear('skin', 1));
   _bind('btn-profile-trail-prev', 'click', () => cycleProfileGear('trail', -1));
   _bind('btn-profile-trail-next', 'click', () => cycleProfileGear('trail', 1));
 

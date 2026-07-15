@@ -2875,13 +2875,16 @@
       isolation: isolate;
       width: min(360px, 92vw);
       display: grid;
-      grid-template-columns: auto minmax(0, 1fr) auto;
+      grid-template-columns: minmax(56px, 1fr) auto minmax(56px, 1fr);
       align-items: center;
       gap: 11px;
       min-height: max(60px, calc(env(safe-area-inset-top, 0px) + 60px));
       margin: 0 0 16px;
-      padding: max(8px, calc(env(safe-area-inset-top, 0px) + 8px)) 10px 10px;
+      padding: max(8px, calc(env(safe-area-inset-top, 0px) + 8px)) 0 10px;
     }
+    .runner-hub-scroll .hub-screen-heading > div { text-align: center; min-width: 0; }
+    .runner-hub-scroll .hub-screen-heading > :first-child { justify-self: start; }
+    .runner-hub-scroll .hub-screen-heading > :last-child { justify-self: end; }
     .runner-hub-scroll .hub-screen-heading::before {
       content: '';
       position: absolute;
@@ -3058,35 +3061,165 @@
     .shop-item-equipped { box-shadow: inset 3px 0 0 #FFD700, inset 0 1px 0 rgba(255,255,255,0.055); }
 
     /* Profile: identity and performance stay prominent; activity becomes Career. */
-    .profile-header,
     .profile-xp,
     .profile-stats,
     .profile-career,
     .profile-collection,
     .profile-boosters,
-    .profile-equipped { width: min(360px, 92vw); }
-    .profile-passport {
+    .profile-runner-card { width: min(360px, 92vw); }
+    .profile-runner-card {
       position: relative;
-      min-height: 82px;
-      border-radius: 15px;
+      flex-shrink: 0;
+      padding: 12px 12px 12px;
       margin-bottom: 10px;
+      border-radius: 15px;
+      border: 1px solid rgba(77,143,255,0.24);
       background:
-        linear-gradient(105deg, rgba(13,29,67,0.96), rgba(6,13,31,0.94)),
-        var(--surface-arcade);
-      border-color: rgba(77,143,255,0.28);
+        radial-gradient(circle at 50% 42%, rgba(35,60,130,0.5), transparent 72%),
+        linear-gradient(180deg, rgba(10,20,48,0.9), rgba(6,12,30,0.94));
+      overflow: hidden;
     }
-    .profile-passport::after {
-      content: '';
+    .runner-passport-row {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      padding-bottom: 10px;
+      margin-bottom: 6px;
+      border-bottom: 1px solid rgba(77,143,255,0.14);
+    }
+    .runner-passport-row .profile-avatar { width: 44px; height: 44px; border-radius: 11px; }
+    .runner-passport-row .profile-placeholder-icon { width: 26px; height: 26px; }
+    .runner-passport-row .profile-name { font-size: 0.84rem; }
+    .runner-stage-row {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      align-items: center;
+      justify-items: center;
+    }
+    .profile-hero-stage {
+      position: relative;
+      width: 112px;
+      height: 118px;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+    }
+    .profile-hero-glow {
       position: absolute;
-      right: 12px;
-      bottom: 10px;
-      width: 48px;
-      height: 3px;
-      border-radius: 2px;
-      background: repeating-linear-gradient(90deg, #4D8FFF 0 4px, transparent 4px 7px);
-      opacity: 0.38;
+      left: 50%;
+      top: 52%;
+      width: 128px;
+      height: 128px;
+      transform: translate(-50%, -50%);
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(77,143,255,0.38) 0%, transparent 68%);
+      opacity: 0.85;
+      pointer-events: none;
     }
-    .profile-avatar { width: 58px; height: 58px; border-radius: 13px; }
+    .profile-hero-sprite {
+      position: relative;
+      width: 96px;
+      height: 96px;
+      object-fit: contain;
+      animation: profile-hero-bob 1.9s ease-in-out infinite;
+      will-change: transform;
+    }
+    .profile-hero-shadow {
+      position: absolute;
+      bottom: 3px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 54px;
+      height: 9px;
+      border-radius: 50%;
+      background: rgba(0,0,0,0.4);
+      filter: blur(2px);
+      animation: profile-hero-shadow 1.9s ease-in-out infinite;
+    }
+    @keyframes profile-hero-bob {
+      0%, 100% { transform: translateY(0); }
+      50%      { transform: translateY(-7px); }
+    }
+    @keyframes profile-hero-shadow {
+      0%, 100% { transform: translateX(-50%) scaleX(1);    opacity: 0.4; }
+      50%      { transform: translateX(-50%) scaleX(0.78); opacity: 0.26; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .profile-hero-sprite,
+      .profile-hero-shadow { animation: none; }
+    }
+    .profile-hero-meta {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      margin-top: 6px;
+      min-width: 0;
+    }
+    .profile-hero-title {
+      color: #9AA7BD;
+      border: 1px solid currentColor;
+      border-radius: 8px;
+      padding: 4px 11px;
+      font-size: 0.64rem;
+      font-weight: 900;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+    .profile-hero-skin {
+      color: rgba(210,225,255,0.5);
+      font-size: 0.54rem;
+      font-weight: 700;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      max-width: 100%;
+    }
+    .runner-trail-row {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      align-items: center;
+      justify-items: center;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(77,143,255,0.14);
+    }
+    .runner-trail-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+    .equipped-trail-bubble.runner-trail-bubble {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .runner-trail-bubble .equipped-trail-icon-img {
+      width: 24px;
+      height: 24px;
+      object-fit: contain;
+      display: block;
+    }
+    .runner-trail-name {
+      color: #fff;
+      font-size: 0.62rem;
+      font-weight: 800;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+    .runner-trail-count {
+      color: rgba(210,225,255,0.38);
+      font-size: 0.54rem;
+      font-weight: 700;
+      letter-spacing: 0.6px;
+    }
     .profile-passport-label { color: rgba(136,170,255,0.62); font-size: 0.52rem; font-weight: 900; letter-spacing: 1.4px; text-transform: uppercase; }
     .profile-passport-level {
       align-self: flex-start;
@@ -3138,20 +3271,115 @@
     .career-stat:last-child { border-right: 0; }
     .career-stat span { display: block; color: #fff; font-size: 0.84rem; font-weight: 900; overflow: hidden; text-overflow: ellipsis; }
     .career-stat small { color: rgba(210,225,255,0.42); font-size: 0.48rem; text-transform: uppercase; letter-spacing: 0.4px; }
-    .profile-collection-rail {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 7px;
+    .career-bar {
+      margin: 5px auto 0;
+      width: 80%;
+      height: 3px;
+      border-radius: 2px;
+      background: rgba(255,255,255,0.08);
+      overflow: hidden;
     }
-    .profile-collection-rail > div {
-      padding: 10px 8px;
-      border-radius: 11px;
-      border: 1px solid rgba(77,143,255,0.16);
+    .career-bar-fill {
+      height: 100%;
+      width: 0%;
+      border-radius: 2px;
+      background: linear-gradient(90deg, #4D8FFF, #7BB0FF);
+      transition: width 0.4s ease;
+    }
+    .career-stat .career-next { display: block; margin-top: 3px; color: rgba(210,225,255,0.3); font-size: 0.44rem; letter-spacing: 0.3px; }
+    .career-stat.career-max .career-bar-fill { background: #FFD700; }
+    .career-stat.career-max .career-next { color: rgba(255,215,0,0.55); }
+    .career-medals {
+      display: flex;
+      justify-content: space-around;
+      gap: 6px;
+      margin-top: 10px;
+      padding: 9px 4px 0;
+      border-top: 1px solid var(--surface-line);
+    }
+    .career-medal {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      min-width: 0;
+    }
+    .career-medal small {
+      color: rgba(210,225,255,0.34);
+      font-size: 0.44rem;
+      font-weight: 700;
+      letter-spacing: 0.4px;
+    }
+    .career-medal-ring {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       background: rgba(7,15,36,0.72);
-      text-align: center;
+      border: 2px solid rgba(255,255,255,0.12);
     }
-    .profile-collection-rail span { display: block; color: #4D8FFF; font-size: 0.78rem; font-weight: 900; margin-bottom: 2px; }
-    .profile-collection-rail small { color: rgba(210,225,255,0.42); font-size: 0.52rem; text-transform: uppercase; }
+    .career-medal-icon { width: 19px; height: 19px; object-fit: contain; }
+    .medal-none .career-medal-icon { filter: grayscale(1); opacity: 0.4; }
+    .medal-bronze .career-medal-ring { border-color: #D0885A; }
+    .medal-bronze small { color: rgba(208,136,90,0.75); }
+    .medal-silver .career-medal-ring { border-color: #C0C8DD; }
+    .medal-silver small { color: rgba(192,200,221,0.75); }
+    .medal-gold .career-medal-ring { border-color: #FFD700; box-shadow: 0 0 9px rgba(255,215,0,0.35); }
+    .medal-gold small { color: rgba(255,215,0,0.75); }
+    .collection-shelf {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 6px;
+    }
+    .collection-shelf-trails {
+      grid-template-columns: repeat(6, 1fr);
+      margin-top: 6px;
+    }
+    .collection-cell {
+      position: relative;
+      aspect-ratio: 1;
+      border-radius: 10px;
+      border: 1px solid rgba(77,143,255,0.22);
+      background: rgba(10,22,50,0.78);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    .collection-cell-img {
+      width: 78%;
+      height: 78%;
+      object-fit: contain;
+    }
+    .collection-cell.locked {
+      border-color: rgba(255,255,255,0.07);
+      background: rgba(8,12,28,0.72);
+      cursor: pointer;
+    }
+    .collection-cell.locked .collection-cell-img {
+      filter: grayscale(1) brightness(0.32);
+    }
+    .collection-cell.locked:active { border-color: rgba(77,143,255,0.35); }
+    .collection-lock {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .collection-lock-img { width: 15px; height: 15px; opacity: 0.75; }
+    .collection-nft {
+      position: absolute;
+      bottom: 3px;
+      right: 4px;
+      color: #6FD66F;
+      font-size: 0.4rem;
+      font-weight: 900;
+      letter-spacing: 0.6px;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+    }
 
     /* Quests: short rotations first, long-term progression remains below. */
     .quests-screen-body { align-items: center; }

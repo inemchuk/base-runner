@@ -318,15 +318,41 @@ export default function Game() {
             <span className="hub-status-chip">BASE ID</span>
           </div>
 
-          <div className="profile-header profile-passport">
-            <img id="profile-avatar" className="profile-avatar" alt="" style={{display:'none'}} />
-            <div id="profile-avatar-placeholder" className="profile-avatar" style={{display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.5rem'}}><img className="profile-placeholder-icon ui-icon" src="/game/ui-icons/profile.png" alt="" aria-hidden="true" /></div>
-            <div className="profile-info">
-              <span className="profile-passport-label">Runner passport</span>
-              <span className="profile-name" id="profile-name">Not connected</span>
-              <span className="profile-address" id="profile-address"></span>
+          <div className="profile-runner-card" id="profile-runner-card">
+            <div className="runner-passport-row">
+              <img id="profile-avatar" className="profile-avatar" alt="" style={{display:'none'}} />
+              <div id="profile-avatar-placeholder" className="profile-avatar" style={{display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.5rem'}}><img className="profile-placeholder-icon ui-icon" src="/game/ui-icons/profile.png" alt="" aria-hidden="true" /></div>
+              <div className="profile-info">
+                <span className="profile-passport-label">Runner passport</span>
+                <span className="profile-name" id="profile-name">Not connected</span>
+                <span className="profile-address" id="profile-address"></span>
+              </div>
+              <span className="profile-passport-level" id="profile-passport-level">LV.1</span>
             </div>
-            <span className="profile-passport-level" id="profile-passport-level">LV.1</span>
+            <div className="runner-stage-row">
+              <button className="equipped-arrow" id="btn-hero-skin-prev" aria-label="Previous skin">‹</button>
+              <div className="profile-hero-stage">
+                <span className="profile-hero-glow" id="profile-hero-glow"></span>
+                <img className="profile-hero-sprite" id="profile-hero-sprite" src="/game/chars/cryptokid.png" alt="Equipped skin" />
+                <span className="profile-hero-shadow"></span>
+              </div>
+              <button className="equipped-arrow" id="btn-hero-skin-next" aria-label="Next skin">›</button>
+            </div>
+            <div className="profile-hero-meta">
+              <span className="profile-hero-title" id="profile-hero-title">ROOKIE</span>
+              <span className="profile-hero-skin" id="profile-hero-skin">Genesis Runner</span>
+            </div>
+            <div className="runner-trail-row">
+              <button className="equipped-arrow" id="btn-profile-trail-prev" aria-label="Previous trail">‹</button>
+              <div className="runner-trail-info">
+                <span className="equipped-trail-bubble runner-trail-bubble" id="equipped-trail-bubble">
+                  <span id="equipped-trail-icon"><img className="equipped-trail-icon-img" src="/nft/images/trail_default.png" alt="Default trail" /></span>
+                </span>
+                <span className="runner-trail-name" id="equipped-trail-name">None</span>
+                <span className="runner-trail-count" id="equipped-trail-count">1/1</span>
+              </div>
+              <button className="equipped-arrow" id="btn-profile-trail-next" aria-label="Next trail">›</button>
+            </div>
           </div>
 
           <div className="profile-xp" id="profile-xp-clickable" role="button" tabIndex={0} aria-label="Open level rewards" style={{cursor:'pointer'}}>
@@ -365,23 +391,21 @@ export default function Game() {
               <span className="profile-section-meta">All time</span>
             </div>
             <div className="career-grid">
-              <div className="career-stat"><span id="stat-games">0</span><small>Games</small></div>
-              <div className="career-stat"><span id="stat-rows">0</span><small>Rows</small></div>
-              <div className="career-stat"><span id="stat-coins">0</span><small>Coins</small></div>
-              <div className="career-stat"><span id="stat-checkins">0</span><small>Check-ins</small></div>
+              <div className="career-stat" id="career-tile-games"><span id="stat-games">0</span><small>Games</small><div className="career-bar"><div className="career-bar-fill" id="career-bar-games" /></div><small className="career-next" id="career-next-games"></small></div>
+              <div className="career-stat" id="career-tile-rows"><span id="stat-rows">0</span><small>Rows</small><div className="career-bar"><div className="career-bar-fill" id="career-bar-rows" /></div><small className="career-next" id="career-next-rows"></small></div>
+              <div className="career-stat" id="career-tile-coins"><span id="stat-coins">0</span><small>Coins</small><div className="career-bar"><div className="career-bar-fill" id="career-bar-coins" /></div><small className="career-next" id="career-next-coins"></small></div>
+              <div className="career-stat" id="career-tile-checkins"><span id="stat-checkins">0</span><small>Check-ins</small><div className="career-bar"><div className="career-bar-fill" id="career-bar-checkins" /></div><small className="career-next" id="career-next-checkins"></small></div>
             </div>
+            <div className="career-medals" id="career-medals" />
           </section>
 
           <section className="profile-collection" id="profile-collection">
             <div className="profile-section-head">
               <p className="profile-section-title">Collection</p>
-              <span className="profile-section-meta">Owned gear</span>
+              <span className="profile-section-meta" id="profile-collection-meta">Owned gear</span>
             </div>
-            <div className="profile-collection-rail">
-              <div><span id="profile-collection-skins">1 / 1</span><small>Skins</small></div>
-              <div><span id="profile-collection-trails">1 / 1</span><small>Trails</small></div>
-              <div><span id="profile-collection-boosters">0</span><small>Boosters</small></div>
-            </div>
+            <div className="collection-shelf" id="collection-shelf-skins" />
+            <div className="collection-shelf collection-shelf-trails" id="collection-shelf-trails" />
           </section>
 
           <div className="profile-boosters">
@@ -405,36 +429,6 @@ export default function Game() {
             </div>
           </div>
 
-          <div className="profile-equipped">
-            <div className="profile-section-head">
-              <p className="profile-section-title">Current loadout</p>
-              <span className="profile-section-meta">Swipe with arrows</span>
-            </div>
-            <div className="profile-equipped-row">
-              <div className="equipped-card">
-                <span className="equipped-type-label">Skin</span>
-                <div className="equipped-picker">
-                  <button className="equipped-arrow" id="btn-profile-skin-prev" aria-label="Previous skin">‹</button>
-                  <img className="equipped-sprite" id="equipped-skin-sprite" src="/game/chars/cryptokid.png" alt="skin" />
-                  <button className="equipped-arrow" id="btn-profile-skin-next" aria-label="Next skin">›</button>
-                </div>
-                <span className="equipped-name" id="equipped-skin-name">Genesis Runner</span>
-                <span className="equipped-count" id="equipped-skin-count">1/1</span>
-              </div>
-              <div className="equipped-card">
-                <span className="equipped-type-label">Trail</span>
-                <div className="equipped-picker">
-                  <button className="equipped-arrow" id="btn-profile-trail-prev" aria-label="Previous trail">‹</button>
-                  <span className="equipped-trail-bubble" id="equipped-trail-bubble">
-                    <span id="equipped-trail-icon"><img className="equipped-trail-icon-img" src="/nft/images/trail_default.png" alt="Default trail" /></span>
-                  </span>
-                  <button className="equipped-arrow" id="btn-profile-trail-next" aria-label="Next trail">›</button>
-                </div>
-                <span className="equipped-name" id="equipped-trail-name">None</span>
-                <span className="equipped-count" id="equipped-trail-count">1/1</span>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
 

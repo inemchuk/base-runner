@@ -7133,7 +7133,6 @@ const Shop = (() => {
       const owned = d.owned || ['skin_cryptokid'];
       if (!owned.includes(itemId)) owned.push(itemId);
       d.owned = owned;
-      _markNftClaimed(itemId);
     } else if (type === 'trail') {
       const packs = d.trailPacks || [];
       if (!packs.includes(itemId)) packs.push(itemId);

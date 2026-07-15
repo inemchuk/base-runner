@@ -84,6 +84,10 @@ assert.doesNotMatch(
 
 const runtime = readFileSync('public/game/game.js', 'utf8');
 
+const grantItemLocal = runtime.match(/function _grantItemLocal\(itemId, type\) \{([\s\S]*?)\n  \}\n\n  function getFocusItem/);
+assert.ok(grantItemLocal, 'Shop exposes the local craft ownership grant');
+assert.doesNotMatch(grantItemLocal[1], /_markNftClaimed/, 'Crafted skin ownership must remain unclaimed so Shop can show CLAIM');
+
 assert.match(runtime, /class="shop-nft-btn claim-action"[^>]*data-id="\$\{itemId\}">CLAIM ONCHAIN/, 'Generic Shop NFT claims should use the shared onchain action');
 assert.match(runtime, /class="shop-btn claim-action shop-btn-claim-equip"[^>]*>CLAIM<\/button>/, 'Skin NFT claims should use the compact shared action');
 assert.match(runtime, /class="shop-btn claim-action shop-btn-claim-equip-trail"[^>]*>CLAIM<\/button>/, 'Trail NFT claims should use the compact shared action');

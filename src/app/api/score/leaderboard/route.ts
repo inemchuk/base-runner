@@ -81,12 +81,12 @@ export async function GET(req: NextRequest) {
         token: process.env.UPSTASH_REDIS_REST_TOKEN,
       });
       const key    = redisKey(period);
-      const result = await redis.zrange(key, 0, 99, { rev: true, withScores: true }) as (string | number)[];
+      const result = await redis.zrange(key, 0, -1, { rev: true, withScores: true }) as (string | number)[];
       for (let i = 0; i < result.length; i += 2) {
         raw.push({ address: result[i] as string, score: result[i + 1] as number });
       }
     } else {
-      const sorted = [...memStore.entries()].sort((a, b) => b[1] - a[1]).slice(0, 100);
+      const sorted = [...memStore.entries()].sort((a, b) => b[1] - a[1]);
       raw = sorted.map(([address, score]) => ({ address, score }));
     }
 

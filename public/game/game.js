@@ -356,12 +356,20 @@ const Leaderboard = (() => {
     }
   }
 
+  function _emptyStateHtml(message) {
+    return `<div class="lb-empty">
+      ${_uiIconHtml('gamepad', 'lb-empty-icon', '')}
+      <p class="lb-empty-text">${message}</p>
+      <button class="lb-empty-play" onclick="document.getElementById('btn-start')?.click()">PLAY NOW</button>
+    </div>`;
+  }
+
   function renderPersonal() {
     const container = document.getElementById('lb-list');
     if (!container) return;
     const scores = Save.getScores();
     if (scores.length === 0) {
-      container.innerHTML = `<p class="lb-empty">${_uiIconHtml('gamepad', 'lb-empty-icon', 'gamepad')}No scores yet.<br>Play to set a record!</p>`;
+      container.innerHTML = _emptyStateHtml('No scores yet.<br>Play your first run to set a record!');
       return;
     }
     container.innerHTML = scores.map((score, i) => {
@@ -379,14 +387,20 @@ const Leaderboard = (() => {
     const container = document.getElementById('lb-list');
     if (!container) return;
     const onChain = window.__BASE_LEADERBOARD_ENTRIES;
-    if (!onChain || onChain.length === 0) {
+    if (!onChain) {
       container.innerHTML = '<p class="lb-empty">Loading global scores…</p>';
       return;
     }
+    if (onChain.length === 0) {
+      container.innerHTML = _emptyStateHtml('No runners on the board yet.<br>Be the first!');
+      return;
+    }
+    const myAddr = (window.__BASE_WALLET || '').toLowerCase();
     container.innerHTML = onChain.map((entry, i) => {
       const rankClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
+      const isYou = myAddr && entry.address && entry.address.toLowerCase() === myAddr;
       const medal = MEDALS[i] || `${i + 1}`;
-      return `<div class="lb-row ${rankClass}">
+      return `<div class="lb-row ${rankClass}${isYou ? ' you' : ''}">
         <span class="lb-rank">${medal}</span>
         ${avatarHtml(entry)}
         <span class="lb-name">${entry.name}</span>
@@ -399,19 +413,26 @@ const Leaderboard = (() => {
     const container = document.getElementById('lb-list');
     if (!container) return;
     const entries = window.__BASE_COIN_LB_ENTRIES;
-    if (!entries || entries.length === 0) {
+    if (!entries) {
       container.innerHTML = '<p class="lb-empty">Loading coin rankings…</p>';
       return;
     }
+    if (entries.length === 0) {
+      container.innerHTML = _emptyStateHtml('No coin rankings yet.<br>Collect coins in your runs!');
+      return;
+    }
+    const myAddr = (window.__BASE_WALLET || '').toLowerCase();
+    const coinHtml = (value) => `<img src="/game/coin.png" style="width:14px;height:14px;object-fit:contain;"> ${value}`;
     container.innerHTML = entries.map((entry, i) => {
       const rankClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
+      const isYou = myAddr && entry.address && entry.address.toLowerCase() === myAddr;
       const medal = MEDALS[i] || `${i + 1}`;
-      return `<div class="lb-row ${rankClass}">
+      return `<div class="lb-row ${rankClass}${isYou ? ' you' : ''}">
         <span class="lb-rank">${medal}</span>
         ${avatarHtml(entry)}
         <span class="lb-name">${entry.name}</span>
         <span class="lb-pts" style="display:flex;align-items:center;gap:4px;">
-          <img src="/game/coin.png" style="width:14px;height:14px;object-fit:contain;"> ${entry.balance}
+          ${coinHtml(entry.balance)}
         </span>
       </div>`;
     }).join('');
@@ -614,8 +635,17 @@ const Sound = (() => {
                duration: 0.12, vol: 0.22, attack: 0.003 });
   }
 
+  // Checkpoint fanfare — короткий двухнотный аккорд, легче чем newRecord
+  function checkpoint() {
+    [659, 988].forEach((freq, i) => {
+      setTimeout(() => playTone({ freq, type: 'sine', duration: 0.14,
+                                  vol: 0.24, attack: 0.004 }), i * 90);
+    });
+  }
+
   return { init, toggleMute, isMuted, getVolume, setVolume,
-           jump, step, log, death, splash, trainHorn, thunder, newRecord, coin };
+           jump, step, log, death, splash, trainHorn, thunder, newRecord, coin,
+           checkpoint };
 })();
 
 
@@ -1277,13 +1307,36 @@ const World = (() => {
   // СОЗДАНИЕ РЯДОВ
   // ═══════════════════════════════════════════════════════
 
+  // Стартовый лагерь раннеров. Ряды <= 0 недостижимы для игрока
+  // (Player.move запрещает newRow < 1), так что это чистый back-drop:
+  // декорации здесь никогда не участвуют в коллизиях движения.
+  // Композиция — кластеры, а не россыпь: склад у старта, костровая площадка
+  // (палатки полукругом вокруг огня), билборд как отдельный якорь сбоку.
+  // flip/scale дают вариативность одних и тех же спрайтов.
+  // Колонка 4 (за спиной игрока) до костра свободна — по ней рисуется тропа.
+  const START_CAMP_LAYOUT = {
+    '0':  [{ col: 0, type: 'campflag' }, { col: 8, type: 'campflag' }],
+    '-1': [{ col: 1, type: 'tent' }, { col: 6, type: 'crate' },
+           { col: 7, type: 'crate', flip: true, scale: 0.8 }],
+    '-2': [{ col: 4, type: 'campfire' }, { col: 7, type: 'tent2', flip: true }],
+    '-3': [{ col: 2, type: 'billboard' }, { col: 6, type: 'tent' }],
+    '-4': [{ col: 3, type: 'tent2', flip: true, scale: 0.95 }, { col: 6, type: 'campflag' }],
+    '-5': [{ col: 2, type: 'crate', scale: 0.85 }, { col: 5, type: 'tent', scale: 0.9 }],
+    '-6': [{ col: 3, type: 'campflag' }],
+    '-7': [{ col: 1, type: 'crate', scale: 0.8 }, { col: 6, type: 'tent2', flip: true, scale: 0.9 }],
+    '-8': [{ col: 5, type: 'campflag' }],
+  };
+
   function makeGrassRow(rowIdx) {
     // Generate decorations — bushes, trees, rocks on grid cells
     // Player starts at row 1, col COLS/2 — always keep that clear
     const decorations = [];
 
-    // Start rows (0-2) and player's starting row stay empty
+    // Start rows (0-2) and player's starting row stay empty;
+    // rows <= 0 get the static runner-camp set dressing (visual only)
     if (rowIdx <= 2) {
+      const camp = START_CAMP_LAYOUT[String(rowIdx)];
+      if (camp) for (const d of camp) decorations.push({ ...d });
       return { idx: rowIdx, type: 'grass', obstacles: [], spawnQueue: [], spawnTimer: 0, dir: 0, speed: 0, decorations };
     }
 
@@ -1852,6 +1905,11 @@ const Player = (() => {
   // dCol: +1 = вправо, -1 = влево
   function move(dRow, dCol) {
     if (!state.alive)  return false;
+    // Стартовый отсчёт: движение заблокировано, первый ввод пропускает отсчёт
+    if (typeof RunCountdown !== 'undefined' && RunCountdown.isLocked()) {
+      RunCountdown.skip();
+      return false;
+    }
     if (state.jumping) {
       _bufferedMove = { dRow, dCol }; // запомним тап — применим в момент приземления
       return false;
@@ -1882,6 +1940,7 @@ const Player = (() => {
     if (_isNewRow) {
       state.maxRow = state.row;
       state.score  = state.row - 1;
+      if (typeof CheckpointFx !== 'undefined') CheckpointFx.onScore(state.score);
     }
 
     // --- Сбор монеты (+ магнит: радиус 2 клетки с анимацией) ---
@@ -3099,6 +3158,12 @@ const Renderer = (() => {
     rock_pile:  '/game/env/addons-v1/rock_pile.png',
     stump:      '/game/env/addons-v1/stump.png',
     shrub:      '/game/env/addons-v1/shrub.png',
+    tent:       '/game/env/start-camp/tent-blue.png',
+    tent2:      '/game/env/start-camp/tent-orange.png',
+    crate:      '/game/env/start-camp/crate.png',
+    campfire:   '/game/env/start-camp/campfire.png',
+    billboard:  '/game/env/start-camp/billboard.png',
+    campflag:   '/game/env/start-camp/campflag.png',
     cactus:     '/game/env/cactus.png',
     tumbleweed: '/game/env/tumbleweed.png',
     pine:       '/game/env/pine.png',
@@ -3133,8 +3198,8 @@ const Renderer = (() => {
   // size:  sprite scale (× CELL)
   // sw:    shadow ellipse half-width (× CELL)
   // sh:    shadow ellipse half-height (× CELL)
-  // base:  ground-contact point in cell (0 = top, 1 = bottom)
-  // shadowLift: raises shadow to match visible sprite base when PNG has bottom padding
+  // base: ground-contact point in cell (0 = top, 1 = bottom)
+  // bottomPadding: transparent lower edge in the source image, expressed as image height
   const _ENV_SPRITE_CFG = {
     bush:       { size: 0.82, sw: 0.32, sh: 0.09, base: 0.92, shadowLift: 0.14 },
     tree:       { size: 1.05, sw: 0.30, sh: 0.08, base: 0.94 },
@@ -3142,6 +3207,15 @@ const Renderer = (() => {
     rock_pile:  { size: 0.76, sw: 0.30, sh: 0.08, base: 0.83, shadowLift: 0.05 },
     stump:      { size: 0.74, sw: 0.28, sh: 0.08, base: 0.88, shadowLift: 0.04 },
     shrub:      { size: 0.82, sw: 0.32, sh: 0.09, base: 0.86, shadowLift: 0.08 },
+    // Тени лагеря: ширина = видимая опора спрайта (замерена по альфа-каналу),
+    // не шире — иначе эллипс торчит из-под предмета и тот "парит".
+    // shadowLift подтыкает эллипс под основание, наружу выглядывает тонкий край.
+    tent:       { size: 0.92, sw: 0.335, sh: 0.055, base: 0.91, bottomPadding: 38 / 512, shadowLift: 0.02, shadowOffsetY: 0 },
+    tent2:      { size: 0.92, sw: 0.335, sh: 0.055, base: 0.91, bottomPadding: 38 / 512, shadowLift: 0.02, shadowOffsetY: 0 },
+    crate:      { size: 0.72, sw: 0.185, sh: 0.042, base: 0.91, bottomPadding: 38 / 512, shadowLift: 0.02, shadowOffsetY: 0 },
+    campfire:   { size: 0.62, sw: 0.19,  sh: 0.040, base: 0.91, bottomPadding: 38 / 512, shadowAlpha: 0.10, shadowOffsetY: 0 },
+    billboard:  { size: 1.42, sw: 0.44,  sh: 0.040, base: 0.94, bottomPadding: 38 / 512, shadowAlpha: 0.14, shadowLift: 0.02, shadowOffsetY: 0 },
+    campflag:   { size: 0.86, sw: 0.075, sh: 0.032, base: 0.94, bottomPadding: 38 / 512, shadowAlpha: 0.16, shadowOffsetY: 0 },
     cactus:     { size: 0.88, sw: 0.22, sh: 0.07, base: 0.94 },
     tumbleweed: { size: 0.65, sw: 0.20, sh: 0.06, base: 0.92 },
     pine:       { size: 1.05, sw: 0.28, sh: 0.08, base: 0.94 },
@@ -3153,17 +3227,23 @@ const Renderer = (() => {
     if (!img || !img.complete || !img.naturalWidth) return false;
     const cfg    = _ENV_SPRITE_CFG[type] || { size: 0.85, sw: 0.28, sh: 0.08, base: 0.92 };
     const size   = CELL * cfg.size;
-    const baseY  = cy - CELL * 0.5 + CELL * cfg.base; // ground contact
-    const shadowY = baseY - CELL * (cfg.shadowLift || 0);
-    const tallCaster = type === 'tree' || type === 'pine' || type === 'cactus';
-    drawGroundShadow(cx, shadowY, CELL * cfg.sw * 2.15, CELL * cfg.sh * 2.7, {
-      surfaceId,
-      offsetX: CELL * (tallCaster ? 0.10 : 0.04),
-      offsetY: CELL * 0.02,
-    });
-    drawPropContact(type, cx, baseY, surfaceId);
-    // Sprite: image bottom sits at baseY
-    ctx.drawImage(img, cx - size / 2, baseY - size, size, size);
+    const baseY  = cy - CELL * 0.5 + CELL * cfg.base; // visible ground contact
+    const spriteBottomY = baseY + size * (cfg.bottomPadding || 0);
+    if (!cfg.noShadow) {
+      const shadowY = baseY - CELL * (cfg.shadowLift || 0);
+      const tallCaster = type === 'tree' || type === 'pine' || type === 'cactus';
+      const shadowOffsetX = cfg.shadowOffsetX ?? (tallCaster ? 0.10 : 0.04);
+      const shadowOffsetY = cfg.shadowOffsetY ?? 0.02;
+      drawGroundShadow(cx, shadowY, CELL * cfg.sw * 2.15, CELL * cfg.sh * 2.7, {
+        surfaceId,
+        alpha: cfg.shadowAlpha,
+        offsetX: CELL * shadowOffsetX,
+        offsetY: CELL * shadowOffsetY,
+      });
+      drawPropContact(type, cx, baseY, surfaceId);
+    }
+    // The opaque pixels, rather than any transparent PNG padding, sit on the ground.
+    ctx.drawImage(img, cx - size / 2, spriteBottomY - size, size, size);
     return true;
   }
 
@@ -3271,21 +3351,23 @@ const Renderer = (() => {
   const _COMPACT_HALO = Object.freeze({ head: 0.225, tail: 0.135, dot: 0.060 });
   const _LONG_HALO = Object.freeze({ head: 0.205, tail: 0.125, dot: 0.054 });
 
+  // Якоря сверены с фактическими пикселями ламп каждого спрайта
+  // (кластеры ярких тёплых пикселей спереди / красных сзади), 2026-07-16
   const _CAR_LIGHT_PROFILES = Object.freeze({
-    taxi:             _lightProfile([[0.940, 0.225], [0.940, 0.775]], [[0.075, 0.220], [0.075, 0.780]], _SEDAN_BEAM, _COMPACT_HALO),
-    yellow_taxi:      _lightProfile([[0.930, 0.220], [0.930, 0.780]], [[0.075, 0.250], [0.075, 0.750]], _SEDAN_BEAM, _COMPACT_HALO),
-    green_taxi:       _lightProfile([[0.940, 0.220], [0.940, 0.780]], [[0.055, 0.220], [0.055, 0.780]], _SEDAN_BEAM, _COMPACT_HALO),
-    orange:           _lightProfile([[0.925, 0.210], [0.925, 0.790]], [[0.055, 0.290], [0.055, 0.710]], _SEDAN_BEAM, _COMPACT_HALO),
-    police:           _lightProfile([[0.950, 0.300], [0.950, 0.700]], [[0.040, 0.200], [0.040, 0.800]], _SEDAN_BEAM, _COMPACT_HALO),
-    ambulance:        _lightProfile([[0.900, 0.315], [0.900, 0.680]], [[0.040, 0.205], [0.040, 0.795]], _VAN_BEAM, _COMPACT_HALO),
-    truck:            _lightProfile([[0.975, 0.215], [0.975, 0.780]], [[0.020, 0.220], [0.020, 0.780]], _LONG_BEAM, _LONG_HALO),
-    bus:              _lightProfile([[0.972, 0.200], [0.972, 0.800]], [[0.022, 0.220], [0.022, 0.780]], _LONG_BEAM, _LONG_HALO),
+    taxi:             _lightProfile([[0.940, 0.225], [0.940, 0.775]], [[0.062, 0.170], [0.062, 0.815]], _SEDAN_BEAM, _COMPACT_HALO),
+    yellow_taxi:      _lightProfile([[0.930, 0.220], [0.930, 0.780]], [[0.088, 0.155], [0.088, 0.825]], _SEDAN_BEAM, _COMPACT_HALO),
+    green_taxi:       _lightProfile([[0.955, 0.200], [0.955, 0.780]], [[0.068, 0.185], [0.068, 0.795]], _SEDAN_BEAM, _COMPACT_HALO),
+    orange:           _lightProfile([[0.960, 0.220], [0.960, 0.785]], [[0.075, 0.255], [0.075, 0.725]], _SEDAN_BEAM, _COMPACT_HALO),
+    police:           _lightProfile([[0.950, 0.300], [0.950, 0.700]], [[0.060, 0.165], [0.060, 0.815]], _SEDAN_BEAM, _COMPACT_HALO),
+    ambulance:        _lightProfile([[0.945, 0.180], [0.945, 0.800]], [[0.040, 0.170], [0.040, 0.825]], _VAN_BEAM, _COMPACT_HALO),
+    truck:            _lightProfile([[0.975, 0.190], [0.975, 0.750]], [[0.020, 0.220], [0.020, 0.780]], _LONG_BEAM, _LONG_HALO),
+    bus:              _lightProfile([[0.930, 0.245], [0.930, 0.740]], [[0.022, 0.220], [0.022, 0.780]], _LONG_BEAM, _LONG_HALO),
     firetruck:        _lightProfile([[0.970, 0.255], [0.970, 0.745]], [[0.155, 0.330], [0.155, 0.660]], _LONG_BEAM, _LONG_HALO),
-    black_suv:        _lightProfile([[0.890, 0.280], [0.890, 0.690]], [[0.080, 0.220], [0.080, 0.780]], _SEDAN_BEAM, _COMPACT_HALO),
+    black_suv:        _lightProfile([[0.903, 0.245], [0.903, 0.740]], [[0.080, 0.220], [0.080, 0.780]], _SEDAN_BEAM, _COMPACT_HALO),
     blue_hatchback:   _lightProfile([[0.860, 0.250], [0.860, 0.750]], [[0.115, 0.240], [0.115, 0.760]], _SEDAN_BEAM, _COMPACT_HALO),
-    white_panel_van:  _lightProfile([[0.890, 0.330], [0.890, 0.670]], [[0.045, 0.225], [0.045, 0.775]], _VAN_BEAM, _COMPACT_HALO),
-    silver_minivan:   _lightProfile([[0.855, 0.330], [0.855, 0.660]], [[0.090, 0.220], [0.090, 0.780]], _VAN_BEAM, _COMPACT_HALO),
-    orange_pickup:    _lightProfile([[0.900, 0.305], [0.900, 0.680]], [[0.090, 0.220], [0.090, 0.780]], _VAN_BEAM, _COMPACT_HALO),
+    white_panel_van:  _lightProfile([[0.890, 0.255], [0.890, 0.765]], [[0.045, 0.225], [0.045, 0.775]], _VAN_BEAM, _COMPACT_HALO),
+    silver_minivan:   _lightProfile([[0.850, 0.315], [0.850, 0.750]], [[0.090, 0.220], [0.090, 0.780]], _VAN_BEAM, _COMPACT_HALO),
+    orange_pickup:    _lightProfile([[0.895, 0.250], [0.895, 0.745]], [[0.090, 0.220], [0.090, 0.780]], _VAN_BEAM, _COMPACT_HALO),
   });
   const _DEFAULT_CAR_LIGHT_PROFILE = _CAR_LIGHT_PROFILES.taxi;
 
@@ -3609,6 +3691,11 @@ const Renderer = (() => {
     // Close precipitation, fog and lightning are intentionally foreground
     // effects. This completes the depth stack without a second world pass.
     drawWeatherNear(W, H);
+
+    // Стартовый отсчёт 3-2-1-GO — верхний экранный слой
+    if (typeof RunCountdown !== 'undefined') RunCountdown.draw(ctx, W, H);
+    // Чекпоинт-фанфары (каждые 100 рядов)
+    if (typeof CheckpointFx !== 'undefined') CheckpointFx.draw(ctx, W, H);
   }
 
   function drawWeatherFar(W, H) {
@@ -3911,6 +3998,13 @@ const Renderer = (() => {
     ctx.drawImage(fxs.grassTop, 0, y, COLS * CELL, CELL * 0.18);
     ctx.drawImage(fxs.grassBot, 0, y + CELL * 0.85, COLS * CELL, CELL * 0.15);
 
+    // Стартовая линия — игрок начинает ран, стоя на ней (row 1);
+    // надпись START — рядом ниже (row 0), чтобы её не перекрывал персонаж.
+    // Тропа от костровой площадки к старту вытоптана по колонке 4.
+    if (row.idx === 1) drawStartLine(y);
+    else if (row.idx === 0) drawStartText(y);
+    if (row.idx <= 1 && row.idx >= -1) drawCampPath(row.idx, y);
+
     // Coins
     if (row.coins) {
       const t = _now / 600;
@@ -3974,6 +4068,15 @@ const Renderer = (() => {
                        : d.type === 'tumbleweed' ? cx + swayX * 2
                        : d.type === 'pine'       ? cx + swayX * 1.2
                        : cx;
+        // Вариативность лагеря: зеркалирование и масштаб вокруг центра клетки
+        const hasVariant = d.flip || (d.scale && d.scale !== 1);
+        if (hasVariant) {
+          const vs = d.scale || 1;
+          ctx.save();
+          ctx.translate(cx, cy);
+          ctx.scale(d.flip ? -vs : vs, vs);
+          ctx.translate(-cx, -cy);
+        }
         if (!drawEnvSprite(d.type, spriteCx, cy, decorationSurfaceId)) {
           if      (d.type === 'bush')       drawBush(spriteCx, cy, bi, decorationSurfaceId);
           else if (d.type === 'tree')       drawTree(spriteCx, cy, bi, decorationSurfaceId);
@@ -3982,7 +4085,16 @@ const Renderer = (() => {
           else if (d.type === 'tumbleweed') drawTumbleweed(spriteCx, cy, bi, decorationSurfaceId);
           else if (d.type === 'pine')       drawPine(spriteCx, cy, bi, decorationSurfaceId);
           else if (d.type === 'snowman')    drawSnowman(cx, cy, bi, decorationSurfaceId);
+          else if (d.type === 'tent')       drawTent(cx, cy, decorationSurfaceId, 0);
+          else if (d.type === 'tent2')      drawTent(cx, cy, decorationSurfaceId, 1);
+          else if (d.type === 'campfire')   drawCampfire(cx, cy, decorationSurfaceId);
+          else if (d.type === 'crate')      drawCrate(cx, cy, decorationSurfaceId);
+          else if (d.type === 'campflag')   drawCampFlag(cx, cy, decorationSurfaceId);
+          else if (d.type === 'billboard')  drawBillboard(cx, cy, decorationSurfaceId);
         }
+        if (hasVariant) ctx.restore();
+        // Дым идёт поверх спрайта костра и без транформа зеркала
+        if (d.type === 'campfire') drawCampfireSmoke(cx, cy);
       }
     }
   }
@@ -4179,6 +4291,237 @@ const Renderer = (() => {
     ctx.fill();
   }
 
+  // ── Start line: клетчатая полоса на ряду 1 ──────────────────
+  // Краска по земле, без объектов — ничего не блокирует и не даёт z-конфликтов
+  function drawStartLine(y) {
+    const sq = CELL * 0.14;               // клетка шахматной полосы
+    const stripY = y + CELL * 0.16;       // чуть ниже верхней кромки ряда
+    ctx.save();
+    ctx.globalAlpha = 0.82;
+    for (let r = 0; r < 2; r++) {
+      for (let cxi = 0; cxi * sq < COLS * CELL; cxi++) {
+        ctx.fillStyle = (cxi + r) % 2 === 0 ? '#f2f4f8' : '#232a3a';
+        ctx.fillRect(cxi * sq, stripY + r * sq, Math.min(sq, COLS * CELL - cxi * sq), sq);
+      }
+    }
+    ctx.restore();
+  }
+
+  // ── Надпись START — краска на ряду 0, за спиной игрока ──────
+  function drawStartText(y) {
+    ctx.save();
+    ctx.globalAlpha = 0.55;
+    ctx.fillStyle = '#f2f4f8';
+    ctx.font = `700 ${Math.round(CELL * 0.34)}px ${GAME_FX_FONT}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('S T A R T', COLS * CELL / 2, y + CELL * 0.42);
+    ctx.restore();
+  }
+
+  // ── Вытоптанная тропа: от костра (кол. 4, ряд -3) к старту ──
+  function drawCampPath(rowIdx, y) {
+    const pathX = 4 * CELL + CELL / 2;
+    ctx.save();
+    ctx.fillStyle = 'rgba(94,66,41,0.12)';
+    for (let i = 0; i < 3; i++) {
+      // Детерминированное лёгкое виляние тропы (без RNG — стабильно по кадрам)
+      const wob = Math.sin(rowIdx * 3.7 + i * 2.1);
+      const px = pathX + wob * CELL * 0.16;
+      const py = y + CELL * (0.18 + i * 0.32);
+      ctx.beginPath();
+      ctx.ellipse(px, py, CELL * (0.20 + 0.04 * Math.cos(rowIdx + i)), CELL * 0.10, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // ── Дым костра: 3 бесстейтовых клуба, цикл ~3 сек ───────────
+  function drawCampfireSmoke(cx, cy) {
+    const baseY = cy + CELL * 0.05;
+    for (let i = 0; i < 3; i++) {
+      const t = ((_now * 0.00035) + i / 3) % 1;
+      const r  = CELL * (0.05 + t * 0.09);
+      const px = cx + Math.sin(t * 6.28 + i * 2.1) * CELL * 0.06;
+      const py = baseY - t * CELL * 0.75;
+      const fadeIn = t > 0.08 ? 1 : t / 0.08;
+      ctx.fillStyle = `rgba(200,205,215,${(0.22 * (1 - t) * fadeIn).toFixed(3)})`;
+      ctx.beginPath();
+      ctx.arc(px, py, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // ═══ Стартовый лагерь (ряды <= 0, чисто визуальный back-drop) ═══
+
+  // ── Tent: двухцветная палатка с входом ──────────────────────
+  const TENT_PALETTES = [
+    { body: '#3b6fd4', shade: '#2a4fa0', door: '#1c3670' },   // base blue
+    { body: '#e0813f', shade: '#b85f28', door: '#8a4218' },   // orange
+  ];
+  function drawTent(cx, cy, surfaceId, variant) {
+    const p = TENT_PALETTES[variant] || TENT_PALETTES[0];
+    const w = CELL * 0.78, h = CELL * 0.62;
+    const baseY = cy + CELL * 0.28;
+    drawGroundShadow(cx, baseY, w * 1.05, h * 0.22, { surfaceId, offsetX: CELL * 0.05, offsetY: 0 });
+    drawPropContact('tent', cx, baseY, surfaceId);
+    // Правый скат (тень)
+    ctx.fillStyle = p.shade;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - h * 0.62);
+    ctx.lineTo(cx + w / 2, baseY);
+    ctx.lineTo(cx + w * 0.1, baseY);
+    ctx.closePath();
+    ctx.fill();
+    // Левый скат (свет)
+    ctx.fillStyle = p.body;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - h * 0.62);
+    ctx.lineTo(cx - w / 2, baseY);
+    ctx.lineTo(cx + w * 0.1, baseY);
+    ctx.closePath();
+    ctx.fill();
+    // Вход
+    ctx.fillStyle = p.door;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - h * 0.30);
+    ctx.lineTo(cx - w * 0.16, baseY);
+    ctx.lineTo(cx + w * 0.16, baseY);
+    ctx.closePath();
+    ctx.fill();
+    // Блик на коньке
+    ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - h * 0.62);
+    ctx.lineTo(cx - w * 0.42, baseY - h * 0.06);
+    ctx.stroke();
+  }
+
+  // ── Campfire: камни, поленья, мерцающее пламя ───────────────
+  function drawCampfire(cx, cy, surfaceId) {
+    const baseY = cy + CELL * 0.24;
+    drawGroundShadow(cx, baseY, CELL * 0.5, CELL * 0.12, { surfaceId, offsetX: CELL * 0.03, offsetY: 0 });
+    // Поленья крест-накрест
+    ctx.strokeStyle = '#6b4a2b';
+    ctx.lineWidth = CELL * 0.07;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(cx - CELL * 0.18, baseY - CELL * 0.02);
+    ctx.lineTo(cx + CELL * 0.16, baseY - CELL * 0.10);
+    ctx.moveTo(cx - CELL * 0.16, baseY - CELL * 0.10);
+    ctx.lineTo(cx + CELL * 0.18, baseY - CELL * 0.02);
+    ctx.stroke();
+    ctx.lineCap = 'butt';
+    // Камни по кругу
+    ctx.fillStyle = '#8d8d96';
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI;
+      ctx.beginPath();
+      ctx.arc(cx + Math.cos(a) * CELL * 0.24, baseY + Math.sin(a) * CELL * 0.05, CELL * 0.05, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // Пламя: два слоя + лёгкое мерцание (дёшево — один костёр на весь мир)
+    const fl = 0.85 + 0.15 * Math.sin(_now * 0.012);
+    const fh = CELL * 0.34 * fl;
+    ctx.fillStyle = 'rgba(255,140,30,0.9)';
+    ctx.beginPath();
+    ctx.moveTo(cx - CELL * 0.11, baseY - CELL * 0.06);
+    ctx.quadraticCurveTo(cx - CELL * 0.10, baseY - fh * 0.6, cx, baseY - fh);
+    ctx.quadraticCurveTo(cx + CELL * 0.10, baseY - fh * 0.6, cx + CELL * 0.11, baseY - CELL * 0.06);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,220,90,0.95)';
+    ctx.beginPath();
+    ctx.moveTo(cx - CELL * 0.05, baseY - CELL * 0.06);
+    ctx.quadraticCurveTo(cx - CELL * 0.04, baseY - fh * 0.35, cx, baseY - fh * 0.55);
+    ctx.quadraticCurveTo(cx + CELL * 0.04, baseY - fh * 0.35, cx + CELL * 0.05, baseY - CELL * 0.06);
+    ctx.closePath();
+    ctx.fill();
+    // Тёплый отсвет на земле
+    ctx.fillStyle = `rgba(255,160,60,${0.10 + 0.04 * fl})`;
+    ctx.beginPath();
+    ctx.ellipse(cx, baseY, CELL * 0.5, CELL * 0.16, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // ── Crate: ящик снаряжения ──────────────────────────────────
+  function drawCrate(cx, cy, surfaceId) {
+    const s = CELL * 0.44;
+    const baseY = cy + CELL * 0.26;
+    drawGroundShadow(cx, baseY, s * 1.3, s * 0.3, { surfaceId, offsetX: CELL * 0.04, offsetY: 0 });
+    drawPropContact('crate', cx, baseY, surfaceId);
+    ctx.fillStyle = '#9a6a3a';
+    ctx.fillRect(cx - s / 2, baseY - s, s, s);
+    ctx.fillStyle = '#7c5028';
+    ctx.fillRect(cx - s / 2, baseY - s * 0.30, s, s * 0.30);
+    // Планки
+    ctx.strokeStyle = '#5f3c1c';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(cx - s / 2, baseY - s, s, s);
+    ctx.beginPath();
+    ctx.moveTo(cx - s / 2, baseY - s);
+    ctx.lineTo(cx + s / 2, baseY);
+    ctx.moveTo(cx + s / 2, baseY - s);
+    ctx.lineTo(cx - s / 2, baseY);
+    ctx.stroke();
+  }
+
+  // ── Camp flag: шест с трепещущим вымпелом ───────────────────
+  function drawCampFlag(cx, cy, surfaceId) {
+    const baseY = cy + CELL * 0.30;
+    const h = CELL * 0.95;
+    drawGroundShadow(cx, baseY, CELL * 0.22, CELL * 0.08, { surfaceId, offsetX: CELL * 0.02, offsetY: 0 });
+    ctx.strokeStyle = '#d8d8e0';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(cx, baseY);
+    ctx.lineTo(cx, baseY - h);
+    ctx.stroke();
+    // Вымпел: лёгкое трепетание кончика
+    const wave = Math.sin(_now * 0.004 + cx * 0.05) * CELL * 0.05;
+    ctx.fillStyle = '#0052FF';
+    ctx.beginPath();
+    ctx.moveTo(cx, baseY - h);
+    ctx.lineTo(cx + CELL * 0.42, baseY - h + CELL * 0.10 + wave);
+    ctx.lineTo(cx, baseY - h + CELL * 0.22);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // ── Billboard: щит "BASE RUNNER" на двух опорах ─────────────
+  function drawBillboard(cx, cy, surfaceId) {
+    const w = CELL * 1.6, h = CELL * 0.66;
+    const baseY  = cy + CELL * 0.30;
+    const boardY = baseY - CELL * 1.06;   // верх опор
+    drawGroundShadow(cx, baseY, w * 0.8, CELL * 0.12, { surfaceId, offsetX: CELL * 0.06, offsetY: 0 });
+    // Опоры
+    ctx.fillStyle = '#5a5a64';
+    ctx.fillRect(cx - w * 0.34, boardY + h * 0.5, CELL * 0.07, baseY - boardY - h * 0.5);
+    ctx.fillRect(cx + w * 0.34 - CELL * 0.07, boardY + h * 0.5, CELL * 0.07, baseY - boardY - h * 0.5);
+    // Щит
+    ctx.fillStyle = '#101b33';
+    ctx.fillRect(cx - w / 2, boardY, w, h);
+    ctx.strokeStyle = '#2a3c66';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(cx - w / 2, boardY, w, h);
+    // Логотип Base — синий квадрат со скруглением
+    const ls = h * 0.34;
+    ctx.fillStyle = '#0052FF';
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(cx - ls / 2, boardY + h * 0.12, ls, ls, ls * 0.28);
+    else ctx.rect(cx - ls / 2, boardY + h * 0.12, ls, ls);
+    ctx.fill();
+    // Надпись
+    ctx.fillStyle = '#e8eefc';
+    ctx.font = `700 ${Math.round(h * 0.24)}px ${GAME_FX_FONT}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('BASE RUNNER', cx, boardY + h * 0.72);
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+  }
+
   // Keep for fallback (unused now but kept for safety)
   function drawGrassDetails(y) {}
 
@@ -4279,18 +4622,19 @@ const Renderer = (() => {
 
     ctx.save();
     if (nightRatio > 0.15 && frontLights.length >= 2) {
-      const beamMidX = (frontLights[0].x + frontLights[1].x) / 2;
-      const beamMidY = (frontLights[0].y + frontLights[1].y) / 2;
-      const beamOriginX = beamMidX + direction * car.width * profile.beam.offset;
+      // Конус на каждую фару (не один общий из центра машины):
+      // два узких луча из фактических точек ламп
       const beamLength = CELL * profile.beam.length;
-      const beamWidth = CELL * profile.beam.width;
+      const beamWidth = CELL * profile.beam.width * 0.52;
       ctx.globalCompositeOperation = 'screen';
-      ctx.globalAlpha = alpha * profile.beam.alpha;
-      ctx.save();
-      ctx.translate(beamOriginX, beamMidY);
-      ctx.scale(direction, 1);
-      ctx.drawImage(fxs.hlBeam, 0, -beamWidth / 2, beamLength, beamWidth);
-      ctx.restore();
+      ctx.globalAlpha = alpha * profile.beam.alpha * 0.85;
+      for (const point of frontLights) {
+        ctx.save();
+        ctx.translate(point.x + direction * car.width * profile.beam.offset, point.y);
+        ctx.scale(direction, 1);
+        ctx.drawImage(fxs.hlBeam, 0, -beamWidth / 2, beamLength, beamWidth);
+        ctx.restore();
+      }
 
       ctx.globalAlpha = alpha;
       for (const point of frontLights) {
@@ -4353,6 +4697,31 @@ const Renderer = (() => {
       const y = World.rowToY(row.idx);
       if (y + CELL < visTop || y > visBot) continue;
       for (const car of row.obstacles) drawCarLights(row, y, car);
+    }
+    // Костёр лагеря светит ночью (композит после ночной вуали)
+    if (nightRatio > 0.05) {
+      for (const row of World.getRows()) {
+        if (row.idx > 0 || row.type !== 'grass' || !row.decorations) continue;
+        const y = World.rowToY(row.idx);
+        if (y + CELL < visTop || y > visBot) continue;
+        for (const d of row.decorations) {
+          if (d.type !== 'campfire') continue;
+          const fx = d.col * CELL + CELL / 2;
+          const fy = y + CELL * 0.62;
+          const fl = 0.88 + 0.12 * Math.sin(_now * 0.011);
+          const R  = CELL * 1.5 * fl;
+          const g = ctx.createRadialGradient(fx, fy, 0, fx, fy, R);
+          g.addColorStop(0, `rgba(255,170,70,${(0.34 * nightRatio).toFixed(3)})`);
+          g.addColorStop(1, 'rgba(255,140,40,0)');
+          ctx.save();
+          ctx.globalCompositeOperation = 'screen';
+          ctx.fillStyle = g;
+          ctx.beginPath();
+          ctx.arc(fx, fy, R, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      }
     }
     if (lightningFlash > 0) {
       ctx.save();
@@ -6134,6 +6503,7 @@ const UI = (() => {
       // Update daily spin banner visibility
       if (typeof DailySpin !== 'undefined') DailySpin.updateBanner();
       if (typeof Shop !== 'undefined' && Shop.renderFocusStrip) Shop.renderFocusStrip();
+      if (typeof _updateMenuStats === 'function') _updateMenuStats();
       _updateCiBanner();
       // Tick the banner every second while on menu
       if (_menuCiInterval) clearInterval(_menuCiInterval);
@@ -6197,7 +6567,25 @@ const UI = (() => {
     if (goScore) goScore.textContent = snapshot.score;
     if (goBest)  goBest.textContent  = snapshot.best;
     if (recordLabel) recordLabel.textContent = snapshot.isNewRecord ? 'PERSONAL BEST' : 'RECORD';
-    if (recordState) recordState.classList.toggle('hidden', !snapshot.isNewRecord);
+    if (recordState) {
+      // Один слот на два бейджа: NEW RECORD (золото) или "N STEPS AWAY"
+      // (тёплый) при близком ране. Близко = не хватило <= 20% рекорда
+      // (минимум 5, максимум 30 шагов) — далёкие раны не дразним.
+      const diff = snapshot.best - snapshot.score;
+      const nearWindow = Math.max(5, Math.min(30, Math.ceil(snapshot.best * 0.2)));
+      const isNear = !snapshot.isNewRecord && snapshot.score > 0 && diff > 0 && diff <= nearWindow;
+      if (snapshot.isNewRecord) {
+        recordState.textContent = 'NEW RECORD';
+        recordState.classList.remove('near');
+        recordState.classList.remove('hidden');
+      } else if (isNear) {
+        recordState.textContent = diff === 1 ? '1 STEP AWAY' : `${diff} STEPS AWAY`;
+        recordState.classList.add('near');
+        recordState.classList.remove('hidden');
+      } else {
+        recordState.classList.add('hidden');
+      }
+    }
 
     const ratingRow   = document.getElementById('go-rating-row');
     const ratingLabel = document.getElementById('go-rating-label');
@@ -6251,7 +6639,9 @@ const UI = (() => {
 
     const claimScoreBtn = document.getElementById('btn-claim-score');
     if (claimScoreBtn) {
-      claimScoreBtn.style.display = '';
+      // CSS прячет кнопку по умолчанию (display:none) — включаем явно,
+      // пустая строка лишь снимает inline-стиль и оставляет её скрытой
+      claimScoreBtn.style.display = 'flex';
       claimScoreBtn.setAttribute('aria-live', 'polite');
       if (snapshot.canClaimOnchain) {
         claimScoreBtn.dataset.runId = String(snapshot.runId);
@@ -7557,7 +7947,6 @@ const Shop = (() => {
     const hint = status.hasFragments
       ? (status.canCraft ? 'Ready' : `Need ${status.craftFee} coins`)
       : `${status.missing} left`;
-    const chestHtml = status.focus ? _dailyFragmentChestHtml(status) : '';
 
     return `
           <div class="shop-focus-row${activeClass}${readyClass}">
@@ -7572,8 +7961,7 @@ const Shop = (() => {
               ${topUpAction}
               ${craftAction}
             </div>
-          </div>
-          ${chestHtml}`;
+          </div>`;
   }
 
   function _dailyFragmentChestHtml(status) {
@@ -7587,7 +7975,7 @@ const Shop = (() => {
     return `
           <div class="daily-fragment-chest${chest.canBuy ? '' : ' daily-fragment-chest-locked'}">
             <div class="daily-fragment-chest-copy">
-              <span class="daily-fragment-chest-kicker">Daily chest</span>
+              <span class="daily-fragment-chest-kicker">Daily chest · ${_escapeHtml(status.name)}</span>
               <span class="daily-fragment-chest-text">${chest.reason}</span>
             </div>
             <button class="shop-btn shop-btn-daily-chest${disabledClass}"${disabledAttr}>
@@ -7596,6 +7984,35 @@ const Shop = (() => {
               <span class="daily-fragment-chest-price"><img src="/game/coin.png" alt="coins"> ${chest.cost}</span>
             </button>
           </div>`;
+  }
+
+  // Standalone daily chest strip shown above the catalog on the focus item's tab.
+  function _dailyChestStripHtml(tabType) {
+    const focusId = getFocusItem();
+    if (!focusId) return '';
+    const cfg = CRAFT_CONFIG[focusId];
+    if (!cfg || cfg.type !== tabType) return '';
+    const status = getCraftStatus(focusId);
+    if (!status.valid || status.owned || !status.focus) return '';
+    return _dailyFragmentChestHtml(status);
+  }
+
+  const TIER_RANK = { common: 1, rare: 2, epic: 3, legendary: 4 };
+
+  function _tierClass(itemId) {
+    const tier = CRAFT_CONFIG[itemId] && CRAFT_CONFIG[itemId].tier;
+    return tier ? ` shop-item-tier-${tier}` : '';
+  }
+
+  function _sortByOwnedThenTier(items, ownedIds) {
+    return [...items].sort((a, b) => {
+      const aOwned = ownedIds.includes(a.id) ? 0 : 1;
+      const bOwned = ownedIds.includes(b.id) ? 0 : 1;
+      if (aOwned !== bOwned) return aOwned - bOwned;
+      const aTier = (CRAFT_CONFIG[a.id] && TIER_RANK[CRAFT_CONFIG[a.id].tier]) || 0;
+      const bTier = (CRAFT_CONFIG[b.id] && TIER_RANK[CRAFT_CONFIG[b.id].tier]) || 0;
+      return aTier - bTier;
+    });
   }
 
   function _bindEconomyBtns(container) {
@@ -7672,8 +8089,8 @@ const Shop = (() => {
     const owned    = getOwned();
     const equipped = getEquipped();
 
-    container.innerHTML = '';
-    for (const item of ITEMS) {
+    container.innerHTML = _dailyChestStripHtml('skin');
+    for (const item of _sortByOwnedThenTier(ITEMS, owned)) {
       const isOwned    = owned.includes(item.id);
       const isEquipped = equipped === item.id;
       const canDirectBuy = _directBuyAvailable(item.id);
@@ -7705,7 +8122,7 @@ const Shop = (() => {
       }
 
       const el = document.createElement('div');
-      el.className = 'shop-item' + (isEquipped ? ' shop-item-equipped' : '');
+      el.className = 'shop-item' + _tierClass(item.id) + (isEquipped ? ' shop-item-equipped' : '');
       el.dataset.shopItem = item.id;
       el.innerHTML = `
         ${iconHtml}
@@ -7806,7 +8223,7 @@ const Shop = (() => {
     const packs    = getDeathPacks();
     const equipped = getEquippedDeath();
 
-    container.innerHTML = '';
+    container.innerHTML = _dailyChestStripHtml('death');
 
     // Default (free)
     const defEl = document.createElement('div');
@@ -7824,14 +8241,14 @@ const Shop = (() => {
       </div>`;
     container.appendChild(defEl);
 
-    for (const item of DEATH_PACKS) {
+    for (const item of _sortByOwnedThenTier(DEATH_PACKS, packs)) {
       const isOwned    = packs.includes(item.id);
       const isEquipped = equipped === item.id;
       const canDirectBuy = _directBuyAvailable(item.id);
       const canAfford  = canDirectBuy && balance >= item.price;
 
       const el = document.createElement('div');
-      el.className = 'shop-item' + (isEquipped ? ' shop-item-equipped' : '');
+      el.className = 'shop-item' + _tierClass(item.id) + (isEquipped ? ' shop-item-equipped' : '');
       el.dataset.shopItem = item.id;
       el.innerHTML = `
         <span class="shop-icon">${_imgHtml(item.iconSrc || '/game/ui-icons/celebration.png', 'shop-effect-icon ui-icon', item.name, ' aria-hidden="true"')}</span>
@@ -7880,7 +8297,7 @@ const Shop = (() => {
     const packs    = getTrailPacks();
     const equipped = getEquippedTrail();
 
-    container.innerHTML = '';
+    container.innerHTML = _dailyChestStripHtml('trail');
 
     // Default (free)
     const defEl = document.createElement('div');
@@ -7898,7 +8315,7 @@ const Shop = (() => {
       </div>`;
     container.appendChild(defEl);
 
-    for (const item of TRAIL_PACKS) {
+    for (const item of _sortByOwnedThenTier(TRAIL_PACKS, packs)) {
       const isOwned    = packs.includes(item.id);
       const isEquipped = equipped === item.id;
       const canDirectBuy = _directBuyAvailable(item.id);
@@ -7930,7 +8347,7 @@ const Shop = (() => {
       }
 
       const el = document.createElement('div');
-      el.className = 'shop-item' + (isEquipped ? ' shop-item-equipped' : '');
+      el.className = 'shop-item' + _tierClass(item.id) + (isEquipped ? ' shop-item-equipped' : '');
       el.dataset.shopItem = item.id;
       el.innerHTML = `
         ${trailIconHtml}
@@ -8391,8 +8808,9 @@ const Loadout = (() => {
     summary.classList.toggle('loadout-build-empty', chosen.length === 0);
 
     if (chosen.length === 0) {
-      title.textContent = 'No boosters selected';
-      hint.textContent = 'Pick boosters to shape this run';
+      const best = (typeof Save !== 'undefined') ? Save.getBest() : 0;
+      title.textContent = best > 0 ? `Target: beat ${best}` : 'First run';
+      hint.textContent = best > 0 ? 'No boosters — pure skill run' : 'Set your first record today';
       return;
     }
 
@@ -8414,6 +8832,21 @@ const Loadout = (() => {
     }
   }
 
+  function renderGoals() {
+    const holder = document.getElementById('loadout-goals');
+    const list = document.getElementById('loadout-goals-list');
+    if (!holder || !list) return;
+    const goals = (typeof Quests !== 'undefined' && typeof Quests.getDailySummary === 'function') ? Quests.getDailySummary() : [];
+    if (!goals.length) { holder.classList.add('hidden'); return; }
+    holder.classList.remove('hidden');
+    list.innerHTML = goals.map(goal => `
+      <div class="loadout-goal${goal.claimed ? ' done' : goal.done ? ' ready' : ''}">
+        ${_imgHtml(goal.iconSrc, 'loadout-goal-icon ui-icon', goal.name, ' aria-hidden="true"')}
+        <span class="loadout-goal-name">${goal.desc}</span>
+        <span class="loadout-goal-progress">${goal.claimed ? '✓ done' : goal.done ? 'ready!' : `${goal.progress}/${goal.target}`}</span>
+      </div>`).join('');
+  }
+
   function render() {
     const coinEl = document.getElementById('loadout-coin-count');
     if (coinEl) coinEl.textContent = Save.getCoins();
@@ -8423,12 +8856,14 @@ const Loadout = (() => {
       const btn = document.getElementById(b.btn);
       const countEl = document.getElementById(b.count);
       const count = (typeof Shop !== 'undefined') ? Shop.getBoosterCount(b.id) : 0;
-      if (countEl) countEl.textContent = `x${count}`;
+      if (countEl) countEl.textContent = count > 0 ? `x${count}` : '+ GET';
       if (!btn) continue;
       btn.classList.toggle('loadout-card-selected', selected.has(b.id));
       btn.classList.toggle('loadout-card-empty', count <= 0);
-      btn.disabled = count <= 0;
+      // Empty cards stay tappable: they lead to the booster shop.
+      btn.disabled = false;
     }
+    renderGoals();
     renderBuildSummary();
   }
 
@@ -8451,7 +8886,13 @@ const Loadout = (() => {
   }
 
   function toggle(id) {
-    if (typeof Shop === 'undefined' || Shop.getBoosterCount(id) <= 0) return;
+    if (typeof Shop === 'undefined') return;
+    if (Shop.getBoosterCount(id) <= 0) {
+      // Out of charges — send the player to the booster shop instead of a dead tap.
+      Shop.show();
+      Shop.setTab('boosters');
+      return;
+    }
     if (selected.has(id)) selected.delete(id);
     else selected.add(id);
     setInlineMessage();
@@ -8818,25 +9259,27 @@ const Quests = (() => {
     const isPending = canClaim && _pendingClaims.has(claimKey);
     const pct = isMaxed ? 100 : Math.min(100, Math.floor((progress / target) * 100));
     const rewardLabel = context.reward ? RewardEconomy.labelHtml(context.reward) : '';
-    const badge = isRotation ? (claimed ? 'DONE' : variant.toUpperCase()) : (isMaxed ? 'MAX' : `LV ${context.level + 1}`);
+    // Rotation cards live inside labelled DAILY/WEEKLY sections, so they only badge DONE.
+    const badge = isRotation ? (claimed ? 'DONE' : '') : (isMaxed ? 'MAX' : `LV ${context.level + 1}`);
     const card = document.createElement('div');
     card.className = `quest-card quest-card-${variant}${canClaim ? ' quest-claimable' : ''}${claimed ? ' quest-card-complete' : ''}${isPending ? ' quest-pending' : ''}`;
+    const statusHtml = isMaxed || claimed
+      ? '<div class="quest-progress"><span class="quest-done">✓ CLAIMED</span></div>'
+      : canClaim
+        ? `<div class="quest-progress"><button class="quest-claim-btn claim-action" data-id="${context.questId}"${isPending ? ' disabled' : ''}>${isPending ? 'CLAIMING...' : 'CLAIM'}</button></div>`
+        : '';
     card.innerHTML = `
       <div class="quest-header">
         <span class="quest-name">${_imgHtml(def.iconSrc, 'quest-icon-img', def.name, ' aria-hidden="true"')} ${def.name}</span>
-        <span class="quest-level">${badge}</span>
+        ${badge ? `<span class="quest-level">${badge}</span>` : ''}
       </div>
       <div class="quest-desc">${def.desc}</div>
-      ${isMaxed ? '' : `<div class="quest-reward-label">${rewardLabel}</div>`}
-      <div class="quest-bar-bg"><div class="quest-bar-fill${canClaim ? ' complete' : ''}" style="width:${pct}%"></div></div>
-      <div class="quest-progress">
+      <div class="quest-reward-row">
+        ${isMaxed ? '<span></span>' : `<div class="quest-reward-label">${rewardLabel}</div>`}
         <span class="quest-progress-text">${Math.min(progress, target)} / ${target}</span>
-        ${isMaxed || claimed
-          ? '<span class="quest-done">✓ CLAIMED</span>'
-          : canClaim
-            ? `<button class="quest-claim-btn claim-action" data-id="${context.questId}"${isPending ? ' disabled' : ''}>${isPending ? 'CLAIMING...' : 'CLAIM'}</button>`
-            : `<span class="quest-progress-text">${pct}%</span>`}
-      </div>`;
+      </div>
+      <div class="quest-bar-bg"><div class="quest-bar-fill${canClaim ? ' complete' : ''}" style="width:${pct}%"></div></div>
+      ${statusHtml}`;
     return card;
   }
 
@@ -8862,6 +9305,24 @@ const Quests = (() => {
     if (weekly) weekly.textContent = `Resets in ${daysToMonday}d`;
   }
 
+  function _updateReadyCounts(data) {
+    const counts = { daily: 0, weekly: 0, career: 0 };
+    for (const scope of ['daily', 'weekly']) {
+      for (const entry of data[scope].entries) {
+        const def = _rotationDef(entry.id);
+        if (def && entry.progress >= def.target && !entry.claimed) counts[scope]++;
+      }
+    }
+    for (const def of DEFS) {
+      const context = _claimContext(data, def.id);
+      if (context && !context.complete && context.entry.progress >= context.target && !context.entry.claimed[context.level]) counts.career++;
+    }
+    for (const scope of ['daily', 'weekly', 'career']) {
+      const el = document.getElementById(`quest-${scope}-ready`);
+      if (el) el.textContent = counts[scope] > 0 ? `${counts[scope]} ready` : '';
+    }
+  }
+
   function render() {
     const data = _loadData();
     _renderRotation('daily', data);
@@ -8871,6 +9332,7 @@ const Quests = (() => {
       career.innerHTML = '';
       for (const def of DEFS) career.appendChild(_questCard(def, _claimContext(data, def.id), 'career'));
     }
+    _updateReadyCounts(data);
     _updateResetLabels();
     document.querySelectorAll('#screen-quests .quest-claim-btn').forEach(btn => {
       btn.addEventListener('click', () => claim(btn.dataset.id));
@@ -8891,7 +9353,21 @@ const Quests = (() => {
     return DEFS.map(def => ({ id: def.id, name: def.name, iconSrc: def.iconSrc, level: _getLevel(data[def.id]), max: def.levels.length }));
   }
 
-  return { onGameOver, hasClaimable, claim, render, applyServerData, getCareerNext, getCareerMedals };
+  // Today's rotation with progress, for the loadout goals block.
+  function getDailySummary() {
+    const data = _loadData();
+    return data.daily.entries.map(entry => {
+      const def = _rotationDef(entry.id);
+      if (!def) return null;
+      return {
+        id: entry.id, name: def.name, desc: def.desc, iconSrc: def.iconSrc,
+        progress: Math.min(entry.progress, def.target), target: def.target,
+        claimed: entry.claimed, done: entry.progress >= def.target,
+      };
+    }).filter(Boolean);
+  }
+
+  return { onGameOver, hasClaimable, claim, render, applyServerData, getCareerNext, getCareerMedals, getDailySummary };
 })();
 
 
@@ -10160,6 +10636,117 @@ function hideContinueOverlay() {
   if (el) el.classList.add('hidden');
 }
 
+// ===== СТАРТОВЫЙ ОТСЧЁТ 3-2-1-GO =====
+// Запускается только из initGame (не при continue/revive). Пока идёт отсчёт,
+// движение заблокировано через гейт в Player.move; первый тап/свайп/клавиша
+// пропускает отсчёт (сам ход при этом не выполняется). Мир живёт как обычно.
+const RunCountdown = (() => {
+  const STEP_T = 0.45;   // сек на цифру
+  const GO_T   = 0.55;   // сек вспышки GO (геймплей уже разблокирован)
+
+  let phase  = null;     // 3 | 2 | 1 | 0 (GO) | null (выкл)
+  let phaseT = 0;
+
+  function start() { phase = 3; phaseT = 0; }
+  function stop()  { phase = null; }
+  // Пропуск по первому вводу: сразу к GO
+  function skip()  { if (phase !== null && phase > 0) { phase = 0; phaseT = 0; } }
+  function isLocked() { return phase !== null && phase > 0; }
+
+  function update(dt) {
+    if (phase === null) return;
+    phaseT += dt;
+    if (phaseT >= (phase > 0 ? STEP_T : GO_T)) {
+      phase  = phase > 0 ? phase - 1 : null;
+      phaseT = 0;
+    }
+  }
+
+  // Экранный оверлей; вызывается в конце Renderer.draw
+  function draw(ctx, W, H) {
+    if (phase === null || currentState !== GameState.PLAYING) return;
+    const limit = phase > 0 ? STEP_T : GO_T;
+    const t = Math.min(phaseT / limit, 1);
+    // Pop-in: масштаб 1.35 → 1.0 (ease-out), затухание в последней трети
+    const pop   = 1 + 0.35 * Math.pow(1 - Math.min(t / 0.35, 1), 2);
+    const alpha = t < 0.7 ? 1 : 1 - (t - 0.7) / 0.3;
+    const isGo  = phase === 0;
+    const size  = Math.round(Math.min(W, H) * (isGo ? 0.22 : 0.26) * pop);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.font = `700 ${size}px 'Courier New', monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const label = isGo ? 'GO!' : String(phase);
+    const x = W / 2, yPos = H * 0.38;
+    ctx.lineWidth = Math.max(3, size * 0.08);
+    ctx.strokeStyle = 'rgba(10,16,34,0.85)';
+    ctx.strokeText(label, x, yPos);
+    ctx.fillStyle = isGo ? '#4d8bff' : '#f2f4f8';
+    ctx.fillText(label, x, yPos);
+    ctx.restore();
+  }
+
+  return { start, stop, skip, isLocked, update, draw };
+})();
+
+// ===== ЧЕКПОИНТ-ФАНФАРЫ =====
+// Каждые 100 рядов: короткая вспышка "CHECKPOINT N" поверх канваса, звук и
+// лёгкая вибрация. Не блокирует ввод и не трогает мир — чистая презентация.
+const CheckpointFx = (() => {
+  const STEP = 100;    // интервал по score
+  const LIFE = 1.1;    // сек жизни баннера
+
+  let next  = STEP;    // следующий порог
+  let t     = -1;      // время с показа; -1 = выкл
+  let value = 0;
+
+  function reset() { next = STEP; t = -1; value = 0; }
+
+  function onScore(score) {
+    if (score < next) return;
+    value = next;
+    next += STEP;
+    t = 0;
+    if (typeof Sound !== 'undefined' && Sound.checkpoint) Sound.checkpoint();
+    if (navigator.vibrate) navigator.vibrate(30);
+  }
+
+  function update(dt) {
+    if (t >= 0) { t += dt; if (t >= LIFE) t = -1; }
+  }
+
+  // Экранный слой; вызывается в конце Renderer.draw
+  function draw(ctx, W, H) {
+    if (t < 0 || currentState !== GameState.PLAYING) return;
+    const p = t / LIFE;
+    // Pop-in в первые 20%, медленный дрейф вверх, фейд в последней четверти
+    const pop   = 1 + 0.30 * Math.pow(1 - Math.min(p / 0.2, 1), 2);
+    const alpha = p < 0.75 ? 1 : 1 - (p - 0.75) / 0.25;
+    const rise  = p * H * 0.03;
+    const size  = Math.round(Math.min(W, H) * 0.11 * pop);
+    const x = W / 2, y = H * 0.30 - rise;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = `700 ${Math.max(10, Math.round(size * 0.30))}px 'Courier New', monospace`;
+    ctx.lineWidth = Math.max(2, size * 0.05);
+    ctx.strokeStyle = 'rgba(10,16,34,0.85)';
+    ctx.strokeText('CHECKPOINT', x, y - size * 0.72);
+    ctx.fillStyle = 'rgba(220,232,255,0.92)';
+    ctx.fillText('CHECKPOINT', x, y - size * 0.72);
+    ctx.font = `700 ${size}px 'Courier New', monospace`;
+    ctx.lineWidth = Math.max(3, size * 0.08);
+    ctx.strokeText(String(value), x, y);
+    ctx.fillStyle = '#4d8bff';
+    ctx.fillText(String(value), x, y);
+    ctx.restore();
+  }
+
+  return { reset, onScore, update, draw };
+})();
+
 function initGame() {
   const flow = _getRunCompleteFlow();
   if (!flow || typeof flow.beginRun !== 'function') return false;
@@ -10175,6 +10762,8 @@ function initGame() {
   World.init();
   Player.init();
   Input.reset();
+  RunCountdown.start();
+  CheckpointFx.reset();
   deathTriggered = false;
   Renderer.stopDeath();
   if (typeof Sound !== 'undefined') Sound.init();
@@ -10200,6 +10789,8 @@ function gameLoop(timestamp, gen, runId) {
   lastTime = timestamp;
 
   if (currentState === GameState.PLAYING) {
+    RunCountdown.update(dt);
+    CheckpointFx.update(dt);
     World.update(dt);
     Player.update(dt);
     World.extendWorld(Player.getState().row);
@@ -10671,6 +11262,23 @@ function _updateCiBanner() {
     const m  = Math.floor((s % 3600) / 60);
     const sc = s % 60;
     sub.textContent = `Next in ${h}h ${String(m).padStart(2, '0')}m ${String(sc).padStart(2, '0')}s`;
+  }
+}
+
+// Best score + global rank line in the menu hero
+function _updateMenuStats() {
+  const bestEl = document.getElementById('menu-best');
+  const rankEl = document.getElementById('menu-rank');
+  if (bestEl && typeof Save !== 'undefined') bestEl.textContent = Save.getBest();
+  if (rankEl) {
+    const entries = window.__BASE_LEADERBOARD_ENTRIES || [];
+    const addr = (window.__BASE_WALLET || '').toLowerCase();
+    let rankText = '#-';
+    if (addr && entries.length > 0) {
+      const entry = entries.find(e => e.address.toLowerCase() === addr);
+      if (entry) rankText = `#${entry.rank ?? (entries.indexOf(entry) + 1)}`;
+    }
+    rankEl.textContent = rankText;
   }
 }
 
@@ -11301,6 +11909,13 @@ function _initUI() {
 
   // Quest notify on game over — tap to go to quests
   _bind('go-quest-notify', 'click', () => {
+    _leaveActiveRun();
+    Quests.render();
+    UI.show('quests');
+  });
+
+  // Тап по "Today's goals" в лодауте ведёт в квесты
+  _bind('loadout-goals', 'click', () => {
     _leaveActiveRun();
     Quests.render();
     UI.show('quests');

@@ -166,9 +166,12 @@ export default function Game() {
         <button id="btn-settings" className="settings-gear-btn" aria-label="Settings"><img className="settings-gear-icon ui-icon" src="/game/ui-icons/settings.png" alt="" aria-hidden="true" /></button>
         <div className="menu-shell">
           <div className="menu-hero">
-            <span className="menu-kicker">Base arcade</span>
             <h1 className="game-title">BASE RUNNER</h1>
             <p className="subtitle">how far can you go?</p>
+            <div className="menu-stats-row" id="menu-stats-row">
+              <span className="menu-stat"><small>Best</small><strong id="menu-best">0</strong></span>
+              <span className="menu-stat"><small>Rank</small><strong id="menu-rank">#-</strong></span>
+            </div>
             <div id="menu-coin-balance"><img src="/game/coin.png" className="coin-icon" alt="coin" /> <span id="menu-coin-count">0</span></div>
             <button id="menu-focus-strip" className="menu-focus-strip hidden" type="button">
               <span className="menu-focus-kicker">Focus</span>
@@ -183,22 +186,22 @@ export default function Game() {
           <div className="menu-missions">
             <span className="menu-section-label">Today</span>
             <div className="daily-banners">
-              <button id="btn-spin" className="spin-banner hidden">
-                <img className="spin-banner-icon ui-icon" src="/game/ui-icons/daily-spin.png" alt="" aria-hidden="true" />
-                <div className="spin-banner-text">
-                  <span className="spin-banner-title">Daily Spin</span>
-                  <span className="spin-banner-sub" id="spin-banner-sub">Free spin available!</span>
-                </div>
-                <span className="spin-banner-arrow">›</span>
-              </button>
-              <button id="btn-ci-banner" className="spin-banner">
-                <img className="spin-banner-icon ui-icon" src="/game/ui-icons/daily-checkin.png" alt="" aria-hidden="true" />
-                <div className="spin-banner-text">
-                  <span className="spin-banner-title">Daily Check-in</span>
-                  <span className="spin-banner-sub" id="ci-banner-sub">Claim your reward!</span>
-                </div>
-                <span className="spin-banner-arrow">›</span>
-              </button>
+              <div className="daily-banners-row">
+                <button id="btn-spin" className="spin-banner spin-banner-compact hidden">
+                  <img className="spin-banner-icon ui-icon" src="/game/ui-icons/daily-spin.png" alt="" aria-hidden="true" />
+                  <div className="spin-banner-text">
+                    <span className="spin-banner-title">Daily Spin</span>
+                    <span className="spin-banner-sub" id="spin-banner-sub">Free spin available!</span>
+                  </div>
+                </button>
+                <button id="btn-ci-banner" className="spin-banner spin-banner-compact">
+                  <img className="spin-banner-icon ui-icon" src="/game/ui-icons/daily-checkin.png" alt="" aria-hidden="true" />
+                  <div className="spin-banner-text">
+                    <span className="spin-banner-title">Daily Check-in</span>
+                    <span className="spin-banner-sub" id="ci-banner-sub">Claim your reward!</span>
+                  </div>
+                </button>
+              </div>
               <button id="btn-starter-pack-banner" className="spin-banner hidden">
                 <img className="spin-banner-icon ui-icon" src="/game/ui-icons/starter-pack.png" alt="" aria-hidden="true" />
                 <div className="spin-banner-text">
@@ -292,6 +295,10 @@ export default function Game() {
                 <span className="loadout-count" id="loadout-count-shield">×0</span>
               </button>
             </div>
+            <button type="button" className="loadout-goals hidden" id="loadout-goals" aria-label="Open quests">
+              <span className="loadout-build-kicker">Today&apos;s goals</span>
+              <div id="loadout-goals-list" className="loadout-goals-list" />
+            </button>
             <div id="loadout-build-summary" className="loadout-build-summary loadout-build-empty">
               <span className="loadout-build-kicker">Run build</span>
               <span id="loadout-build-title" className="loadout-build-title">No boosters selected</span>
@@ -585,21 +592,21 @@ export default function Game() {
           </div>
           <section className="quest-group quest-group-daily">
             <div className="quest-group-head">
-              <div><span className="quest-group-kicker">Daily</span><strong>Today&apos;s route</strong></div>
+              <div><span className="quest-group-kicker">Daily<span className="quest-ready-count" id="quest-daily-ready"></span></span><strong>Today&apos;s route</strong></div>
               <span className="quest-reset" id="quest-daily-reset">Resets 00:00 UTC</span>
             </div>
             <div className="quest-list" id="quest-daily-list"></div>
           </section>
           <section className="quest-group quest-group-weekly">
             <div className="quest-group-head">
-              <div><span className="quest-group-kicker">Weekly</span><strong>Long run</strong></div>
+              <div><span className="quest-group-kicker">Weekly<span className="quest-ready-count" id="quest-weekly-ready"></span></span><strong>Long run</strong></div>
               <span className="quest-reset" id="quest-weekly-reset">Resets Monday</span>
             </div>
             <div className="quest-list" id="quest-weekly-list"></div>
           </section>
           <section className="quest-group quest-group-career">
             <div className="quest-group-head">
-              <div><span className="quest-group-kicker">Career</span><strong>Permanent tracks</strong></div>
+              <div><span className="quest-group-kicker">Career<span className="quest-ready-count" id="quest-career-ready"></span></span><strong>Permanent tracks</strong></div>
               <span className="quest-reset">8 levels each</span>
             </div>
             <div className="quest-list" id="quest-career-list"></div>

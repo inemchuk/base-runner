@@ -675,10 +675,82 @@
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
     }
     .loadout-card-empty {
-      opacity: 0.38;
-      cursor: default;
+      opacity: 0.55;
+      cursor: pointer;
       box-shadow: none;
     }
+    .loadout-card-empty .loadout-count {
+      color: #4D8FFF;
+      border: 1px solid rgba(77,143,255,0.4);
+      border-radius: 7px;
+      padding: 2px 8px;
+      font-size: 0.6rem;
+    }
+    .loadout-goals {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 6px;
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--surface-line);
+      border-radius: 10px;
+      background: linear-gradient(180deg, var(--surface-arcade-strong), var(--surface-arcade));
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+      /* Это кнопка (тап ведёт в квесты) — ресеты и аффорданс */
+      font-family: inherit;
+      color: inherit;
+      text-align: left;
+      cursor: pointer;
+      transition: transform 0.1s, border-color 0.12s;
+    }
+    .loadout-goals::after {
+      content: '›';
+      position: absolute;
+      top: 8px;
+      right: 12px;
+      color: rgba(136,170,255,0.55);
+      font-size: 1rem;
+      font-weight: 900;
+      line-height: 1;
+    }
+    .loadout-goals:active {
+      transform: translateY(1px) scale(0.995);
+      border-color: rgba(136,170,255,0.4);
+    }
+    .loadout-goals.hidden { display: none; }
+    .loadout-goals-list {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    .loadout-goal {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+    .loadout-goal-icon { width: 17px; height: 17px; object-fit: contain; flex-shrink: 0; }
+    .loadout-goal-name {
+      flex: 1;
+      min-width: 0;
+      color: rgba(230,238,255,0.82);
+      font-size: 0.64rem;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+    .loadout-goal-progress {
+      color: rgba(136,170,255,0.85);
+      font-size: 0.6rem;
+      font-weight: 900;
+      letter-spacing: 0.5px;
+      white-space: nowrap;
+    }
+    .loadout-goal.ready .loadout-goal-progress { color: #69F0AE; }
+    .loadout-goal.done { opacity: 0.5; }
+    .loadout-goal.done .loadout-goal-name { text-decoration: line-through; }
     .loadout-icon {
       width: 46px;
       height: 46px;
@@ -768,6 +840,9 @@
       gap: 9px 12px;
       padding: 14px;
       overflow: hidden;
+      /* flex-элемент с overflow:hidden получает min-height 0 и сжимается
+         внутри #loadout-scroll, обрезая RECORD и кнопку клейма */
+      flex-shrink: 0;
       border: 1px solid rgba(77,143,255,0.28);
       border-radius: 12px;
       background: linear-gradient(180deg, rgba(8,18,45,0.96), rgba(2,9,27,0.94));
@@ -831,6 +906,11 @@
       text-shadow: 0 0 12px rgba(255,215,0,0.28);
     }
     .run-complete-record-state.hidden { display: none; }
+    /* "N STEPS AWAY" — тёплый оттенок вместо золотого NEW RECORD */
+    .run-complete-record-state.near {
+      color: #FFB74D;
+      text-shadow: 0 0 12px rgba(255,183,77,0.25);
+    }
     .run-complete-result .go-rating-row,
     .run-complete-result .go-coins-row,
     .run-complete-result .go-xp-row,
@@ -890,18 +970,36 @@
     }
     .run-complete-result .run-complete-quest {
       display: none;
+      position: relative;
       width: 100%;
       min-height: 34px;
       margin: 0;
-      padding: 6px 8px;
-      border: 1px solid rgba(105,240,174,0.2);
-      background: rgba(105,240,174,0.07);
-      color: #69F0AE;
+      padding: 6px 30px 6px 12px;
+      border: 1px solid rgba(105,240,174,0.30);
+      border-radius: 999px;
+      background: linear-gradient(180deg, rgba(105,240,174,0.14), rgba(105,240,174,0.04));
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.10), 0 4px 14px rgba(105,240,174,0.08);
+      color: #7CF5B8;
       font-family: inherit;
       font-size: 0.68rem;
       font-weight: 900;
       letter-spacing: 0.4px;
       animation: none;
+      transition: transform 0.1s, box-shadow 0.12s;
+    }
+    .run-complete-result .run-complete-quest::after {
+      content: '›';
+      position: absolute;
+      right: 13px;
+      top: 50%;
+      transform: translateY(-54%);
+      color: rgba(124,245,184,0.75);
+      font-size: 1rem;
+      font-weight: 900;
+    }
+    .run-complete-result .run-complete-quest:active {
+      transform: translateY(1px) scale(0.99);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
     }
     .run-complete-result .btn-claim-score {
       display: none;
@@ -911,6 +1009,100 @@
       border-width: 1px;
     }
     .loadout-run-complete #loadout-build-summary { display: none; }
+
+    /* RUN COMPLETE: компактный режим — экран должен умещаться без скролла.
+       XP-строка переезжает вправо от RECORD (grid 2x2 внутри карточки). */
+    .loadout-run-complete .run-complete-result { padding: 12px; gap: 8px 12px; }
+    .loadout-run-complete .run-complete-score { padding: 0 0 6px; }
+    .loadout-run-complete #go-score { font-size: clamp(2.3rem, 11vw, 3.2rem); }
+    /* Строка рекорда: label+значение на первой строке, бейдж
+       (NEW RECORD / N STEPS AWAY) — на своей строке ниже. Ничего не жмётся. */
+    .loadout-run-complete .run-complete-record {
+      grid-column: 1;
+      grid-template-columns: auto auto;
+      justify-content: start;
+      align-items: baseline;
+      column-gap: 8px;
+      row-gap: 3px;
+    }
+    .loadout-run-complete .run-complete-record-label { white-space: nowrap; }
+    .loadout-run-complete .run-complete-record-state {
+      grid-column: 1 / -1;
+      justify-self: start;
+      white-space: nowrap;
+    }
+    /* XP-блок справа: строка "+N XP ×M", чипы бонусов — строкой ниже */
+    .loadout-run-complete .go-xp-row {
+      grid-column: 2;
+      grid-row: 2;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      align-items: center;
+      align-content: flex-start;
+      gap: 3px 6px;
+      max-width: 46vw;
+    }
+    .loadout-run-complete .go-xp-row .go-xp-icon {
+      width: 15px;
+      height: 15px;
+      flex: 0 0 15px;
+    }
+    .loadout-run-complete #go-xp-multi {
+      padding: 1px 6px;
+      border-radius: 5px;
+      background: rgba(167,139,250,0.16);
+      color: #A78BFA;
+      font-size: 0.62rem;
+    }
+    .loadout-run-complete #go-xp-bonus {
+      flex-basis: 100%;
+      justify-content: flex-end;
+      gap: 6px;
+      font-size: 0.62rem;
+    }
+    .loadout-run-complete .btn-claim-score { margin: 0; }
+    .loadout-run-complete .loadout-gear-row {
+      min-height: 112px;
+      grid-template-rows: 62px auto;
+      padding: 8px 6px;
+      gap: 5px 8px;
+    }
+    .loadout-run-complete .loadout-gear-preview { width: 60px; height: 58px; }
+    .loadout-run-complete .loadout-card {
+      min-height: 100px;
+      padding: 8px 6px;
+      gap: 6px;
+    }
+    .loadout-run-complete .loadout-icon { width: 38px; height: 38px; }
+    .loadout-run-complete .loadout-name { min-height: unset; font-size: 0.6rem; }
+    .loadout-run-complete .loadout-count { font-size: 0.72rem; }
+    .loadout-run-complete .loadout-goals { padding: 10px 14px; gap: 6px; }
+
+    /* Действительно короткие экраны: дожимаем run-complete до полного фита */
+    @media (max-height: 700px) {
+      .loadout-run-complete .loadout-scroll { gap: 6px; padding-bottom: 6px; }
+      .loadout-run-complete .run-complete-result { padding: 8px 10px; gap: 4px 10px; }
+      .loadout-run-complete .run-complete-score { padding: 0 0 3px; }
+      .loadout-run-complete #go-score { font-size: 1.9rem; }
+      .loadout-run-complete .run-complete-quest { min-height: 28px; padding: 4px 8px; }
+      .loadout-run-complete .btn-claim-score { min-height: 38px; }
+      .loadout-run-complete .loadout-gear-row {
+        min-height: 74px;
+        grid-template-rows: 40px auto;
+        padding: 5px 6px;
+        gap: 3px 8px;
+      }
+      .loadout-run-complete .loadout-gear-preview { width: 40px; height: 38px; }
+      .loadout-run-complete .loadout-gear-label { font-size: 0.52rem; }
+      .loadout-run-complete .loadout-gear-name { font-size: 0.64rem; }
+      .loadout-run-complete .loadout-card { min-height: 68px; padding: 5px 4px; gap: 3px; }
+      .loadout-run-complete .loadout-icon { width: 26px; height: 26px; }
+      .loadout-run-complete .loadout-goals { padding: 5px 9px; gap: 3px; }
+      .loadout-run-complete .loadout-goal-name,
+      .loadout-run-complete .loadout-goal-progress { font-size: 0.6rem; }
+      .loadout-run-complete .loadout-inline-message { display: none; }
+      .loadout-run-complete .loadout-actions { padding-top: 6px; }
+    }
     .loadout-inline-message {
       min-height: 16px;
       color: rgba(136,170,255,0.72);
@@ -1176,13 +1368,29 @@
     .lb-row.gold   { background: linear-gradient(180deg, rgba(38,30,12,0.84), rgba(10,12,24,0.8)); color: #fff; border-color: var(--surface-gold-line); }
     .lb-row.silver { background: linear-gradient(180deg, rgba(22,28,42,0.86), rgba(8,12,28,0.8)); border-color: rgba(210,225,255,0.2); }
     .lb-row.bronze { background: linear-gradient(180deg, rgba(34,24,16,0.82), rgba(8,12,28,0.8)); border-color: rgba(255,165,90,0.18); }
-    .lb-rank    { font-size: 1.4rem; width: 36px; text-align: center; display: flex; align-items: center; justify-content: center; }
+    .lb-rank    { font-size: 1.02rem; font-weight: 800; min-width: 40px; flex-shrink: 0; text-align: center; display: flex; align-items: center; justify-content: center; font-variant-numeric: tabular-nums; }
     .lb-medal-img { width: 28px; height: 28px; object-fit: contain; filter: drop-shadow(0 2px 7px rgba(0,82,255,0.22)); }
     .lb-avatar  { width: 30px; height: 30px; border-radius: 8px; object-fit: cover; flex-shrink: 0; background: rgba(0,82,255,0.16); border: 1px solid rgba(77,143,255,0.16); }
     .lb-name    { flex: 1; text-align: left; padding: 0 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .lb-pts     { font-weight: 900; font-size: 1rem; color: #fff; font-variant-numeric: tabular-nums; }
     .lb-empty   { color: rgba(210,225,255,0.46); text-align: center; margin-top: 30px; font-size: 0.86rem; }
     .lb-empty-icon { width: 54px; height: 54px; object-fit: contain; margin: 0 auto 10px; opacity: 0.72; filter: drop-shadow(0 2px 9px rgba(0,82,255,0.20)); }
+    .lb-empty-text { margin: 0 0 14px; line-height: 1.5; }
+    .lb-empty-play {
+      padding: 10px 26px;
+      border: 1px solid rgba(77,143,255,0.4);
+      border-radius: 11px;
+      background: rgba(0,82,255,0.16);
+      color: #fff;
+      font-family: inherit;
+      font-size: 0.72rem;
+      font-weight: 900;
+      letter-spacing: 1.6px;
+      cursor: pointer;
+      transition: background 0.12s, transform 0.12s;
+    }
+    .lb-empty-play:active { transform: scale(0.96); background: rgba(0,82,255,0.3); }
+    .lb-row.you { border-color: rgba(77,143,255,0.5); background: linear-gradient(180deg, rgba(14,30,66,0.9), rgba(8,14,32,0.85)); }
     .lb-subtitle { color: #4D8FFF; font-size: 0.8rem; letter-spacing: 2px; text-align: center; margin-bottom: 12px; }
 
     /* ===== CHECK-IN ===== */
@@ -1859,6 +2067,13 @@
       gap: 2px;
     }
     .shop-name { color: #fff; font-size: 0.88rem; font-weight: 800; letter-spacing: 0.5px; }
+    .shop-item-tier-common    { border-color: rgba(154,167,189,0.4); }
+    .shop-item-tier-rare      { border-color: rgba(77,143,255,0.5); }
+    .shop-item-tier-epic      { border-color: rgba(167,139,250,0.55); }
+    .shop-item-tier-legendary {
+      border-color: rgba(255,215,0,0.55);
+      box-shadow: inset 0 1px 0 rgba(255,215,0,0.12);
+    }
     .shop-desc { color: rgba(210,225,255,0.46); font-size: 0.66rem; line-height: 1.28; }
     .shop-action {
       flex: 0 0 auto;
@@ -2038,6 +2253,7 @@
       cursor: not-allowed;
     }
 
+    #shop-items > .daily-fragment-chest { margin-top: 0; margin-bottom: 4px; }
     .daily-fragment-chest {
       margin-top: 6px;
       padding: 8px 9px;
@@ -2169,7 +2385,14 @@
     .quest-bar-bg { width: 100%; height: 6px; background: rgba(255,255,255,0.075); border-radius: 3px; overflow: hidden; margin-bottom: 7px; }
     .quest-bar-fill { height: 100%; background: linear-gradient(90deg, #0052FF, #4D8FFF); border-radius: 3px; transition: width 0.3s; }
     .quest-bar-fill.complete { background: linear-gradient(90deg, #00C853, #69F0AE); }
-    .quest-progress { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    .quest-progress { display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin-top: 7px; }
+    .quest-reward-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 6px;
+    }
     .quest-progress-text { color: rgba(210,225,255,0.5); font-size: 0.7rem; font-weight: 700; white-space: nowrap; }
     .quest-claim-btn {
       border-radius: 9px;
@@ -2766,6 +2989,53 @@
       width: 100%;
       max-width: none;
       margin: 0;
+    }
+    .daily-banners-row {
+      display: flex;
+      gap: 7px;
+      width: 100%;
+    }
+    .spin-banner-compact {
+      flex: 1;
+      min-width: 0;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 7px;
+      min-height: 74px;
+      padding: 10px 11px;
+    }
+    .spin-banner-compact .spin-banner-text { min-width: 0; width: 100%; }
+    .spin-banner-compact .spin-banner-sub {
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      display: block;
+    }
+    .menu-stats-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 18px;
+      margin: 2px 0 8px;
+    }
+    .menu-stat {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+    }
+    .menu-stat small {
+      color: rgba(136,170,255,0.6);
+      font-size: 0.56rem;
+      font-weight: 900;
+      letter-spacing: 1.4px;
+      text-transform: uppercase;
+    }
+    .menu-stat strong {
+      color: #fff;
+      font-size: 0.92rem;
+      font-weight: 900;
+      letter-spacing: 0.5px;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.55);
     }
     .spin-banner {
       display: flex; align-items: center; gap: 12px;
@@ -3396,6 +3666,8 @@
     }
     .quest-group-head > div { display: flex; flex-direction: column; gap: 3px; }
     .quest-group-kicker { color: #4D8FFF; font-size: 0.52rem; font-weight: 900; letter-spacing: 1.5px; text-transform: uppercase; }
+    .quest-ready-count { color: #69F0AE; margin-left: 7px; letter-spacing: 0.8px; }
+    .quest-ready-count:empty { display: none; }
     .quest-group-weekly .quest-group-kicker { color: #A78BFA; }
     .quest-group-career .quest-group-kicker { color: #FFD700; }
     .quest-group-head strong { color: #fff; font-size: 0.76rem; letter-spacing: 0.4px; }

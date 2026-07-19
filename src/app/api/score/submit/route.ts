@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { updateLevelProgressFromRun } from '@/lib/economy/levels.ts';
+import { notifyOvertakenPlayers } from '@/lib/notificationTriggers.ts';
 import { sanitizeRunCoins, updateQuestProgressFromRun } from '@/lib/economy/quests.ts';
 import { getRatingDef, getRunRating } from '@/lib/economy/rating.ts';
 import {
@@ -153,6 +154,16 @@ export async function POST(req: NextRequest) {
       writeLevelState(addr, levelUpdate.state),
       writeDailyQualityState(addr, dailyQualityUpdate.state),
     ]);
+
+    // Notify players this run just overtook on the all-time board.
+    // Fire-and-forget: must never affect the submit response.
+    if (redis && score > previousBest && previousBest > 0) {
+      after(() => {
+        notifyOvertakenPlayers({ address: addr, previousBest, score }).catch((err) => {
+          console.warn('overtake notification failed:', err);
+        });
+      });
+    }
 
     // Non-blocking telemetry (after() runs post-response). Log the credited
     // (sanitized) coin figure, not the raw request value.

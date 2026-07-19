@@ -44,3 +44,13 @@ next-env.d.ts
 
 # superpowers brainstorm sessions
 .superpowers/
+
+# playwright-mcp session artifacts
+.playwright-mcp/
+
+# local screenshots / scratch backups
+/rc-*.png
+/tmp/
+
+# staging art (chroma sources / cleaned sprites, not live assets)
+public/game/chars/rework/

@@ -57,6 +57,8 @@ export async function fetchOptedInAddresses(): Promise<string[]> {
     const data = (await res.json()) as {
       users?: Array<{ wallet_address?: string; address?: string }>;
       data?: Array<{ wallet_address?: string; address?: string }>;
+      // Live API returns camelCase (verified 2026-07-19); keep snake_case fallbacks.
+      nextCursor?: string;
       next_cursor?: string;
       cursor?: string;
     };
@@ -67,7 +69,7 @@ export async function fetchOptedInAddresses(): Promise<string[]> {
       if (addr) addresses.push(addr.toLowerCase());
     }
 
-    cursor = data.next_cursor ?? data.cursor;
+    cursor = data.nextCursor ?? data.next_cursor ?? data.cursor;
     if (!cursor || rows.length === 0) break;
   }
 

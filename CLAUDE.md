@@ -2,7 +2,7 @@
 
 # Base Runner Project Map
 
-Last updated: 2026-07-10.
+Last updated: 2026-07-16.
 
 Base Runner is a Base/Farcaster mini game. The playable game is a vanilla
 canvas runner loaded by a Next.js app. React owns wallet/API/onchain bridges;
@@ -84,11 +84,61 @@ canvas rendering.
 - Row types include grass, road, water, train.
 - Biomes rotate through default, desert, snow.
 - Weather states include clear, rain, fog, storm, windy.
-- Boosters are charges: magnet, double coins, second chance shield.
-- Loadout exists and should become the strategic pre-run layer.
-- Score is max forward row reached.
+- Boosters are charges: magnet, double coins, second chance shield. In-run
+  booster feedback exists (`UI.triggerRunBoosterFeedback`).
+- Loadout exists and should become the strategic pre-run layer. It already
+  shows "Today's goals" (daily quest summary) before the run.
+- Score is max forward row reached. Player can never move below row 1
+  (`Player.move` rejects `newRow < 1`), so rows <= 0 are visual-only.
+- Tap during jump is buffered and applied on landing (`_bufferedMove`).
+- Train rows have a warning flash + horn ~1.2s before each pass.
 - Game over submits score, syncs coins, updates quests, and awards XP.
 - Zoom exists around high score ranges to preserve reaction/readability.
+
+## Run Start Presentation (added 2026-07-16)
+
+- Start line: checkered strip + "START" ground paint on row 1
+  (`drawStartLine` in renderer; pure ground paint, no collision).
+- Runner camp on rows 0..-8: `START_CAMP_LAYOUT` in `world.js` section places
+  tents/campfire/crates/flags/billboard. These rows are unreachable, so camp
+  decorations never affect movement collision.
+- Camp props load as sprites from `public/game/env/start-camp/*` via
+  `_ENV_SPRITE_SRCS`; renderer keeps vector fallbacks (`drawTent`,
+  `drawCampfire`, `drawCrate`, `drawCampFlag`, `drawBillboard`).
+- Approved composition (2026-07-16): campfire row -2 center with stateless
+  smoke + night emissive glow, billboard row -3 col 2, trampled path on
+  col 4 rows 1..-1, camp decorations support `flip`/`scale` variants.
+- Shadow rule for camp PNGs: shadow width must equal the sprite's opaque
+  footprint measured from the alpha channel (not wider — objects look
+  airborne), tucked with `shadowLift`; `noShadow: true` in `_ENV_SPRITE_CFG`
+  exists for future sprites with baked-in shadows.
+- Pending art from Ivan: bunting garland, lantern (night emissive),
+  sleeping bag / backpack props for the campfire circle.
+- 3-2-1-GO countdown: `RunCountdown` module near `initGame`. Starts only from
+  `initGame` (not on continue/revive), locks movement via a gate at the top of
+  `Player.move`, first input skips straight to GO, overlay drawn at the end of
+  `Renderer.draw`. Tunables: `STEP_T`, `GO_T`.
+
+## UI Gotchas
+
+- Run-complete card (`#run-complete-result`) lives inside the flex column
+  `#loadout-scroll` and has `overflow: hidden`, so it needs `flex-shrink: 0`
+  or flex will crush it and clip RECORD/claim rows. Fixed 2026-07-16; keep the
+  rule when restyling.
+- Rows inside the run-complete card default to `display: none` in CSS; JS must
+  set an explicit visible value (`'flex'`), not `''`, when showing them.
+- RUN COMPLETE uses two-tier compact styling under `.loadout-run-complete`:
+  comfortable base sizes (fits ~760px+ heights without scroll), plus an
+  aggressive `@media (max-height: 700px)` tier for short screens. XP row sits
+  right of RECORD (explicit grid-row 2 / column 2 in the result card).
+- Hub screens with pending onchain claims use `.claim-action` styling; the
+  RUN COMPLETE claim button is `#btn-claim-score` driven by
+  `renderRunComplete` snapshot state (idle/claiming/confirming/claimed).
+- Menu hero shows Best/Rank stats (`#menu-best`, `#menu-rank`); daily spin and
+  check-in banners render as a compact two-column row.
+- Quest groups show per-scope ready counters (`#quest-daily-ready` etc.);
+  leaderboards have empty states with a PLAY NOW shortcut and highlight the
+  current wallet's row.
 
 ## API And Persistence
 
@@ -169,6 +219,8 @@ canvas rendering.
 
 - Live idle sprites were replaced for all active skins listed above.
 - Old live sprites are backed up in `public/game/chars/backups-before-full-rework/`.
+- `public/game/chars/rework/` holds untracked staging art (chroma sources and
+  cleaned sprites) for the rework; do not treat it as live game assets.
 - `Genesis Runner` is fully connected:
   `public/game/chars/cryptokid-genesis/{idle,walk-a,walk-b}.png`.
 - Frame folders exist for all skins:
@@ -183,11 +235,68 @@ canvas rendering.
 - Use subtle in-place walk/bounce for all skins. Avoid sideways/catwalk steps,
   crossed legs, or a visibly different gait between skins.
 
+## Systems That Already Exist (do not re-propose)
+
+Easy to miss when planning new features; verified in code 2026-07-16:
+
+- Input buffering, train warning flash/horn, police siren live event.
+- In-run booster feedback HUD hooks.
+- Daily fragment chest (`DAILY_FRAGMENT_CHEST_*`), focus chest, fragment
+  top-up with per-rarity caps.
+- Runner titles by level (`RUNNER_TITLES`), career medals, collection shelf,
+  profile runner card.
+- Push notification infra: `src/app/api/notify` + `src/lib/baseNotifications.ts`.
+- Notification triggers (added 2026-07-19): "you got passed" batch send from
+  `score/submit` via `after()` + `src/lib/notificationTriggers.ts` (5 nearest
+  overtaken, 6h cooldown `notify_cd:overtake:*`, skips first-ever submits);
+  daily `GET /api/notify/cron` (Vercel cron 17:00 UTC in `vercel.json`, auth
+  `CRON_SECRET` bearer or `NOTIFY_ADMIN_SECRET`). Each opted-in wallet is
+  assigned to ONE segment by priority (one push/day): streak-expiry (active
+  streak, not checked in today; no cooldown) → check-in nudge (never checked
+  in; 14d `notify_cd:checkin:*`) → first-run onboarding (checked in but no
+  `scores` entry; 14d `notify_cd:onboard:*`). `?dryRun=1` returns recipient
+  counts without sending. Verified 2026-07-19: 423 opted-in → 10 streak, 328
+  check-in, 7 onboarding.
+  Base App wallet-address API only (FID/Neynar deprecated 2026-04-09); needs
+  `BASE_NOTIFICATIONS_API_KEY`, `NEXT_PUBLIC_APP_URL`, `CRON_SECRET` envs.
+  Design: `docs/superpowers/specs/2026-07-19-base-notifications-triggers-design.md`.
+- XP multipliers and bonus chips (streak/record/daily) via `xpBreakdown`.
+- "N STEPS AWAY" near-record badge on RUN COMPLETE (shares the NEW RECORD
+  slot in `renderRunComplete`; threshold: missed by <= 20% of best, 5..30).
+- Checkpoint fanfares every 100 rows: `CheckpointFx` module (canvas banner
+  + `Sound.checkpoint` + light vibration), reset from `initGame`.
+
+## Feature Backlog (candidates, discussed 2026-07-16, not yet decided)
+
+Ordered by recommended sequence; details in that session's design notes.
+Shipped 2026-07-16: "N steps to record" badge, checkpoint fanfares.
+
+2. Near-miss detection + Flow combo meter: cosmetic feedback + small capped
+   XP bonus only — never coin multipliers (session coins are trust-heavy).
+3. Row archetypes: `ROW_DANGER_COST` already prices `dense_slow_road`,
+   `fast_sparse_road`, `rush_road`, `short_log_river`, `river_chain`, but
+   `PATTERNS` never emits them — wire generation, keep max one cost>=3 row
+   per section and coordinate with siren/train spacing.
+4. Share-run card to Farcaster cast: signed payload route + OG image +
+   composeCast bridge. Requires HMAC signing to prevent fake score cards.
+5. Seasons (leaderboard cycle + free reward track + onchain season receipt) —
+   separate design doc, after economy V1.
+6. Social ladder: referral crate -> "beat my score" deep link -> ghost race
+   (ghost needs run recording: seed + input log; consider adding the format
+   to `_runSummary` early).
+7. Comeback crate and daily quest reroll (small retention/coin-sink items).
+
+Death slow-mo (reuse the `_visualDt` mechanism) remains a cheap polish
+candidate alongside any of the above.
+
 ## Current Verification Habit
 
 - For JS-only changes run `node --check public/game/game.js`.
 - Always run `git diff --check` before claiming done.
 - Do not run the dev server unless Ivan asks.
+- Before risky visual edits, copy touched files to `tmp/backup-<topic>/` for
+  one-command rollback (git revert is unsafe while the tree carries active
+  user/Codex edits). Current: `tmp/backup-run-start/`.
 
 ## Product Priorities
 

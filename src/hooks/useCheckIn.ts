@@ -6,6 +6,7 @@ import { base } from 'wagmi/chains';
 import { encodeFunctionData, numberToHex } from 'viem';
 import { Attribution } from 'ox/erc8021';
 import { CHECKIN_ABI, CHECKIN_ADDRESS } from '@/config/checkin-contract';
+import { reportGameTx } from '@/lib/reportGameTx';
 
 const DATA_SUFFIX = Attribution.toDataSuffix({ codes: ['bc_2a3sfttm'] });
 const PAYMASTER_URL = process.env.NEXT_PUBLIC_PAYMASTER_URL;
@@ -53,11 +54,12 @@ export function useCheckIn() {
   useEffect(() => {
     if (isSuccess) {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      reportGameTx(address, txHash);
       refetch().then(() => {
         window.dispatchEvent(new CustomEvent('base-checkin-confirmed'));
       });
     }
-  }, [isSuccess, refetch]);
+  }, [isSuccess, txHash, address, refetch]);
 
   const todayUTC = Math.floor(Date.now() / 86400000);
   const lastDay  = stateData ? Number(stateData[0]) : 0;
@@ -114,12 +116,13 @@ export function useCheckIn() {
             const res = await rpcClient.request({
               method: 'wallet_getCallsStatus',
               params: [callsId],
-            }) as { status: number | string };
+            }) as { status: number | string; receipts?: Array<{ transactionHash?: string }> };
             const s = res?.status;
             const confirmed = s === 200 || s === 'CONFIRMED' || s === 'confirmed';
             const failed    = s === 400 || s === 'FAILED'    || s === 'failed';
             if (confirmed || failed || elapsed >= 90000) {
               clearInterval(iv);
+              if (confirmed) reportGameTx(address, res?.receipts?.[0]?.transactionHash);
               if (confirmed || elapsed >= 90000) await finish();
               else setPaymasterPending(false);
             }

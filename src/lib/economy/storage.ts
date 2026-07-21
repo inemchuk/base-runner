@@ -16,6 +16,7 @@ export interface EconomyCheckinRewardState {
   lastDate: string | null;
   streak: number;
   total: number;
+  bestStreak: number;
 }
 
 export interface EconomyDailyFragmentChestState {
@@ -204,10 +205,12 @@ export async function writeDailyQualityState(address: string, state: DailyQualit
 }
 
 function normalizeCheckinRewardState(input: Partial<EconomyCheckinRewardState>): EconomyCheckinRewardState {
+  const streak = Math.max(0, Math.floor(Number(input.streak) || 0));
   return {
     lastDate: typeof input.lastDate === 'string' ? input.lastDate : null,
-    streak: Math.max(0, Math.floor(Number(input.streak) || 0)),
+    streak,
     total: Math.max(0, Math.floor(Number(input.total) || 0)),
+    bestStreak: Math.max(streak, Math.floor(Number(input.bestStreak) || 0)),
   };
 }
 

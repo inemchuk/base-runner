@@ -1,0 +1,28 @@
+{
+  "name": "Base Runner Badge — Collector Gold",
+  "description": "Collector tier 3/8: reached 6 items in Base Runner on Base. Earned in game, minted by the player.",
+  "image": "https://baserunnerapp.vercel.app/nft/images/badge_collection_3.svg",
+  "external_url": "https://baserunnerapp.vercel.app",
+  "attributes": [
+    {
+      "trait_type": "Type",
+      "value": "Achievement Badge"
+    },
+    {
+      "trait_type": "Category",
+      "value": "Collector"
+    },
+    {
+      "trait_type": "Tier",
+      "value": "Gold"
+    },
+    {
+      "trait_type": "Milestone",
+      "value": 6
+    },
+    {
+      "trait_type": "Game",
+      "value": "Base Runner"
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "name": "Base Runner Badge — Marathon Runner Bronze",
+  "description": "Marathon Runner tier 1/8: reached 100 rows in Base Runner on Base. Earned in game, minted by the player.",
+  "image": "https://baserunnerapp.vercel.app/nft/images/badge_rows_1.svg",
+  "external_url": "https://baserunnerapp.vercel.app",
+  "attributes": [
+    {
+      "trait_type": "Type",
+      "value": "Achievement Badge"
+    },
+    {
+      "trait_type": "Category",
+      "value": "Marathon Runner"
+    },
+    {
+      "trait_type": "Tier",
+      "value": "Bronze"
+    },
+    {
+      "trait_type": "Milestone",
+      "value": 100
+    },
+    {
+      "trait_type": "Game",
+      "value": "Base Runner"
+    }
+  ]
+}

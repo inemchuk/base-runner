@@ -5,6 +5,7 @@ import { useAccount, useWriteContract, useWaitForTransactionReceipt, useSwitchCh
 import { base } from 'wagmi/chains';
 import { numberToHex, encodeFunctionData } from 'viem';
 import { NFT_ABI, NFT_CONTRACT, NFT_DEPLOYED } from '@/config/nft-contract';
+import { reportGameTx } from '@/lib/reportGameTx';
 
 const PAYMASTER_URL = process.env.NEXT_PUBLIC_PAYMASTER_URL;
 
@@ -39,10 +40,11 @@ export function useNftMint() {
   // Regular tx path: fire after on-chain confirmation
   useEffect(() => {
     if (isSuccess && mintingItem && !paymasterPath) {
+      reportGameTx(address, txHash);
       window.dispatchEvent(new CustomEvent('nft-minted', { detail: { itemId: mintingItem } }));
       setMintingItem(null);
     }
-  }, [isSuccess, mintingItem, paymasterPath]);
+  }, [isSuccess, mintingItem, paymasterPath, address, txHash]);
 
   // Cleanup poll on unmount
   useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
@@ -114,7 +116,7 @@ export function useNftMint() {
             const res = await rpcClient.request({
               method: 'wallet_getCallsStatus',
               params: [callsId],
-            }) as { status: number | string; receipts?: unknown[] };
+            }) as { status: number | string; receipts?: Array<{ transactionHash?: string }> };
 
             const s = res?.status;
             const confirmed = s === 200 || s === 'CONFIRMED' || s === 'confirmed';
@@ -122,6 +124,7 @@ export function useNftMint() {
 
             if (confirmed) {
               clearInterval(pollRef.current!); pollRef.current = null;
+              reportGameTx(address, res?.receipts?.[0]?.transactionHash);
               window.dispatchEvent(new CustomEvent('nft-minted', { detail: { itemId } }));
               setMintingItem(null); setPaymasterPath(false);
             } else if (failed) {

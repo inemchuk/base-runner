@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="42%" r="65%">
+      <stop offset="0%" stop-color="#1b2a52"/><stop offset="100%" stop-color="#0a1024"/>
+    </radialGradient>
+    <linearGradient id="ring" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#3f7cf6"/><stop offset="100%" stop-color="#2554c0"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="64" fill="url(#bg)"/>
+  <circle cx="256" cy="238" r="150" fill="none" stroke="url(#ring)" stroke-width="22"/>
+  <circle cx="256" cy="238" r="118" fill="rgba(20,30,58,0.85)" stroke="#3f7cf6" stroke-opacity="0.35" stroke-width="2"/>
+  <text x="256" y="216" text-anchor="middle" font-family="'Courier New',monospace" font-size="52" font-weight="bold" fill="#dbe7fe" letter-spacing="2">PLAY</text>
+  <text x="256" y="292" text-anchor="middle" font-family="'Courier New',monospace" font-size="72" font-weight="bold" fill="#3f7cf6">V</text>
+  <text x="256" y="428" text-anchor="middle" font-family="'Courier New',monospace" font-size="30" font-weight="bold" fill="#8aa4e8" letter-spacing="4">DEDICATED PLAYER</text>
+  <text x="256" y="466" text-anchor="middle" font-family="'Courier New',monospace" font-size="22" fill="#5c729f" letter-spacing="3">SAPPHIRE · BASE RUNNER</text>
+</svg>

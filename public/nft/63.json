@@ -1,0 +1,28 @@
+{
+  "name": "Base Runner Badge — Elite Runner Silver",
+  "description": "Elite Runner tier 2/8: reached 3 elite runs in Base Runner on Base. Earned in game, minted by the player.",
+  "image": "https://baserunnerapp.vercel.app/nft/images/badge_elite_2.svg",
+  "external_url": "https://baserunnerapp.vercel.app",
+  "attributes": [
+    {
+      "trait_type": "Type",
+      "value": "Achievement Badge"
+    },
+    {
+      "trait_type": "Category",
+      "value": "Elite Runner"
+    },
+    {
+      "trait_type": "Tier",
+      "value": "Silver"
+    },
+    {
+      "trait_type": "Milestone",
+      "value": 3
+    },
+    {
+      "trait_type": "Game",
+      "value": "Base Runner"
+    }
+  ]
+}

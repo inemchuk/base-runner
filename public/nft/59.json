@@ -1,0 +1,28 @@
+{
+  "name": "Base Runner Badge — High Scorer Amethyst",
+  "description": "High Scorer tier 6/8: reached 400 score in Base Runner on Base. Earned in game, minted by the player.",
+  "image": "https://baserunnerapp.vercel.app/nft/images/badge_record_6.svg",
+  "external_url": "https://baserunnerapp.vercel.app",
+  "attributes": [
+    {
+      "trait_type": "Type",
+      "value": "Achievement Badge"
+    },
+    {
+      "trait_type": "Category",
+      "value": "High Scorer"
+    },
+    {
+      "trait_type": "Tier",
+      "value": "Amethyst"
+    },
+    {
+      "trait_type": "Milestone",
+      "value": 400
+    },
+    {
+      "trait_type": "Game",
+      "value": "Base Runner"
+    }
+  ]
+}

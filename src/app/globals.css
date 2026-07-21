@@ -155,7 +155,7 @@
     /* Settings screen */
     .settings-list {
       width: min(320px, 90vw); display: flex; flex-direction: column; gap: 8px;
-      margin-bottom: 32px;
+      margin-bottom: 14px;
     }
     .settings-row {
       background: linear-gradient(180deg, var(--surface-arcade-strong), var(--surface-arcade));
@@ -218,6 +218,142 @@
     }
     .settings-toggle input:checked ~ .settings-toggle-track .settings-toggle-thumb {
       transform: translateX(21px);
+    }
+
+    .feedback-card {
+      width: min(320px, 90vw);
+      padding: 15px;
+      border: 1px solid var(--surface-line);
+      border-radius: 10px;
+      background: linear-gradient(180deg, var(--surface-arcade-strong), var(--surface-arcade));
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.055);
+    }
+    .feedback-card-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .feedback-card-kicker {
+      display: block;
+      color: rgba(136,170,255,0.62);
+      font-size: 0.54rem;
+      font-weight: 900;
+      letter-spacing: 1.3px;
+      text-transform: uppercase;
+    }
+    .feedback-card h3 {
+      margin-top: 5px;
+      color: rgba(255,255,255,0.94);
+      font-size: 0.92rem;
+      font-weight: 900;
+      letter-spacing: 0;
+    }
+    .feedback-card-mark {
+      display: grid;
+      width: 25px;
+      height: 25px;
+      place-items: center;
+      color: #9dc2ff;
+      border: 1px solid rgba(77,143,255,0.32);
+      border-radius: 7px;
+      background: rgba(0,82,255,0.13);
+      font-size: 1.1rem;
+      line-height: 1;
+    }
+    .feedback-card-copy {
+      margin-top: 9px;
+      color: rgba(210,225,255,0.52);
+      font-size: 0.62rem;
+      line-height: 1.5;
+    }
+    .feedback-form { margin-top: 13px; }
+    .feedback-kind-control {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 5px;
+      padding: 4px;
+      border: 1px solid rgba(136,170,255,0.12);
+      border-radius: 8px;
+      background: rgba(3,8,22,0.52);
+    }
+    .feedback-kind-btn {
+      min-height: 31px;
+      border: 1px solid transparent;
+      border-radius: 5px;
+      background: transparent;
+      color: rgba(210,225,255,0.48);
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 0.62rem;
+      font-weight: 900;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+    .feedback-kind-btn.is-active {
+      border-color: rgba(77,143,255,0.35);
+      background: rgba(0,82,255,0.2);
+      color: #d7e6ff;
+    }
+    .feedback-message {
+      display: block;
+      width: 100%;
+      min-height: 84px;
+      margin-top: 8px;
+      padding: 10px;
+      resize: vertical;
+      border: 1px solid rgba(136,170,255,0.18);
+      border-radius: 7px;
+      outline: none;
+      background: rgba(3,8,22,0.62);
+      color: rgba(245,248,255,0.94);
+      font: 600 0.68rem/1.45 var(--font);
+      letter-spacing: 0;
+    }
+    .feedback-message::placeholder { color: rgba(210,225,255,0.3); }
+    .feedback-message:focus { border-color: rgba(77,143,255,0.54); box-shadow: 0 0 0 2px rgba(0,82,255,0.11); }
+    .feedback-form-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .feedback-status {
+      min-width: 0;
+      color: rgba(210,225,255,0.48);
+      font-size: 0.56rem;
+      line-height: 1.35;
+    }
+    .feedback-status.is-error { color: #ff9898; }
+    .feedback-status.is-success { color: #9ee6b2; }
+    .feedback-submit {
+      flex: 0 0 auto;
+      min-height: 34px;
+      padding: 0 11px;
+      border: 1px solid rgba(136,170,255,0.34);
+      border-radius: 7px;
+      background: var(--button-blue);
+      color: #fff;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 0.58rem;
+      font-weight: 900;
+      letter-spacing: 0.75px;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.2), 0 5px 14px rgba(0,82,255,0.18);
+    }
+    .feedback-submit:disabled { cursor: default; opacity: 0.48; box-shadow: none; }
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
     }
 
     #screen-profile {
@@ -914,7 +1050,6 @@
     .run-complete-result .go-rating-row,
     .run-complete-result .go-coins-row,
     .run-complete-result .go-xp-row,
-    .run-complete-result .run-complete-quest,
     .run-complete-result .btn-claim-score {
       grid-column: 1 / -1;
     }
@@ -967,39 +1102,6 @@
     }
     .run-complete-result .go-xp-bonus {
       color: rgba(210,225,255,0.54);
-    }
-    .run-complete-result .run-complete-quest {
-      display: none;
-      position: relative;
-      width: 100%;
-      min-height: 34px;
-      margin: 0;
-      padding: 6px 30px 6px 12px;
-      border: 1px solid rgba(105,240,174,0.30);
-      border-radius: 999px;
-      background: linear-gradient(180deg, rgba(105,240,174,0.14), rgba(105,240,174,0.04));
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.10), 0 4px 14px rgba(105,240,174,0.08);
-      color: #7CF5B8;
-      font-family: inherit;
-      font-size: 0.68rem;
-      font-weight: 900;
-      letter-spacing: 0.4px;
-      animation: none;
-      transition: transform 0.1s, box-shadow 0.12s;
-    }
-    .run-complete-result .run-complete-quest::after {
-      content: '›';
-      position: absolute;
-      right: 13px;
-      top: 50%;
-      transform: translateY(-54%);
-      color: rgba(124,245,184,0.75);
-      font-size: 1rem;
-      font-weight: 900;
-    }
-    .run-complete-result .run-complete-quest:active {
-      transform: translateY(1px) scale(0.99);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
     }
     .run-complete-result .btn-claim-score {
       display: none;
@@ -1084,7 +1186,6 @@
       .loadout-run-complete .run-complete-result { padding: 8px 10px; gap: 4px 10px; }
       .loadout-run-complete .run-complete-score { padding: 0 0 3px; }
       .loadout-run-complete #go-score { font-size: 1.9rem; }
-      .loadout-run-complete .run-complete-quest { min-height: 28px; padding: 4px 8px; }
       .loadout-run-complete .btn-claim-score { min-height: 38px; }
       .loadout-run-complete .loadout-gear-row {
         min-height: 74px;
@@ -1113,7 +1214,6 @@
     }
     .loadout-arrow:focus-visible,
     .loadout-card:focus-visible,
-    .run-complete-quest:focus-visible,
     .loadout-actions .btn:focus-visible,
     .btn-claim-score:focus-visible {
       outline: 2px solid #fff;
@@ -1298,21 +1398,21 @@
       line-height: 1;
       font-variant-numeric: tabular-nums;
     }
-    #score-combined.record-beat .score-val-num { color: #4D8FFF; }
+    #score-box.record-beat .score-val-num { color: #8AB4FF; }
     .score-divider {
       width: 1px;
       height: 24px;
       background: rgba(255,255,255,0.10);
       margin: 0 2px;
     }
-    /* Record beat — golden pulse */
-    @keyframes recordPulse {
-      0%   { box-shadow: 0 0 14px rgba(0,82,255,0.2); transform: scale(1); }
-      30%  { box-shadow: 0 0 22px rgba(0,82,255,0.9), 0 0 40px rgba(0,82,255,0.4); transform: scale(1.08); }
-      100% { box-shadow: 0 0 14px rgba(0,82,255,0.2); transform: scale(1); }
+    /* Record beat stays attached to the number, never the HUD rail. */
+    @keyframes recordNumberPulse {
+      0%   { text-shadow: 0 0 0 rgba(77,143,255,0); transform: scale(1); }
+      34%  { text-shadow: 0 0 6px rgba(77,143,255,0.95), 0 0 15px rgba(77,143,255,0.45); transform: scale(1.06); }
+      100% { text-shadow: 0 0 0 rgba(77,143,255,0); transform: scale(1); }
     }
-    #score-combined.record-beat {
-      animation: recordPulse 0.45s ease-out forwards;
+    #score-box.record-beat .score-val-num {
+      animation: recordNumberPulse 0.45s ease-out forwards;
     }
     /* New record indicator */
     #new-record-badge {
@@ -3093,6 +3193,76 @@
     .spin-banner-sub   { color: rgba(210,225,255,0.52); font-size: clamp(0.66rem,2.6vw,0.78rem); line-height: 1.25; }
     .spin-banner-arrow { color: rgba(136,170,255,0.48); font-size: 1.2rem; flex-shrink: 0; }
 
+    /* ── Referral ─────────────────────────────────────────────────────── */
+    .referral-banner-icon {
+      width: 34px; height: 34px; flex: 0 0 34px;
+      object-fit: contain;
+      filter: drop-shadow(0 2px 6px rgba(0,0,0,0.26));
+    }
+    .referral-screen-body { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+    .referral-card,
+    .referral-invited,
+    .referral-terms { width: min(360px, 92vw); }
+    .referral-card {
+      display: flex; flex-direction: column; gap: 12px;
+      background: rgba(11,17,37,0.92);
+      border: 1px solid rgba(126,160,225,0.2);
+      border-radius: 8px; padding: 14px;
+    }
+    .referral-pitch {
+      margin: 0; color: rgba(214,228,255,0.82);
+      font-size: 0.86rem; line-height: 1.45;
+    }
+    .referral-pitch strong { color: #8AB4FF; }
+    .referral-payout { padding: 10px 0; border-top: 1px solid rgba(126,160,225,0.14); border-bottom: 1px solid rgba(126,160,225,0.14); }
+    .referral-payout-copy { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+    .referral-payout-label { color: rgba(190,205,240,0.5); font-size: 0.62rem; font-weight: 900; letter-spacing: 1.2px; text-transform: uppercase; }
+    .referral-payout-meta { color: rgba(230,239,255,0.82); font-size: 0.7rem; font-weight: 800; text-align: right; }
+    .referral-payout-track { height: 4px; margin-top: 8px; overflow: hidden; background: rgba(255,255,255,0.08); border-radius: 2px; }
+    .referral-payout-track > span { display: block; width: 0; height: 100%; background: #4D8FFF; border-radius: inherit; transition: width 0.35s ease; }
+    .referral-code-row {
+      display: flex; align-items: center; justify-content: space-between;
+      border-bottom: 1px solid rgba(126,160,225,0.14); padding: 0 0 11px;
+    }
+    .referral-code-label { color: rgba(190,205,240,0.6); font-size: 0.74rem; letter-spacing: 0.6px; text-transform: uppercase; }
+    .referral-code { color: #fff; font-weight: 900; font-size: 1.05rem; letter-spacing: 3px; font-family: inherit; }
+    .referral-share-btn { width: 100%; }
+    .referral-share-hint { color: #7fe0a8; font-size: 0.78rem; text-align: center; }
+    .referral-invited { display: flex; flex-direction: column; gap: 8px; }
+    .referral-invited .menu-section-label { align-self: flex-start; margin: 0 2px 0; }
+    .referral-invited-list { display: flex; flex-direction: column; gap: 0; border-top: 1px solid rgba(126,160,225,0.14); }
+    .referral-empty { color: rgba(190,205,240,0.5); font-size: 0.8rem; padding: 12px 4px; text-align: center; }
+    .referral-friend {
+      display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px;
+      padding: 10px 4px;
+      border-bottom: 1px solid rgba(126,160,225,0.14);
+    }
+    .referral-friend-head { display: contents; }
+    .referral-friend-addr { color: rgba(214,228,255,0.85); font-size: 0.8rem; font-weight: 700; letter-spacing: 0.4px; }
+    .referral-friend-status { color: rgba(190,205,240,0.5); font-size: 0.58rem; font-weight: 900; letter-spacing: 0.55px; text-align: right; }
+    .referral-friend-track { grid-column: 1 / -1; height: 3px; overflow: hidden; background: rgba(255,255,255,0.08); border-radius: 2px; }
+    .referral-friend-track > span { display: block; height: 100%; background: rgba(123,176,255,0.82); border-radius: inherit; transition: width 0.35s ease; }
+    .referral-friend-progress { grid-column: 1 / -1; color: rgba(190,205,240,0.42); font-size: 0.62rem; font-weight: 800; }
+    .referral-friend.earned .referral-friend-status, .referral-friend.paid .referral-friend-status { color: #8AB4FF; }
+    .referral-friend.paused .referral-friend-status { color: #D8A16B; }
+    .referral-terms { margin: 0 0 8px; color: rgba(190,205,240,0.42); font-size: 0.7rem; line-height: 1.4; text-align: center; }
+    .profile-referral-row {
+      display: flex; align-items: center; gap: 8px;
+      width: min(360px, 92vw);
+      flex-shrink: 0;
+      margin-bottom: 14px;
+      background: rgba(20,30,58,0.72);
+      border: 1px solid rgba(96,140,255,0.16);
+      border-radius: 8px; padding: 11px 14px;
+      color: inherit; font: inherit; cursor: pointer; text-align: left;
+    }
+    .profile-referral-label { color: rgba(190,205,240,0.6); font-size: 0.66rem; letter-spacing: 2px; text-transform: uppercase; font-weight: 800; }
+    .profile-referral-value { flex: 1; text-align: right; color: #8AB4FF; font-size: 0.84rem; font-weight: 800; }
+    .referral-balance-chip { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; min-width: 54px; }
+    .referral-balance-label { color: rgba(160,190,255,0.54); font-size: 0.46rem; font-weight: 900; letter-spacing: 0.9px; text-transform: uppercase; }
+    .referral-balance-chip strong { color: rgba(230,239,255,0.94); font-size: 0.7rem; letter-spacing: 0.6px; }
+    .profile-referral-arrow { color: rgba(136,170,255,0.48); font-size: 1.1rem; }
+
     @media (max-height: 720px) {
       .menu-shell { gap: 10px; }
       .menu-hero { padding-top: clamp(12px, 4vh, 28px); }
@@ -3561,8 +3731,10 @@
     .career-stat.career-max .career-next { color: rgba(255,215,0,0.55); }
     .career-medals {
       display: flex;
+      flex-wrap: wrap;
       justify-content: space-around;
       gap: 6px;
+      row-gap: 10px;
       margin-top: 10px;
       padding: 9px 4px 0;
       border-top: 1px solid var(--surface-line);
@@ -3573,6 +3745,8 @@
       align-items: center;
       gap: 3px;
       min-width: 0;
+      flex: 0 0 17%;
+      cursor: pointer;
     }
     .career-medal small {
       color: rgba(210,225,255,0.34);
@@ -3581,6 +3755,7 @@
       letter-spacing: 0.4px;
     }
     .career-medal-ring {
+      position: relative;
       width: 36px;
       height: 36px;
       border-radius: 50%;
@@ -3590,6 +3765,70 @@
       background: rgba(7,15,36,0.72);
       border: 2px solid rgba(255,255,255,0.12);
     }
+
+    /* ── Badge modal ─────────────────────────────────────────────────── */
+    .badge-modal {
+      position: fixed; inset: 0; z-index: 60;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(4,8,20,0.76);
+      backdrop-filter: blur(6px);
+      padding: 18px;
+    }
+    .badge-modal.hidden { display: none; }
+    .badge-modal-card {
+      width: min(360px, 94vw);
+      max-height: 82vh;
+      display: flex; flex-direction: column;
+      background: rgba(11,17,37,0.98);
+      border: 1px solid rgba(126,160,225,0.24);
+      border-radius: 8px;
+      padding: 0 14px 12px;
+      box-shadow: 0 18px 46px rgba(0,0,0,0.46);
+    }
+    .badge-modal-head { display: flex; align-items: center; gap: 10px; margin-bottom: 0; padding: 14px 0 11px; border-bottom: 1px solid rgba(126,160,225,0.16); }
+    .badge-modal-icon { width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+    .badge-modal-icon-img { width: 30px; height: 30px; object-fit: contain; }
+    .badge-modal-copy { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .badge-modal-title { color: #fff; font-weight: 900; font-size: 0.88rem; letter-spacing: 1.1px; }
+    .badge-modal-progress { color: rgba(190,205,240,0.58); font-size: 0.66rem; line-height: 1.35; }
+    .badge-modal-close {
+      width: 28px; height: 28px; border-radius: 6px;
+      background: rgba(96,140,255,0.10); border: 1px solid rgba(126,160,225,0.18); color: rgba(214,228,255,0.7);
+      font-size: 0.9rem; cursor: pointer;
+    }
+    .badge-modal-list {
+      overflow-y: auto;
+      display: flex; flex-direction: column; gap: 0;
+      -webkit-overflow-scrolling: touch;
+    }
+    .badge-tier {
+      display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center; gap: 8px;
+      min-height: 48px; padding: 8px 4px;
+      border-bottom: 1px solid rgba(126,160,225,0.12);
+    }
+    .badge-tier:last-child { border-bottom: 0; }
+    .badge-tier-far { opacity: 0.42; }
+    .badge-tier-next { opacity: 0.82; }
+    .badge-tier-reached { background: rgba(77,143,255,0.05); }
+    .badge-tier-done { background: rgba(123,176,255,0.04); }
+    .badge-tier-roman { color: #8aa4e8; font-weight: 900; font-size: 0.72rem; letter-spacing: 0.8px; }
+    .badge-tier-target { min-width: 0; color: rgba(231,239,255,0.9); font-weight: 800; font-size: 0.78rem; }
+    .badge-tier-state { display: block; margin-top: 2px; color: rgba(190,205,240,0.48); font-size: 0.57rem; font-weight: 800; letter-spacing: 0.35px; }
+    .badge-tier-claim {
+      min-width: 68px;
+      min-height: 30px;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 0.62rem;
+      font-weight: 900;
+      letter-spacing: 0.8px;
+      line-height: 1;
+    }
+    .badge-tier-claiming { color: #8AB4FF; font-size: 0.62rem; font-weight: 800; letter-spacing: 0.7px; }
+    .badge-tier-claimed { color: #8AB4FF; font-size: 0.62rem; font-weight: 900; letter-spacing: 0.7px; }
+    .badge-tier-locked { display: flex; }
+    .badge-tier-lock-img { width: 14px; height: 14px; opacity: 0.5; }
+    .badge-modal-note { margin: 10px 0 0; padding-top: 10px; border-top: 1px solid rgba(126,160,225,0.12); color: rgba(190,205,240,0.44); font-size: 0.62rem; text-align: center; }
     .career-medal-icon { width: 19px; height: 19px; object-fit: contain; }
     .medal-none .career-medal-icon { filter: grayscale(1); opacity: 0.4; }
     .medal-bronze .career-medal-ring { border-color: #D0885A; }
@@ -3677,6 +3916,40 @@
     .quest-card-daily { border-left: 3px solid rgba(77,143,255,0.6); }
     .quest-card-weekly { border-left: 3px solid rgba(167,139,250,0.62); }
     .quest-card-career { border-left: 3px solid rgba(255,215,0,0.34); }
+    .quest-career-badge-divider {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 14px 2px 8px;
+      padding-top: 13px;
+      border-top: 1px solid rgba(126,160,225,0.14);
+      color: rgba(170,196,244,0.56);
+      font-size: 0.56rem;
+      font-weight: 800;
+      letter-spacing: 0.9px;
+      text-transform: uppercase;
+    }
+    .quest-career-badge-divider span:last-child { color: rgba(123,176,255,0.7); }
+    .quest-card-badge-track {
+      border-left: 3px solid rgba(77,143,255,0.46);
+      cursor: pointer;
+      transition: border-color 0.14s ease, background 0.14s ease, transform 0.1s ease;
+    }
+    .quest-card-badge-track:hover { border-left-color: rgba(123,176,255,0.9); background: rgba(17,31,62,0.86); }
+    .quest-card-badge-track:active { transform: translateY(1px); }
+    .quest-badge-track-label {
+      color: rgba(123,176,255,0.72);
+      font-size: 0.58rem;
+      font-weight: 900;
+      letter-spacing: 0.9px;
+      text-transform: uppercase;
+    }
+    .quest-badge-track-action {
+      color: rgba(178,209,255,0.72);
+      font-size: 0.62rem;
+      font-weight: 800;
+      letter-spacing: 0.55px;
+    }
     .quest-card-complete { opacity: 0.62; }
     .quest-card .quest-reward-label { min-height: 20px; }
 
@@ -3684,6 +3957,7 @@
     .shop-tab:focus-visible,
     .shop-btn:focus-visible,
     .quest-claim-btn:focus-visible,
+    .quest-card-badge-track:focus-visible,
     .equipped-arrow:focus-visible,
     .profile-xp:focus-visible {
       outline: 2px solid #fff;
@@ -3714,8 +3988,7 @@
       .quest-notify { animation: none !important; }
     }
 
-    /* Wheel */
-    /* Spin screen layout — scrollable content + fixed back button */
+    /* Daily Spin — focused Base Drop surface, deliberately quieter than a casino wheel. */
     .spin-screen {
       display: flex; flex-direction: column;
       justify-content: flex-start;
@@ -3723,10 +3996,33 @@
     }
     .spin-scroll {
       flex: 1; overflow-y: auto;
+      overflow-x: hidden;
       -webkit-overflow-scrolling: touch;
       scrollbar-width: none;
-      padding: 5vh 16px 16px;
+      padding: max(22px, env(safe-area-inset-top, 0px)) 16px 16px;
       display: flex; flex-direction: column; align-items: center;
+    }
+    .spin-header {
+      width: min(300px, 86vw);
+      display: flex; align-items: center; gap: 10px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(122, 164, 223, 0.16);
+    }
+    .spin-header-icon { width: 40px; height: 40px; flex: 0 0 40px; object-fit: contain; }
+    .spin-eyebrow {
+      display: block; color: rgba(121, 173, 255, 0.76);
+      font-size: 0.54rem; font-weight: 700; letter-spacing: 1.7px;
+      line-height: 1.25; text-transform: uppercase;
+    }
+    .spin-title {
+      margin: 2px 0 0; color: #f4f7ff;
+      font-size: clamp(1.12rem, 5.4vw, 1.46rem); font-weight: 700;
+      letter-spacing: 1.4px; line-height: 1.1;
+    }
+    .spin-subtitle {
+      width: min(300px, 86vw); margin: 8px 0 14px;
+      color: rgba(210, 225, 255, 0.48); font-size: 0.72rem;
+      letter-spacing: 0.35px; line-height: 1.4;
     }
     .spin-back-bar {
       flex-shrink: 0;
@@ -3737,164 +4033,134 @@
       box-sizing: border-box;
     }
     #btn-spin-back {
+      width: min(300px, 86vw);
       margin: 0 auto;
     }
 
     .spin-wheel-wrap {
       position: relative;
-      margin-bottom: 16px;
+      margin-bottom: 14px;
       flex-shrink: 0;
+    }
+    .spin-wheel-wrap::before {
+      content: '';
+      position: absolute;
+      inset: -20%;
+      border-radius: 50%;
+      background: radial-gradient(circle,
+        rgba(55, 130, 255, 0.14) 0%,
+        rgba(55, 130, 255, 0.04) 52%,
+        transparent 72%);
+      z-index: 0;
+      pointer-events: none;
+    }
+    .spin-wheel-wrap::after {
+      content: '';
+      position: absolute;
+      inset: -18%;
+      border-radius: 50%;
+      opacity: 0;
+      z-index: 0;
+      pointer-events: none;
+      -webkit-mask-image: radial-gradient(circle, #000 32%, transparent 72%);
+      mask-image: radial-gradient(circle, #000 32%, transparent 72%);
+    }
+    .spin-wheel-wrap.spin-rays-burst.spin-rays-epic::after {
+      background: repeating-conic-gradient(rgba(185, 111, 255, 0.16) 0deg 8deg, transparent 8deg 24deg);
+      animation: spinRaysBurst 720ms cubic-bezier(0.16, 0.86, 0.3, 1) both;
+    }
+    .spin-wheel-wrap.spin-rays-burst.spin-rays-legendary::after {
+      background: repeating-conic-gradient(rgba(255, 208, 76, 0.18) 0deg 8deg, transparent 8deg 24deg);
+      animation: spinRaysBurst 900ms cubic-bezier(0.16, 0.86, 0.3, 1) both;
+    }
+    @keyframes spinRaysBurst {
+      0% { opacity: 0; transform: scale(0.74) rotate(-8deg); }
+      32% { opacity: 0.9; }
+      100% { opacity: 0; transform: scale(1.08) rotate(8deg); }
     }
     #spin-wheel-canvas {
       display: block;
+      position: relative;
+      z-index: 1;
       border-radius: 50%;
-      box-shadow: 0 18px 42px rgba(0,0,0,0.34), 0 0 0 1px rgba(136,170,255,0.16);
+      box-shadow: 0 14px 34px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(136, 170, 255, 0.12);
     }
     .spin-pointer {
       position: absolute;
-      top: -6px;
+      top: -7px;
       left: 50%;
       transform: translateX(-50%);
-      width: 26px;
-      height: 22px;
-      background: linear-gradient(180deg, #FFF9A0 0%, #FFD700 45%, #FF8C00 100%);
+      transform-origin: 50% 12%;
+      will-change: transform;
+      z-index: 2;
+      width: 24px;
+      height: 28px;
+      background: linear-gradient(180deg, #fff4a8 0%, #e3b33a 48%, #b77a12 100%);
+      border: 2px solid #081225;
       clip-path: polygon(50% 100%, 0% 0%, 100% 0%);
-      filter: drop-shadow(0 2px 5px rgba(0,0,0,0.65));
+      filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.7));
     }
 
     @keyframes spinResultPop {
-      from { transform: scale(0.7); opacity: 0; }
-      to   { transform: scale(1);   opacity: 1; }
+      from { transform: translateY(7px); opacity: 0; }
+      to   { transform: translateY(0); opacity: 1; }
     }
 
-    /* Shared GPU-composited glow pulse — animates opacity only, no box-shadow repaints */
-    @keyframes glowPulse {
-      0%, 100% { opacity: 0.55; }
-      50%       { opacity: 1.0; }
-    }
-
-    /* ── Unified Spin Prize Card (result + NFT claim) ── */
     .spin-prize-card {
-      display: flex; flex-direction: column; align-items: center; gap: 6px;
-      padding: 14px 18px 13px;
-      background: linear-gradient(180deg, var(--surface-arcade-strong), var(--surface-arcade));
-      border: 1px solid var(--surface-line-strong);
-      border-radius: 10px;
-      width: min(280px, 85vw);
-      margin-bottom: 12px;
-      animation: spinResultPop 0.4s cubic-bezier(0.34,1.56,0.64,1);
+      --spin-accent: rgba(181, 197, 225, 0.55);
+      display: flex; flex-direction: column; gap: 7px;
+      width: min(300px, 86vw); box-sizing: border-box;
+      padding: 11px 13px 12px; margin-bottom: 8px;
+      background: linear-gradient(145deg, rgba(13, 29, 55, 0.97), rgba(6, 14, 30, 0.98));
+      border: 1px solid var(--spin-accent); border-left: 3px solid var(--spin-accent);
+      border-radius: 8px;
+      animation: spinResultPop 220ms ease-out both;
     }
     .spin-prize-card.hidden { display: none; }
+    .spin-result-kicker {
+      color: var(--spin-accent); font-size: 0.56rem; font-weight: 700;
+      letter-spacing: 1.5px; line-height: 1;
+    }
+    .spin-result-kicker:empty { display: none; }
+    .spin-result-content { display: flex; align-items: center; gap: 11px; min-height: 54px; }
     .spin-prize-icon {
       display: flex; align-items: center; justify-content: center;
-      min-height: 2.8rem;
-      font-size: 2.4rem; line-height: 1;
+      width: 58px; min-width: 58px; height: 58px; line-height: 1;
     }
-    .spin-prize-icon img {
-      width: 64px; height: 64px; object-fit: contain; image-rendering: auto;
-    }
+    .spin-prize-icon img { width: 58px !important; height: 58px !important; object-fit: contain; image-rendering: auto; }
     .spin-prize-label {
-      font-size: 1rem; font-weight: 700; color: #fff;
-      letter-spacing: 0.5px; text-align: center;
+      min-width: 0; color: #f4f7ff; font-size: 0.88rem; font-weight: 700;
+      letter-spacing: 0.25px; line-height: 1.35; text-align: left;
     }
-    .spin-prize-label .reward-inline {
-      gap: 4px;
-    }
-    .spin-prize-label .reward-inline-icon {
-      width: 20px;
-      height: 20px;
-      flex-basis: 20px;
-    }
-    .spin-prize-label .reward-overflow {
-      margin-left: 0;
-      margin-top: 4px;
-      width: 100%;
-    }
+    .spin-prize-label .reward-inline { gap: 4px; }
+    .spin-prize-label .reward-inline-icon { width: 20px; height: 20px; flex-basis: 20px; }
+    .spin-prize-label .reward-overflow { margin-left: 0; margin-top: 4px; width: 100%; }
+    .spin-prize-card.rarity-common    { --spin-accent: rgba(183, 196, 220, 0.52); }
+    .spin-prize-card.rarity-uncommon  { --spin-accent: rgba(105, 206, 156, 0.7); }
+    .spin-prize-card.rarity-rare      { --spin-accent: rgba(92, 157, 255, 0.84); }
+    .spin-prize-card.rarity-epic      { --spin-accent: rgba(191, 128, 255, 0.86); }
+    .spin-prize-card.rarity-legendary { --spin-accent: rgba(239, 192, 73, 0.92); }
 
-    /* ── Rarity badge ── */
-    .spin-rarity-badge {
-      font-size: 0.65rem; font-weight: 700; letter-spacing: 1.5px;
-      text-transform: uppercase; padding: 2px 12px; border-radius: 20px;
-      line-height: 1.4;
+    .spin-nft-action {
+      display: flex; flex-direction: column; align-items: stretch; gap: 8px;
+      width: min(300px, 86vw); box-sizing: border-box; margin: 0 0 8px;
+      padding: 10px 0 0; border-top: 1px solid rgba(136, 170, 255, 0.14);
     }
-    .rarity-badge-common    { background: rgba(160,160,180,0.2); color: rgba(200,200,210,0.8); }
-    .rarity-badge-uncommon  { background: rgba(76,175,80,0.18);  color: #66BB6A; }
-    .rarity-badge-rare      { background: rgba(33,150,243,0.18); color: #42A5F5; }
-    .rarity-badge-epic      { background: rgba(156,39,176,0.2);  color: #CE93D8; }
-    .rarity-badge-legendary { background: rgba(255,215,0,0.15);  color: #FFD700; }
-
-    /* ── Rarity card borders & glow ── */
-    .spin-prize-card.rarity-common {
-      border-color: rgba(160,160,180,0.3);
-    }
-    .spin-prize-card.rarity-uncommon {
-      border-color: rgba(76,175,80,0.5);
-      box-shadow: 0 0 18px rgba(76,175,80,0.2);
-    }
-    .spin-prize-card.rarity-rare {
-      border-color: rgba(33,150,243,0.5);
-      box-shadow: 0 0 22px rgba(33,150,243,0.25);
-    }
-    .spin-prize-card.rarity-epic {
-      border-color: rgba(156,39,176,0.55);
-      box-shadow: 0 0 28px rgba(156,39,176,0.3);
-      animation: spinResultPop 0.4s cubic-bezier(0.34,1.56,0.64,1), rarityEpicGlow 2.5s ease-in-out infinite;
-    }
-    .spin-prize-card.rarity-legendary {
-      border-color: rgba(255,215,0,0.6);
-      box-shadow: 0 0 35px rgba(255,215,0,0.3), 0 0 80px rgba(255,170,0,0.12);
-      animation: spinResultPop 0.4s cubic-bezier(0.34,1.56,0.64,1), rarityLegendaryGlow 2s ease-in-out infinite;
-    }
-
-    /* Rarity glow keyframes — GPU-composited via ::after would be ideal,
-       but prize card is short-lived so box-shadow is acceptable here */
-    @keyframes rarityEpicGlow {
-      0%, 100% { box-shadow: 0 0 28px rgba(156,39,176,0.3); }
-      50%      { box-shadow: 0 0 40px rgba(156,39,176,0.5), 0 0 80px rgba(180,60,220,0.15); }
-    }
-    @keyframes rarityLegendaryGlow {
-      0%, 100% { box-shadow: 0 0 35px rgba(255,215,0,0.3), 0 0 80px rgba(255,170,0,0.12); }
-      50%      { box-shadow: 0 0 50px rgba(255,215,0,0.55), 0 0 100px rgba(255,170,0,0.25); }
-    }
-
-    /* NFT section inside the card */
-    .spin-nft-section {
-      display: flex; flex-direction: column; align-items: center; gap: 8px;
-      width: 100%; margin-top: 6px;
-    }
-    .spin-nft-section.hidden { display: none; }
-    .spin-nft-divider {
-      width: 100%; height: 1px;
-      background: rgba(136,170,255,0.16);
-      margin: 2px 0;
-    }
+    .spin-nft-action.hidden { display: none; }
     .spin-nft-sub {
-      color: rgba(210,225,255,0.52); font-size: 0.78rem; letter-spacing: 0.5px;
+      color: rgba(210, 225, 255, 0.52); font-size: 0.72rem;
+      letter-spacing: 0.35px; text-align: center;
     }
-    .spin-nft-btn {
-      font-size: 0.9rem; font-weight: 700; letter-spacing: 1px;
-      padding: 8px 24px; border-radius: 10px;
-      width: 100%;
-    }
+    .spin-nft-btn { font-size: 0.78rem; font-weight: 700; letter-spacing: 1px; padding: 9px 16px; border-radius: 8px; width: 100%; }
     .spin-nft-later {
       background: none; border: none; color: rgba(255,255,255,0.35);
-      font-size: 0.75rem; cursor: pointer;
-      padding: 10px 16px; /* larger touch target */
-      min-height: 36px;
+      font-size: 0.68rem; cursor: pointer; padding: 5px 16px 8px; min-height: 30px;
     }
     .spin-nft-later:hover { color: rgba(255,255,255,0.6); }
 
-    /* Countdown timer */
     .spin-timer {
-      color: rgba(210,225,255,0.48);
-      font-size: 0.82rem;
-      letter-spacing: 0.6px;
-      margin-bottom: 12px;
-      text-align: center;
-      padding: 8px 12px;
-      border-radius: 9px;
-      border: 1px solid var(--surface-line);
-      background: rgba(6,12,30,0.58);
+      color: rgba(210,225,255,0.48); font-size: 0.68rem; letter-spacing: 0.5px;
+      margin: 2px 0 12px; text-align: center; padding: 0;
     }
     .spin-timer.hidden { display: none; }
 
@@ -3913,7 +4179,7 @@
     #btn-do-spin {
       background: var(--button-blue);
       border: 1px solid rgba(136,170,255,0.34);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), 0 8px 22px rgba(0,82,255,0.24);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), 0 7px 18px rgba(0,82,255,0.2);
       position: relative;
       transform: translateZ(0);
       will-change: transform;
@@ -3921,14 +4187,18 @@
       align-items: center;
       justify-content: center;
       gap: 7px;
+      width: min(300px, 86vw);
+      margin: 0 0 10px;
+      color: #fff;
+      font-size: clamp(0.92rem, 4.2vw, 1.06rem);
+      letter-spacing: 1.4px;
     }
     #btn-do-spin::after {
       content: '';
       position: absolute; inset: 0;
       border-radius: inherit;
-      box-shadow: 0 0 18px rgba(77,143,255,0.32);
-      opacity: 0.28;
-      animation: glowPulse 2.2s ease-in-out infinite;
+      box-shadow: inset 0 0 0 1px rgba(180, 211, 255, 0.14);
+      opacity: 1;
       pointer-events: none;
     }
     #btn-do-spin:active {
@@ -3943,7 +4213,14 @@
       cursor: default;
       opacity: 0.6;
     }
-    #btn-do-spin:disabled::after { opacity: 0; animation: none; }
+    #btn-do-spin:disabled::after { opacity: 0; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .spin-wheel-wrap.spin-rays-burst::after,
+      .spin-prize-card {
+        animation: none !important;
+      }
+    }
 
     /* ── Starter Pack overlay ─────────────────────────────────────────── */
     .starter-pack-overlay {

@@ -12,6 +12,7 @@ import { useDailySpin } from '@/hooks/useDailySpin';
 import { useNftMint } from '@/hooks/useNftMint';
 import { useScoreClaim } from '@/hooks/useScoreClaim';
 import { useEconomySync } from '@/hooks/useEconomySync';
+import { useReferral } from '@/hooks/useReferral';
 import {
   createRunCompleteFlow,
   type RunCompleteFlow,
@@ -43,6 +44,7 @@ export default function Game() {
   useNftMint();
   useScoreClaim();
   useEconomySync();
+  useReferral();
 
   useEffect(() => {
     const gameWindow = window as GameWindow;
@@ -101,6 +103,7 @@ export default function Game() {
   return (
     <div id="game-container" className="game-container">
       {/* Game engine. rating-config.js loads beforeInteractive from the root layout. */}
+      <Script src="/game/i18n.js" strategy="beforeInteractive" />
       <Script src="/game/game.js" strategy="afterInteractive" />
 
       {/* Canvas */}
@@ -188,25 +191,33 @@ export default function Game() {
             <div className="daily-banners">
               <div className="daily-banners-row">
                 <button id="btn-spin" className="spin-banner spin-banner-compact hidden">
-                  <img className="spin-banner-icon ui-icon" src="/game/ui-icons/daily-spin.png" alt="" aria-hidden="true" />
+                  <img className="spin-banner-icon ui-icon" src="/game/ui-icons/spin/spin-wheel.png" alt="" aria-hidden="true" />
                   <div className="spin-banner-text">
-                    <span className="spin-banner-title">Daily Spin</span>
-                    <span className="spin-banner-sub" id="spin-banner-sub">Free spin available!</span>
+                    <span className="spin-banner-title" data-i18n="menu.daily_spin">Daily Spin</span>
+                    <span className="spin-banner-sub" id="spin-banner-sub" data-i18n="menu.spin_free">Free spin available!</span>
                   </div>
                 </button>
                 <button id="btn-ci-banner" className="spin-banner spin-banner-compact">
                   <img className="spin-banner-icon ui-icon" src="/game/ui-icons/daily-checkin.png" alt="" aria-hidden="true" />
                   <div className="spin-banner-text">
-                    <span className="spin-banner-title">Daily Check-in</span>
-                    <span className="spin-banner-sub" id="ci-banner-sub">Claim your reward!</span>
+                    <span className="spin-banner-title" data-i18n="menu.daily_checkin">Daily Check-in</span>
+                    <span className="spin-banner-sub" id="ci-banner-sub" data-i18n="menu.checkin_claim">Claim your reward!</span>
                   </div>
                 </button>
               </div>
               <button id="btn-starter-pack-banner" className="spin-banner hidden">
                 <img className="spin-banner-icon ui-icon" src="/game/ui-icons/starter-pack.png" alt="" aria-hidden="true" />
                 <div className="spin-banner-text">
-                  <span className="spin-banner-title">Starter Pack</span>
-                  <span className="spin-banner-sub">Claim for free - skins, coins & booster!</span>
+                  <span className="spin-banner-title" data-i18n="menu.starter_pack">Starter Pack</span>
+                  <span className="spin-banner-sub" data-i18n="menu.starter_sub">Claim for free - skins, coins & booster!</span>
+                </div>
+                <span className="spin-banner-arrow">›</span>
+              </button>
+              <button id="btn-referral-banner" className="spin-banner referral-banner hidden">
+                <img className="spin-banner-icon referral-banner-icon" src="/game/ui-icons/referral-invite.png" alt="" aria-hidden="true" />
+                <div className="spin-banner-text">
+                  <span className="spin-banner-title" data-i18n="menu.invite_earn">Invite &amp; Earn</span>
+                  <span className="spin-banner-sub" id="referral-banner-sub" data-i18n="menu.invite_sub">$0.25 per friend</span>
                 </div>
                 <span className="spin-banner-arrow">›</span>
               </button>
@@ -249,10 +260,6 @@ export default function Game() {
                 <span id="go-xp-multi" className="go-xp-multi"></span>
                 <span id="go-xp-bonus" className="go-xp-bonus"></span>
               </div>
-              <button type="button" id="go-quest-notify" className="quest-notify run-complete-quest">
-                <img className="quest-notify-icon ui-icon" src="/game/ui-icons/quests.png" alt="" aria-hidden="true" />
-                Quest complete! Tap to claim
-              </button>
               <button type="button" className="btn claim-action btn-claim-score" id="btn-claim-score">CLAIM ONCHAIN</button>
             </section>
 
@@ -377,6 +384,12 @@ export default function Game() {
             </div>
           </div>
 
+          <button className="profile-referral-row hidden" id="btn-profile-referral">
+            <span className="profile-referral-label" data-i18n="profile.referrals">Referrals</span>
+            <span className="profile-referral-value" id="profile-referral-value">0 invited · $0.00</span>
+            <span className="profile-referral-arrow">›</span>
+          </button>
+
           <div className="profile-stats profile-performance" id="profile-stats">
             <div className="profile-stat profile-stat-rank">
               <span className="profile-stat-value" id="stat-rank">#-</span>
@@ -487,8 +500,14 @@ export default function Game() {
       {/* Daily Spin Screen */}
       <div id="screen-spin" className="screen hidden spin-screen">
         <div className="spin-scroll">
-          <h2 className="icon-screen-title" style={{color:'#fff',fontSize:'clamp(1.2rem,6vw,1.8rem)',marginBottom:'4px',letterSpacing:'3px'}}><img className="screen-title-icon ui-icon" src="/game/ui-icons/daily-spin.png" alt="" aria-hidden="true" />DAILY SPIN</h2>
-          <p style={{color:'rgba(255,255,255,0.45)',fontSize:'clamp(0.75rem,3vw,0.9rem)',marginBottom:'16px',letterSpacing:'1px'}}>Free once a day · resets at 00:00 UTC</p>
+          <div className="spin-header">
+            <img className="spin-header-icon" src="/game/ui-icons/spin/spin-wheel.png" alt="" aria-hidden="true" />
+            <div>
+              <span className="spin-eyebrow" data-i18n="spin.eyebrow">Daily drop</span>
+              <h2 className="spin-title" data-i18n="spin.title">DAILY SPIN</h2>
+            </div>
+          </div>
+          <p className="spin-subtitle" data-i18n="spin.subtitle">One free drop every day · UTC reset</p>
 
           {/* Wheel canvas */}
           <div className="spin-wheel-wrap">
@@ -497,27 +516,30 @@ export default function Game() {
             <div className="spin-pointer" />
           </div>
 
-          {/* Unified prize card — result + optional NFT claim */}
+          {/* Result strip and optional NFT action deliberately stay separate. */}
           <div id="spin-prize-card" className="spin-prize-card hidden">
-            <div id="spin-prize-icon" className="spin-prize-icon"></div>
-            <div id="spin-prize-label" className="spin-prize-label"></div>
-            <div id="spin-nft-section" className="spin-nft-section hidden">
-              <div className="spin-nft-divider" />
-              <div className="spin-nft-sub">Claim as NFT on Base</div>
-              <button className="spin-nft-btn claim-action" id="btn-spin-nft">CLAIM ONCHAIN</button>
-              <button className="spin-nft-later" id="btn-spin-nft-later">Later →</button>
+            <div id="spin-result-kicker" className="spin-result-kicker"></div>
+            <div className="spin-result-content">
+              <div id="spin-prize-icon" className="spin-prize-icon"></div>
+              <div id="spin-prize-label" className="spin-prize-label"></div>
             </div>
+          </div>
+
+          <div id="spin-nft-section" className="spin-nft-action hidden">
+            <div className="spin-nft-sub" data-i18n="spin.nft_sub">Mint this reward on Base</div>
+            <button className="spin-nft-btn claim-action" id="btn-spin-nft" data-i18n="spin.nft_mint">MINT ON BASE</button>
+            <button className="spin-nft-later" id="btn-spin-nft-later" data-i18n="spin.nft_later">Keep in collection</button>
           </div>
 
           {/* Countdown when already spun */}
           <div id="spin-timer" className="spin-timer hidden" />
 
-          <button className="btn" id="btn-do-spin" style={{color:'#fff',marginBottom:'10px',width:'min(280px,85vw)',fontSize:'clamp(1rem,4.5vw,1.2rem)',letterSpacing:'2px'}}>
-            <img className="btn-inline-icon ui-icon" src="/game/ui-icons/daily-spin.png" alt="" aria-hidden="true" /> SPIN
+          <button className="btn" id="btn-do-spin">
+            <img className="btn-inline-icon" src="/game/ui-icons/spin/spin-wheel.png" alt="" aria-hidden="true" /> <span data-i18n="spin.free">FREE SPIN</span>
           </button>
         </div>
         <div className="spin-back-bar">
-          <button className="btn btn-back" id="btn-spin-back" style={{width:'min(280px,85vw)'}}>← BACK</button>
+          <button className="btn btn-back" id="btn-spin-back" data-i18n="common.back">← BACK</button>
         </div>
       </div>
 
@@ -610,6 +632,11 @@ export default function Game() {
               <span className="quest-reset">8 levels each</span>
             </div>
             <div className="quest-list" id="quest-career-list"></div>
+            <div className="quest-career-badge-divider">
+              <span data-i18n="badges.career_label">Achievement badges</span>
+              <span data-i18n="badges.career_meta">Claim on Base</span>
+            </div>
+            <div className="quest-list quest-career-badge-list" id="quest-career-badge-list"></div>
           </section>
         </div>
       </div>
@@ -623,7 +650,7 @@ export default function Game() {
             <div className="settings-row">
               <div className="settings-row-info">
                 <img className="settings-row-icon settings-row-icon-img ui-icon" src="/game/ui-icons/music.png" alt="" aria-hidden="true" />
-                <span className="settings-row-label">Music</span>
+                <span className="settings-row-label" data-i18n="settings.music">Music</span>
               </div>
               <div className="settings-slider-wrap">
                 <input type="range" id="settings-music-vol" className="settings-slider"
@@ -635,7 +662,7 @@ export default function Game() {
             <div className="settings-row">
               <div className="settings-row-info">
                 <img className="settings-row-icon settings-row-icon-img ui-icon" src="/game/ui-icons/sound.png" alt="" aria-hidden="true" />
-                <span className="settings-row-label">Sound Effects</span>
+                <span className="settings-row-label" data-i18n="settings.sfx">Sound Effects</span>
               </div>
               <div className="settings-slider-wrap">
                 <input type="range" id="settings-sfx-vol" className="settings-slider"
@@ -647,7 +674,7 @@ export default function Game() {
             <div className="settings-row">
               <div className="settings-row-info">
                 <img className="settings-row-icon settings-row-icon-img ui-icon" src="/game/ui-icons/vibration.png" alt="" aria-hidden="true" />
-                <span className="settings-row-label">Vibration</span>
+                <span className="settings-row-label" data-i18n="settings.vibration">Vibration</span>
               </div>
               <label className="settings-toggle">
                 <input type="checkbox" id="settings-vibrate-toggle" defaultChecked />
@@ -657,9 +684,33 @@ export default function Game() {
               </label>
             </div>
           </div>
+
+          <section className="feedback-card" aria-labelledby="feedback-title">
+            <div className="feedback-card-head">
+              <div>
+                <span className="feedback-card-kicker" data-i18n="feedback.kicker">Player feedback</span>
+                <h3 id="feedback-title" data-i18n="feedback.title">Help improve the run</h3>
+              </div>
+              <span className="feedback-card-mark" aria-hidden="true">+</span>
+            </div>
+            <p className="feedback-card-copy" data-i18n="feedback.copy">Report a bug or share an idea directly with the team.</p>
+            <form id="feedback-form" className="feedback-form">
+              <input id="feedback-kind" type="hidden" value="bug" />
+              <div className="feedback-kind-control" role="group" aria-label="Feedback type">
+                <button className="feedback-kind-btn is-active" type="button" data-feedback-kind="bug" aria-pressed="true" data-i18n="feedback.bug">Bug</button>
+                <button className="feedback-kind-btn" type="button" data-feedback-kind="idea" aria-pressed="false" data-i18n="feedback.idea">Idea</button>
+              </div>
+              <label className="sr-only" htmlFor="feedback-message" data-i18n="feedback.message_label">Your feedback</label>
+              <textarea id="feedback-message" className="feedback-message" rows={4} maxLength={1000} minLength={10} required data-i18n-placeholder="feedback.placeholder" placeholder="What happened, or what would make the game better?" />
+              <div className="feedback-form-footer">
+                <span id="feedback-status" className="feedback-status" role="status" aria-live="polite"></span>
+                <button id="feedback-submit" className="btn feedback-submit" type="submit" disabled data-i18n="feedback.send">SEND FEEDBACK</button>
+              </div>
+            </form>
+          </section>
         </div>
         <div className="scroll-back-bar">
-          <button className="btn btn-back" id="btn-settings-back">← BACK</button>
+          <button className="btn btn-back" id="btn-settings-back" data-i18n="common.back">← BACK</button>
         </div>
       </div>
 
@@ -697,6 +748,45 @@ export default function Game() {
       </div>
 
       {/* Check-in Screen */}
+      <div id="screen-referral" className="screen hidden scroll-screen">
+        <div className="scroll-screen-body runner-hub-scroll referral-screen-body">
+          <div className="hub-screen-heading">
+            <button className="hub-home-btn" id="btn-referral-home" aria-label="Back to Home">← HOME</button>
+            <div className="hub-heading-copy">
+              <span className="hub-eyebrow" data-i18n="ref.eyebrow">Referral program</span>
+              <h2 className="hub-title" data-i18n="ref.title">INVITE</h2>
+            </div>
+            <span className="hub-status-chip referral-balance-chip">
+              <span className="referral-balance-label" data-i18n="ref.balance">Balance</span>
+              <strong id="referral-balance-chip">$0.00</strong>
+            </span>
+          </div>
+          <div className="referral-card">
+            <p className="referral-pitch" id="referral-pitch">Invite friends to Base Runner. When a friend makes <strong id="referral-threshold">10</strong> transactions in the game, you earn <strong>$0.25</strong>.</p>
+            <div className="referral-payout">
+              <div className="referral-payout-copy">
+                <span className="referral-payout-label">Weekly payout</span>
+                <span className="referral-payout-meta" id="referral-payout-meta">$1.00 to weekly payout</span>
+              </div>
+              <div className="referral-payout-track" aria-hidden="true"><span id="referral-payout-fill" /></div>
+            </div>
+            <div className="referral-code-row">
+              <span className="referral-code-label" data-i18n="ref.your_code">Your code</span>
+              <span className="referral-code" id="referral-code">--------</span>
+            </div>
+            <button className="btn claim-action referral-share-btn" id="btn-referral-share" data-i18n="ref.share">SHARE INVITE LINK</button>
+            <span className="referral-share-hint hidden" id="referral-share-hint" data-i18n="ref.copied">Link copied!</span>
+          </div>
+          <div className="referral-invited">
+            <span className="menu-section-label" data-i18n="ref.invited">Invited friends</span>
+            <div id="referral-invited-list" className="referral-invited-list">
+              <div className="referral-empty" id="referral-empty" data-i18n="ref.empty">No invites yet. Share your link to start earning.</div>
+            </div>
+          </div>
+          <p className="referral-terms" data-i18n="ref.terms">Paid in USDC on Base every week. Fraudulent referrals are voided.</p>
+        </div>
+      </div>
+
       <div id="screen-ci" className="screen hidden">
         <div className="ci-header">
           <h2 className="screen-title"><img className="screen-title-icon ui-icon" src="/game/ui-icons/daily-checkin.png" alt="" aria-hidden="true" />DAILY CHECK-IN</h2>
@@ -713,15 +803,30 @@ export default function Game() {
         <button className="btn btn-back" id="btn-ci-back">← BACK</button>
       </div>
 
+      <div id="badge-modal" className="badge-modal hidden" role="dialog" aria-modal="true">
+        <div className="badge-modal-card">
+          <div className="badge-modal-head">
+            <span className="badge-modal-icon" id="badge-modal-icon"></span>
+            <div className="badge-modal-copy">
+              <span className="badge-modal-title" id="badge-modal-title">BADGES</span>
+              <span className="badge-modal-progress" id="badge-modal-progress"></span>
+            </div>
+            <button className="badge-modal-close" id="btn-badge-modal-close" aria-label="Close">✕</button>
+          </div>
+          <div className="badge-modal-list" id="badge-modal-list"></div>
+          <p className="badge-modal-note" data-i18n="badges.note">Unlock a tier, then claim it free on Base.</p>
+        </div>
+      </div>
+
       <nav className="tab-bar runner-hub-nav" id="runner-hub-nav" aria-label="Runner Hub">
-        <button className="tab-item" id="btn-shop" data-hub-screen="shop"><img className="tab-icon tab-icon-img ui-icon" src="/game/ui-icons/shop.png" alt="" aria-hidden="true" /><span className="tab-label">Shop</span></button>
-        <button className="tab-item" id="btn-quests" data-hub-screen="quests"><img className="tab-icon tab-icon-img ui-icon" src="/game/ui-icons/quests.png" alt="" aria-hidden="true" /><span className="tab-label">Quests</span></button>
+        <button className="tab-item" id="btn-shop" data-hub-screen="shop"><img className="tab-icon tab-icon-img ui-icon" src="/game/ui-icons/shop.png" alt="" aria-hidden="true" /><span className="tab-label" data-i18n="nav.shop">Shop</span></button>
+        <button className="tab-item" id="btn-quests" data-hub-screen="quests"><img className="tab-icon tab-icon-img ui-icon" src="/game/ui-icons/quests.png" alt="" aria-hidden="true" /><span className="tab-label" data-i18n="nav.quests">Quests</span></button>
         <button className="tab-item tab-play" id="btn-start" data-hub-screen="menu" aria-label="Play">
           <span className="tab-icon" id="hub-center-play-icon">▶</span>
           <span className="tab-label">Play</span>
         </button>
-        <button className="tab-item" id="btn-lb" data-hub-screen="lb"><img className="tab-icon tab-icon-img ui-icon" src="/game/ui-icons/leaderboard.png" alt="" aria-hidden="true" /><span className="tab-label">Leaders</span></button>
-        <button className="tab-item" id="btn-profile" data-hub-screen="profile" style={{position:'relative'}}><span className="tab-icon tab-icon-img" id="menu-profile-icon"><img className="ui-icon" src="/game/ui-icons/profile.png" alt="" aria-hidden="true" /></span><span className="tab-label">Profile</span><span className="level-badge" id="profile-level-badge">Lv.1</span></button>
+        <button className="tab-item" id="btn-lb" data-hub-screen="lb"><img className="tab-icon tab-icon-img ui-icon" src="/game/ui-icons/leaderboard.png" alt="" aria-hidden="true" /><span className="tab-label" data-i18n="nav.leaders">Leaders</span></button>
+        <button className="tab-item" id="btn-profile" data-hub-screen="profile" style={{position:'relative'}}><span className="tab-icon tab-icon-img" id="menu-profile-icon"><img className="ui-icon" src="/game/ui-icons/profile.png" alt="" aria-hidden="true" /></span><span className="tab-label" data-i18n="nav.profile">Profile</span><span className="level-badge" id="profile-level-badge">Lv.1</span></button>
       </nav>
     </div>
   );

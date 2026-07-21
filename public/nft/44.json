@@ -1,0 +1,28 @@
+{
+  "name": "Base Runner Badge — Coin Collector Crimson",
+  "description": "Coin Collector tier 7/8: reached 3000 coins in Base Runner on Base. Earned in game, minted by the player.",
+  "image": "https://baserunnerapp.vercel.app/nft/images/badge_coins_7.svg",
+  "external_url": "https://baserunnerapp.vercel.app",
+  "attributes": [
+    {
+      "trait_type": "Type",
+      "value": "Achievement Badge"
+    },
+    {
+      "trait_type": "Category",
+      "value": "Coin Collector"
+    },
+    {
+      "trait_type": "Tier",
+      "value": "Crimson"
+    },
+    {
+      "trait_type": "Milestone",
+      "value": 3000
+    },
+    {
+      "trait_type": "Game",
+      "value": "Base Runner"
+    }
+  ]
+}

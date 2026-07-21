@@ -139,6 +139,16 @@ canvas rendering.
 - Quest groups show per-scope ready counters (`#quest-daily-ready` etc.);
   leaderboards have empty states with a PLAY NOW shortcut and highlight the
   current wallet's row.
+- Daily spin wheel (reworked 2026-07-20): segment disc is pre-rendered into an
+  offscreen cache (`_wheelCache` in `DailySpin`); anything changing segment
+  visuals (icons loading, resize, DISPLAY_POOL colors) must set
+  `_wheelCacheDirty = true`, not draw directly. Phases now include
+  'celebrate' (winner highlight + confetti before the prize card) — busy
+  checks must treat it like spinning. Peg ticks drive `Sound.spinTick` +
+  pointer kick (DOM transform on `.spin-pointer`). Epic/legendary results
+  toggle `spin-rays-epic`/`spin-rays-legendary` on `.spin-wheel-wrap`
+  (CSS conic-gradient rays); cleared in `doSpin`/`show`. Keep the
+  no-shadowBlur-in-RAF rule — glow only when static, in the cache build.
 
 ## API And Persistence
 
@@ -260,6 +270,34 @@ Easy to miss when planning new features; verified in code 2026-07-16:
   Base App wallet-address API only (FID/Neynar deprecated 2026-04-09); needs
   `BASE_NOTIFICATIONS_API_KEY`, `NEXT_PUBLIC_APP_URL`, `CRON_SECRET` envs.
   Design: `docs/superpowers/specs/2026-07-19-base-notifications-triggers-design.md`.
+- Referral program (added 2026-07-19, ships dark behind `REFERRAL_ENABLED`):
+  $0.25 to referrer per referee reaching 10 in-app onchain txs. Server:
+  `src/lib/referral.ts` + `/api/referral/{bind,tx,status,admin}`; tx counting
+  via receipt-log verification (4337-safe, contract whitelist), qualification
+  eager in `/tx` + sweep in notify cron. Client: `useReferral` (?ref capture
+  + bind), `reportGameTx` wired into useCheckIn/useScoreClaim/useNftMint
+  confirmed paths, menu banner `btn-referral-banner`, `screen-referral`,
+  profile row. Referee bonus: 100 coins + 1 boost_magnet at bind. Budget
+  $100 pilot / cap 20 per referrer / payouts manual weekly from $1 via
+  admin route. Design:
+  `docs/superpowers/specs/2026-07-19-referral-program-design.md`.
+- Onchain achievement badges (added 2026-07-20): 10 categories x 8 tiers,
+  token ids 30-109 on BaseRunnerItems (contract `claimed` mapping = minted
+  truth). Server: `src/lib/badges.ts`, badge branch in `/api/nft/sign`,
+  `GET /api/nft/badges`; `game_tx:{addr}` counter (all verified game txs) in
+  `/api/referral/tx`; `bestStreak` added to `economy_checkin`. Client:
+  `Badges` module in game.js (10-medal row in profile career + mint modal
+  `#badge-modal`), mints via existing `__NFT_MINT`. Metadata/art:
+  `public/nft/{30..109}.json` + generated SVGs in `public/nft/images/`
+  (swappable for real art, URLs stable).
+- i18n (added 2026-07-20): `public/game/i18n.js` (EN+RU), loaded
+  beforeInteractive ahead of game.js. Static nodes use `data-i18n` keys,
+  dynamic strings call `window.t(key)`; language row in Settings
+  (`settings-lang-btn`, cycles, persists `localStorage.lang`,
+  `lang-changed` event). v1 covers chrome (menu/nav/settings/referral/
+  badges); quest/economy names still English. New UI strings must add keys.
+- Squads: designed, NOT built (see
+  `docs/superpowers/specs/2026-07-20-badges-localization-squads-design.md`).
 - XP multipliers and bonus chips (streak/record/daily) via `xpBreakdown`.
 - "N STEPS AWAY" near-record badge on RUN COMPLETE (shares the NEW RECORD
   slot in `renderRunComplete`; threshold: missed by <= 20% of best, 5..30).
@@ -296,7 +334,9 @@ candidate alongside any of the above.
 - Do not run the dev server unless Ivan asks.
 - Before risky visual edits, copy touched files to `tmp/backup-<topic>/` for
   one-command rollback (git revert is unsafe while the tree carries active
-  user/Codex edits). Current: `tmp/backup-run-start/`.
+  user/Codex edits). Current: `tmp/backup-run-start/`,
+  `tmp/backup-spin-visuals/` (game.js, globals.css, Game.tsx before the
+  2026-07-20 spin wheel rework).
 
 ## Product Priorities
 

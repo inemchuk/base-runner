@@ -221,6 +221,7 @@ export async function POST(req: NextRequest) {
       lastDate: today,
       streak: nextStreak,
       total: Math.max(checkin.total + 1, chainTotal),
+      bestStreak: Math.max(nextStreak, checkin.bestStreak),
     };
     const reward = CHECKIN_REWARDS[(nextStreak - 1) % CHECKIN_REWARDS.length];
     const applied = applyRewardBundle(shop, coins, reward);

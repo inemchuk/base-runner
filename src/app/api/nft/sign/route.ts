@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { keccak256, encodePacked } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { getTokenId } from '@/config/nft-contract';
+import { getBadgeProgress, isBadgeItem, parseBadgeItem } from '@/lib/badges';
 
 async function getRedis() {
   if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) return null;
@@ -18,17 +19,34 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'missing params' }, { status: 400 });
     }
 
-    const tokenId = getTokenId(itemId as string);
+    const addr = (address as string).toLowerCase();
+
+    // Achievement badges: milestone check from server state, then sign.
+    // Double-mint is prevented onchain (claimed mapping in the contract).
+    let tokenId: number | undefined;
+    if (isBadgeItem(itemId as string)) {
+      const badge = parseBadgeItem(itemId as string);
+      if (!badge) {
+        return NextResponse.json({ error: 'unknown item' }, { status: 400 });
+      }
+      const redis = await getRedis();
+      const progress = await getBadgeProgress(redis, addr);
+      const target = badge.category.targets[badge.tier - 1];
+      if ((progress[badge.category.id] || 0) < target) {
+        return NextResponse.json({ error: 'milestone not reached' }, { status: 403 });
+      }
+      tokenId = badge.tokenId;
+    } else {
+      tokenId = getTokenId(itemId as string);
+    }
     if (tokenId === undefined) {
       return NextResponse.json({ error: 'unknown item' }, { status: 400 });
     }
 
-    const addr = (address as string).toLowerCase();
-
     // Free starter items — no ownership check needed
     const isFreeItem = itemId === 'skin_cryptokid' || itemId === 'trail_default';
 
-    if (!isFreeItem) {
+    if (!isFreeItem && !isBadgeItem(itemId as string)) {
       const redis = await getRedis();
       if (redis) {
         const shopData = await redis.get<{

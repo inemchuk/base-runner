@@ -6,6 +6,7 @@ import { base } from 'wagmi/chains';
 import { encodeFunctionData, numberToHex } from 'viem';
 import { Attribution } from 'ox/erc8021';
 import { SCORECLAIM_ABI, SCORECLAIM_ADDRESS } from '@/config/scoreclaim-contract';
+import { reportGameTx } from '@/lib/reportGameTx';
 
 const DATA_SUFFIX = Attribution.toDataSuffix({ codes: ['bc_2a3sfttm'] });
 const PAYMASTER_URL = process.env.NEXT_PUBLIC_PAYMASTER_URL;
@@ -88,9 +89,10 @@ export function useScoreClaim() {
     const identity = fallbackClaimsRef.current.get(txHash);
     if (!identity) return;
     fallbackClaimsRef.current.delete(txHash);
+    reportGameTx(address, txHash);
     dispatchClaimed(identity);
     clearMatchingClaim(identity);
-  }, [isSuccess, txHash, clearMatchingClaim]);
+  }, [isSuccess, txHash, address, clearMatchingClaim]);
 
   // A reverted receipt restores retry for the identity registered to that
   // exact hash. Write/wallet errors use the per-mutation callback below.
@@ -170,13 +172,14 @@ export function useScoreClaim() {
               const res = await rpcClient.request({
                 method: 'wallet_getCallsStatus',
                 params: [callsId],
-              }) as { status: number | string };
+              }) as { status: number | string; receipts?: Array<{ transactionHash?: string }> };
               const status = res?.status;
               const confirmed = status === 200 || status === 'CONFIRMED' || status === 'confirmed';
               const failed = status === 400 || status === 'FAILED' || status === 'failed';
               if (confirmed || failed || elapsed >= 90000) {
                 clearInterval(iv);
                 if (timeoutRef.current === iv) timeoutRef.current = null;
+                if (confirmed) reportGameTx(address, res?.receipts?.[0]?.transactionHash);
                 if (confirmed || elapsed >= 90000) finish();
                 else fail();
               }

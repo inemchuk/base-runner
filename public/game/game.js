@@ -643,9 +643,15 @@ const Sound = (() => {
     });
   }
 
+  // Spin wheel peg tick — very short quiet click, fired per segment boundary
+  function spinTick() {
+    playTone({ freq: 2100, freqEnd: 1400, type: 'square',
+               duration: 0.025, vol: 0.055, attack: 0.001 });
+  }
+
   return { init, toggleMute, isMuted, getVolume, setVolume,
            jump, step, log, death, splash, trainHorn, thunder, newRecord, coin,
-           checkpoint };
+           checkpoint, spinTick };
 })();
 
 
@@ -2224,6 +2230,9 @@ const Collision = (() => {
 
   // Радиус "хитбокса" игрока (немного меньше клетки для честной игры)
   const PLAYER_RADIUS = CELL * 0.3;
+  // A log supports the runner only when their visible footing is actually over
+  // the trunk, rather than merely brushing its collision radius.
+  const LOG_SUPPORT_INSET = PLAYER_RADIUS * 0.75;
 
   // ===== Основная проверка коллизий =====
   function check() {
@@ -2262,7 +2271,7 @@ const Collision = (() => {
     // Ищем бревно, на котором стоит игрок
     let foundLog = null;
     for (const log of row.obstacles) {
-      if (overlapsX(ps.visualX, PLAYER_RADIUS, log.x, log.width)) {
+      if (isSupportedByLog(ps.visualX, log)) {
         foundLog = log;
         break;
       }
@@ -2289,6 +2298,11 @@ const Collision = (() => {
   // с учётом радиуса игрока
   function overlapsX(playerX, playerR, obsX, obsW) {
     return playerX + playerR > obsX && playerX - playerR < obsX + obsW;
+  }
+
+  function isSupportedByLog(playerX, log) {
+    return playerX >= log.x + LOG_SUPPORT_INSET
+      && playerX <= log.x + log.width - LOG_SUPPORT_INSET;
   }
 
   // Check if a grid cell is blocked by a grass decoration
@@ -3363,11 +3377,11 @@ const Renderer = (() => {
     truck:            _lightProfile([[0.975, 0.190], [0.975, 0.750]], [[0.020, 0.220], [0.020, 0.780]], _LONG_BEAM, _LONG_HALO),
     bus:              _lightProfile([[0.930, 0.245], [0.930, 0.740]], [[0.022, 0.220], [0.022, 0.780]], _LONG_BEAM, _LONG_HALO),
     firetruck:        _lightProfile([[0.970, 0.255], [0.970, 0.745]], [[0.155, 0.330], [0.155, 0.660]], _LONG_BEAM, _LONG_HALO),
-    black_suv:        _lightProfile([[0.903, 0.245], [0.903, 0.740]], [[0.080, 0.220], [0.080, 0.780]], _SEDAN_BEAM, _COMPACT_HALO),
-    blue_hatchback:   _lightProfile([[0.860, 0.250], [0.860, 0.750]], [[0.115, 0.240], [0.115, 0.760]], _SEDAN_BEAM, _COMPACT_HALO),
-    white_panel_van:  _lightProfile([[0.890, 0.255], [0.890, 0.765]], [[0.045, 0.225], [0.045, 0.775]], _VAN_BEAM, _COMPACT_HALO),
-    silver_minivan:   _lightProfile([[0.850, 0.315], [0.850, 0.750]], [[0.090, 0.220], [0.090, 0.780]], _VAN_BEAM, _COMPACT_HALO),
-    orange_pickup:    _lightProfile([[0.895, 0.250], [0.895, 0.745]], [[0.090, 0.220], [0.090, 0.780]], _VAN_BEAM, _COMPACT_HALO),
+    black_suv:        _lightProfile([[0.955, 0.220], [0.955, 0.780]], [[0.055, 0.220], [0.055, 0.780]], _SEDAN_BEAM, _COMPACT_HALO),
+    blue_hatchback:   _lightProfile([[0.955, 0.220], [0.955, 0.780]], [[0.055, 0.220], [0.055, 0.780]], _SEDAN_BEAM, _COMPACT_HALO),
+    white_panel_van:  _lightProfile([[0.955, 0.220], [0.955, 0.780]], [[0.050, 0.220], [0.050, 0.780]], _VAN_BEAM, _COMPACT_HALO),
+    silver_minivan:   _lightProfile([[0.955, 0.220], [0.955, 0.780]], [[0.055, 0.220], [0.055, 0.780]], _VAN_BEAM, _COMPACT_HALO),
+    orange_pickup:    _lightProfile([[0.955, 0.220], [0.955, 0.780]], [[0.050, 0.220], [0.050, 0.780]], _VAN_BEAM, _COMPACT_HALO),
   });
   const _DEFAULT_CAR_LIGHT_PROFILE = _CAR_LIGHT_PROFILES.taxi;
 
@@ -3970,8 +3984,7 @@ const Renderer = (() => {
       grassTop: vStrip(Math.ceil(CELL * 0.18), [[0, 'rgba(0,0,0,0.18)'], [1, 'rgba(0,0,0,0)']]),
       grassBot: vStrip(Math.ceil(CELL * 0.15), [[0, 'rgba(255,255,255,0)'], [1, 'rgba(255,255,255,0.05)']]),
       coinGlow: radial(0.08 / 0.70, [[0, 'rgba(80,150,255,1)'], [0.45, 'rgba(0,82,255,0.5)'], [1, 'rgba(0,40,220,0)']]),
-      hlGlow:   radial(0, [[0, 'rgba(255,238,180,0.55)'], [0.15, 'rgba(255,238,180,0.3)'], [0.4, 'rgba(255,235,170,0.1)'], [1, 'rgba(255,235,170,0)']]),
-      hlDot:    radial(0, [[0, 'rgba(255,252,235,1)'], [0.5, 'rgba(255,245,200,0.5)'], [1, 'rgba(255,240,180,0)']]),
+      hlGlow:   radial(0.08, [[0, 'rgba(255,238,180,0.42)'], [0.22, 'rgba(255,238,180,0.24)'], [0.52, 'rgba(255,235,170,0.08)'], [1, 'rgba(255,235,170,0)']]),
       hlBeam:   headlightBeam,
       tlGlow:   radial(0, [[0, 'rgba(255,25,15,0.55)'], [0.3, 'rgba(255,15,10,0.2)'], [1, 'rgba(255,0,0,0)']]),
       tlDot:    radial(0, [[0, 'rgba(255,60,40,0.95)'], [0.6, 'rgba(255,30,20,0.4)'], [1, 'rgba(255,0,0,0)']]),
@@ -4602,6 +4615,19 @@ const Renderer = (() => {
     };
   }
 
+  function drawSirenBeacon(x, y, car, facingRight, point, rgb, intensity) {
+    const center = _lightPointToCanvas(point, facingRight, x, y, car.width, car.height);
+    const radius = Math.max(4, car.height * 0.30);
+    const glow = ctx.createRadialGradient(center.x, center.y, 0, center.x, center.y, radius);
+    glow.addColorStop(0, `rgba(${rgb},${0.72 * intensity})`);
+    glow.addColorStop(0.28, `rgba(${rgb},${0.30 * intensity})`);
+    glow.addColorStop(1, `rgba(${rgb},0)`);
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.ellipse(center.x, center.y, radius, radius * 0.62, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
   function drawCarLights(row, rowY, car) {
     const isSiren = car.isSirenCar === true;
     if (nightRatio <= 0.15 && !isSiren) return;
@@ -4627,7 +4653,7 @@ const Renderer = (() => {
       const beamLength = CELL * profile.beam.length;
       const beamWidth = CELL * profile.beam.width * 0.52;
       ctx.globalCompositeOperation = 'screen';
-      ctx.globalAlpha = alpha * profile.beam.alpha * 0.85;
+      ctx.globalAlpha = alpha * profile.beam.alpha * 0.62;
       for (const point of frontLights) {
         ctx.save();
         ctx.translate(point.x + direction * car.width * profile.beam.offset, point.y);
@@ -4639,9 +4665,7 @@ const Renderer = (() => {
       ctx.globalAlpha = alpha;
       for (const point of frontLights) {
         const glowR = CELL * profile.halo.head;
-        const dotR = Math.max(1.5, car.height * profile.halo.dot);
         ctx.drawImage(fxs.hlGlow, point.x - glowR, point.y - glowR, glowR * 2, glowR * 2);
-        ctx.drawImage(fxs.hlDot, point.x - dotR, point.y - dotR, dotR * 2, dotR * 2);
       }
 
       if (_surfaceForRow(row).id === 'wetRoad') {
@@ -4668,22 +4692,9 @@ const Renderer = (() => {
 
     if (isSiren) {
       const blink = Math.sin(sirenPhase * Math.PI * 6) > 0;
-      const NW = 192, NH = 92;
-      const sirenSx = car.width / NW;
-      const sirenSy = car.height / NH;
-      const red = { x: 77, y: 24, w: 8, h: 16 };
-      const blue = { x: 77, y: 50, w: 8, h: 16 };
-      const nativeX = (light) => facingRight ? light.x : (NW - light.x - light.w);
-      const drawLight = (light, color) => {
-        ctx.fillStyle = color;
-        ctx.fillRect(x + nativeX(light) * sirenSx, y + light.y * sirenSy, light.w * sirenSx, light.h * sirenSy);
-      };
       ctx.globalCompositeOperation = 'lighter';
-      ctx.globalAlpha = 1;
-      drawLight(red, `rgba(255,20,20,${blink ? 0.95 : 0.12})`);
-      drawLight(blue, `rgba(20,100,255,${blink ? 0.12 : 0.95})`);
-      ctx.fillStyle = blink ? 'rgba(255,20,20,0.06)' : 'rgba(20,100,255,0.06)';
-      ctx.fillRect(x, y, car.width, car.height);
+      drawSirenBeacon(x, y, car, facingRight, [0.51, 0.34], '255,34,34', blink ? 1 : 0.18);
+      drawSirenBeacon(x, y, car, facingRight, [0.51, 0.66], '40,122,255', blink ? 0.18 : 1);
     }
     ctx.restore();
   }
@@ -6437,6 +6448,7 @@ const UI = (() => {
     quests:   document.getElementById('screen-quests'),
     spin:     document.getElementById('screen-spin'),
     settings: document.getElementById('screen-settings'),
+    referral: document.getElementById('screen-referral'),
   };
 
   const hud       = document.getElementById('hud');
@@ -6444,7 +6456,7 @@ const UI = (() => {
   const bestVal   = document.getElementById('best-val');
   // ===== Показать нужный экран =====
   // Screens where music plays
-  const MUSIC_SCREENS = new Set(['menu','loadout','profile','lb','shop','quests','spin','ci','settings']);
+  const MUSIC_SCREENS = new Set(['menu','loadout','profile','lb','shop','quests','spin','ci','settings','referral']);
   const HUB_SCREENS = new Set(['menu', 'shop', 'quests', 'lb', 'profile']);
 
   function _updateHubNavigation(name) {
@@ -6512,11 +6524,12 @@ const UI = (() => {
   }
 
   // ===== Обновить счётчик очков в HUD =====
-  const scoreBox  = document.getElementById('score-combined');
+  const scoreBox  = document.getElementById('score-box');
   const bestBox   = document.getElementById('best-box');
   const badge     = document.getElementById('new-record-badge');
   let   _lastBest = 0;
   let   _badgeTimer = null;
+  let   _recordSoundPlayed = false;
 
   function updateScore(score) {
     if (scoreVal) scoreVal.textContent = score;
@@ -6530,8 +6543,11 @@ const UI = (() => {
   }
 
   function _flashRecord(score) {
-    // New record sound
-    if (typeof Sound !== 'undefined') Sound.newRecord();
+    // New record sound only marks the first break in a run.
+    if (!_recordSoundPlayed && typeof Sound !== 'undefined') {
+      Sound.newRecord();
+      _recordSoundPlayed = true;
+    }
     // Pulse the score box
     if (scoreBox) {
       scoreBox.classList.remove('record-beat');
@@ -6548,6 +6564,15 @@ const UI = (() => {
       if (_badgeTimer) clearTimeout(_badgeTimer);
       _badgeTimer = setTimeout(() => badge.classList.remove('visible'), 1800);
     }
+  }
+
+  function resetRunRecordFeedback() {
+    _recordSoundPlayed = false;
+    if (_badgeTimer) {
+      clearTimeout(_badgeTimer);
+      _badgeTimer = null;
+    }
+    if (badge) badge.classList.remove('visible');
   }
 
   // ===== Обновить рекорд в HUD =====
@@ -6621,7 +6646,6 @@ const UI = (() => {
       }
       const bonuses = [];
       if (xpBreakdown.recordBonus)  bonuses.push(`${_uiIconHtml('leaderboard', 'go-xp-bonus-icon', 'record')} +${xpBreakdown.recordBonus}`);
-      if (xpBreakdown.streakBonus)  bonuses.push(`${_uiIconHtml('fire', 'go-xp-bonus-icon', 'streak')} +${xpBreakdown.streakBonus}`);
       if (xpBreakdown.dailyQualityBonus)  bonuses.push(`${_uiIconHtml('celebration', 'go-xp-bonus-icon', 'daily')} daily +${xpBreakdown.dailyQualityBonus}`);
       if (xpBonusEl) {
         xpBonusEl.innerHTML     = bonuses.map(item => `<span class="go-xp-bonus-chip">${item}</span>`).join('');
@@ -6630,11 +6654,6 @@ const UI = (() => {
       if (xpRow) xpRow.style.display = 'flex';
     } else {
       if (xpRow) xpRow.style.display = 'none';
-    }
-
-    const questNotify = document.getElementById('go-quest-notify');
-    if (questNotify) {
-      questNotify.style.display = snapshot.hasClaimableQuest ? 'inline-flex' : 'none';
     }
 
     const claimScoreBtn = document.getElementById('btn-claim-score');
@@ -6941,7 +6960,7 @@ const UI = (() => {
     el.classList.add('used');
   }
 
-  return { show, updateScore, updateBest, presentRunComplete, patchRunComplete, showCheckIn, showLeaderboard, updateCoins, setRunBoosters, triggerRunBoosterFeedback, markRunBoosterUsed };
+  return { show, updateScore, updateBest, resetRunRecordFeedback, presentRunComplete, patchRunComplete, showCheckIn, showLeaderboard, updateCoins, setRunBoosters, triggerRunBoosterFeedback, markRunBoosterUsed };
 
 })();
 
@@ -9332,6 +9351,12 @@ const Quests = (() => {
       career.innerHTML = '';
       for (const def of DEFS) career.appendChild(_questCard(def, _claimContext(data, def.id), 'career'));
     }
+    if (typeof Badges !== 'undefined' && Badges.renderCareerTracks) {
+      Badges.renderCareerTracks();
+      if (window.__BASE_WALLET) {
+        Badges.fetchData().then(() => Badges.renderCareerTracks());
+      }
+    }
     _updateReadyCounts(data);
     _updateResetLabels();
     document.querySelectorAll('#screen-quests .quest-claim-btn').forEach(btn => {
@@ -9380,37 +9405,38 @@ const Quests = (() => {
 const DailySpin = (() => {
 
   // ── Display segments (wheel visuals; actual prize decided server-side) ──
+  // c0/c1 are restrained Base Runner surfaces. Gold stays reserved for the
+  // pointer and the coin itself, so the wheel does not read like a casino UI.
   const DISPLAY_POOL = [
-    { coin: true,        label: '15'   },
-    { shirtImg: true,    label: 'Gear' },
-    { fragmentImg: true, label: 'Frag' },
-    { coin: true,        label: '35'   },
-    { boosterBagImg: true, label: 'Boost' },
-    { xpImg: true,       label: 'XP'   },
-    { coin: true,        label: '75'   },
-    { fireImg: true,     label: 'Miss' },
+    { coin: true,      label: '15',    c0: '#23476F', c1: '#0A1932' },
+    { gearImg: true,   label: 'GEAR',  c0: '#3D3271', c1: '#17183D' },
+    { fragmentImg: true,label: 'FRAG',  c0: '#155F73', c1: '#082B3B' },
+    { coin: true,      label: '35',    c0: '#2A4F76', c1: '#0D1B34' },
+    { boostImg: true,  label: 'BOOST', c0: '#214C82', c1: '#0B2248' },
+    { xpImg: true,     label: 'XP',    c0: '#225E65', c1: '#0A3036' },
+    { coin: true,      label: '75',    c0: '#31517B', c1: '#101D39' },
+    { emptyImg: true,  label: 'NEXT',  c0: '#29354E', c1: '#10192D' },
   ];
   const SEG_COUNT  = 8;
   const SEG_ANGLE  = (Math.PI * 2) / SEG_COUNT;
-  const SEG_COLORS = ['#0A2456', '#1A1050'];
 
   // ── State ────────────────────────────────────────────────────────────────
   let _canvas = null, _ctx = null;
   let _coinImg   = null;   // preloaded /game/coin.png
   let _hubImg    = null;   // preloaded /icon.png (game logo for wheel hub)
-  let _shirtImg   = null;   // preloaded /game/shirt.png (random skin segment)
-  let _boosterImg    = null;   // preloaded /game/trails.png (random trail segment)
-  let _boosterBagImg = null;   // preloaded booster reward icon
+  let _gearImg       = null;   // unified Daily Spin gear icon
+  let _boostImg      = null;   // unified Daily Spin booster icon
   let _fragmentImg   = null;   // preloaded fragment reward icon
   let _xpImg         = null;   // preloaded XP reward icon
-  let _fireImg       = null;   // preloaded fire utility icon
+  let _crateImg      = null;   // unified Daily Spin crate icon
+  let _emptyImg      = null;   // neutral no-drop icon
   let _canvasLogicalSize = 0;
   let _segments  = [...DISPLAY_POOL];
   let _winIndex  = 0;
   let _prize     = null;
 
   let _animRaf   = 0;
-  let _animPhase = 'idle'; // 'idle' | 'spinning' | 'landing' | 'done'
+  let _animPhase = 'idle'; // 'idle' | 'spinning' | 'landing' | 'celebrate' | 'done'
   let _rot       = 0;
   let _animStart = 0;
   let _lastTs    = 0;
@@ -9419,61 +9445,91 @@ const DailySpin = (() => {
   let _landVel   = 0;
   let _landDur   = 0;   // ms — computed per-spin so initial landing speed = SPIN_SPEED
   let _targetRot = 0;
+  let _spinBase  = 0;   // _rot at spin start (windup pulls back from here)
+
+  // Offscreen cache: the segment disc never changes mid-spin, so it is rendered
+  // once and each frame only rotates the cached bitmap (cheap on mobile).
+  let _wheelCache = null, _wheelCacheDirty = true, _cacheDiskD = 0;
+  let _rimGrad    = null;  // metallic rim gradient, rebuilt on resize
+
+  // Pointer kick + peg ticks
+  let _pointerEl   = null;
+  let _pointerKick = 0;
+  let _lastTickSeg = 0;
+  let _lastTickTs  = 0;
+
+  // Celebration (winner highlight + confetti) after landing, before prize card
+  let _celebStart = 0;
+  let _celebDur   = 0;
+  let _particles  = [];
 
   let _timerInterval  = null;
   let _safetyTimeout  = null;
   let _mintItemId     = null;   // item being offered for NFT claim
 
+  function _spinText(key, fallback, values) {
+    let text = typeof window.t === 'function' ? window.t(key) : fallback;
+    if (!text || text === key) text = fallback;
+    if (!values) return text;
+    return Object.entries(values).reduce((result, [name, value]) =>
+      result.replace(`{${name}}`, String(value)), text);
+  }
+
   // ── Canvas init / resize ─────────────────────────────────────────────────
+  // Segment icons live inside the cached disc — when one loads, the cache must
+  // be rebuilt (lazily, on next draw) or the icon would never appear.
+  function _onSegImgLoad() {
+    _wheelCacheDirty = true;
+    if (_animPhase === 'idle') _drawWheel();
+  }
+
   function _initCanvas() {
     // Preload coin image once
     if (!_coinImg) {
       _coinImg = new Image();
       _coinImg.src = '/game/coin.png';
-      _coinImg.onload = () => { if (_animPhase === 'idle') _drawWheel(); };
+      _coinImg.onload = _onSegImgLoad;
     }
-    // Preload hub logo once
+    // Preload hub logo once (hub is drawn live, not cached)
     if (!_hubImg) {
       _hubImg = new Image();
       _hubImg.src = '/icon.png';
       _hubImg.onload = () => { if (_animPhase === 'idle') _drawWheel(); };
     }
-    // Preload shirt icon once
-    if (!_shirtImg) {
-      _shirtImg = new Image();
-      _shirtImg.src = '/game/shirt.png';
-      _shirtImg.onload = () => { if (_animPhase === 'idle') _drawWheel(); };
+    if (!_gearImg) {
+      _gearImg = new Image();
+      _gearImg.src = '/game/ui-icons/spin/spin-gear.png';
+      _gearImg.onload = _onSegImgLoad;
     }
-    // Preload trail icon once
-    if (!_boosterImg) {
-      _boosterImg = new Image();
-      _boosterImg.src = '/game/trails.png';
-      _boosterImg.onload = () => { if (_animPhase === 'idle') _drawWheel(); };
-    }
-    // Preload booster bag icon once
-    if (!_boosterBagImg) {
-      _boosterBagImg = new Image();
-      _boosterBagImg.src = BOOSTER_ICON_SRCS.boost_magnet;
-      _boosterBagImg.onload = () => { if (_animPhase === 'idle') _drawWheel(); };
+    if (!_boostImg) {
+      _boostImg = new Image();
+      _boostImg.src = '/game/ui-icons/spin/spin-boost.png';
+      _boostImg.onload = _onSegImgLoad;
     }
     if (!_fragmentImg) {
       _fragmentImg = new Image();
-      _fragmentImg.src = '/game/ui-icons/fragments.png';
-      _fragmentImg.onload = () => { if (_animPhase === 'idle') _drawWheel(); };
+      _fragmentImg.src = '/game/ui-icons/spin/spin-fragments.png';
+      _fragmentImg.onload = _onSegImgLoad;
     }
     if (!_xpImg) {
       _xpImg = new Image();
-      _xpImg.src = '/game/ui-icons/xp.png';
-      _xpImg.onload = () => { if (_animPhase === 'idle') _drawWheel(); };
+      _xpImg.src = '/game/ui-icons/spin/spin-xp.png';
+      _xpImg.onload = _onSegImgLoad;
     }
-    if (!_fireImg) {
-      _fireImg = new Image();
-      _fireImg.src = '/game/ui-icons/fire.png';
-      _fireImg.onload = () => { if (_animPhase === 'idle') _drawWheel(); };
+    if (!_crateImg) {
+      _crateImg = new Image();
+      _crateImg.src = '/game/ui-icons/spin/spin-crate.png';
+      _crateImg.onload = _onSegImgLoad;
+    }
+    if (!_emptyImg) {
+      _emptyImg = new Image();
+      _emptyImg.src = '/game/ui-icons/spin/spin-empty.png';
+      _emptyImg.onload = _onSegImgLoad;
     }
     _canvas = document.getElementById('spin-wheel-canvas');
     if (!_canvas) return;
     _ctx = _canvas.getContext('2d');
+    _pointerEl = document.querySelector('.spin-pointer');
     _sizeCanvas();
     _drawWheel();
   }
@@ -9494,47 +9550,46 @@ const DailySpin = (() => {
       _ctx.imageSmoothingEnabled = true;
       _ctx.imageSmoothingQuality = 'high';
     }
+    _wheelCacheDirty = true;
+    _rimGrad = null;
   }
 
   // ── Wheel drawing ─────────────────────────────────────────────────────────
-  function _drawWheel() {
-    if (!_ctx || !_canvas) return;
-    const W  = _canvasLogicalSize || _canvas.width;
-    const H  = _canvasLogicalSize || _canvas.height;
-    const cx = W / 2;
-    const cy = H / 2;
-    const r  = cx * 0.88;
+  // The segment disc (gradients, icons, labels) is pre-rendered once into
+  // _wheelCache; per-frame drawing is just rotate + drawImage plus cheap
+  // screen-space accents (rim, bulbs, hub, gloss). No shadowBlur in RAF.
+  function _buildWheelCache() {
+    if (!_canvasLogicalSize) return;
+    const W   = _canvasLogicalSize;
+    const r   = (W / 2) * 0.88;
+    const d   = Math.ceil(r * 2 + 8); // disc + segment stroke margin
+    const dpr = Math.min(Math.max(window.devicePixelRatio || 1, 1), 2.5);
+    if (!_wheelCache) _wheelCache = document.createElement('canvas');
+    _wheelCache.width  = Math.round(d * dpr);
+    _wheelCache.height = Math.round(d * dpr);
+    _cacheDiskD = d;
+    const c = _wheelCache.getContext('2d');
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    c.clearRect(0, 0, d, d);
+    c.imageSmoothingEnabled = true;
+    c.imageSmoothingQuality = 'high';
+    const cx = d / 2, cy = d / 2;
 
-    _ctx.clearRect(0, 0, W, H);
-
-    // Shadows only when wheel is static — shadowBlur in RAF causes flicker & lag
-    const _glow = (_animPhase === 'idle' || _animPhase === 'done');
-
-    // Gold outer ring (with glow only when static)
-    if (_glow) { _ctx.shadowColor = 'rgba(255,200,0,0.75)'; _ctx.shadowBlur = 18; }
-    _ctx.beginPath();
-    _ctx.arc(cx, cy, r + 5, 0, Math.PI * 2);
-    _ctx.fillStyle = '#FFD700';
-    _ctx.fill();
-    _ctx.shadowBlur  = 0;
-    _ctx.shadowColor = 'transparent';
-
-    // Segments
-    // --- Pre-calculate shared layout constants (same for every segment) ---
+    // --- Shared layout constants (same for every segment) ---
     const tr      = r * 0.52;
     const iconSz  = Math.round(r * 0.26);
     const iconY   = -iconSz * 0.58;
     const labelY  =  iconSz * 0.58;
 
     // Uniform label font size: find the widest label among all segments,
-    // then shrink ONE common font size so it fits with comfortable padding.
+    // then shrink one common mono font so it fits with comfortable padding.
     const maxLabelSz  = Math.round(r * 0.10);
-    const maxLabelW   = r * 0.26; // comfortable width (leaves ~18% padding each side)
-    _ctx.font = `bold ${maxLabelSz}px sans-serif`;
+    const maxLabelW   = r * 0.30;
+    c.font = `700 ${maxLabelSz}px "Courier New", monospace`;
     let widestW = 0;
     for (let i = 0; i < SEG_COUNT; i++) {
       const seg = _segments[i] || DISPLAY_POOL[i % DISPLAY_POOL.length];
-      if (seg.label) widestW = Math.max(widestW, _ctx.measureText(seg.label).width);
+      if (seg.label) widestW = Math.max(widestW, c.measureText(seg.label).width);
     }
     const uniformLabelSz = widestW > maxLabelW
       ? Math.floor(maxLabelSz * maxLabelW / widestW)
@@ -9542,93 +9597,183 @@ const DailySpin = (() => {
 
     for (let i = 0; i < SEG_COUNT; i++) {
       const seg   = _segments[i] || DISPLAY_POOL[i % DISPLAY_POOL.length];
-      const start = _rot + i * SEG_ANGLE - Math.PI / 2;
+      const start = i * SEG_ANGLE - Math.PI / 2;
       const end   = start + SEG_ANGLE;
 
-      _ctx.save();
+      c.save();
 
       // Draw + clip to segment shape so text can never escape
+      c.beginPath();
+      c.moveTo(cx, cy);
+      c.arc(cx, cy, r, start, end);
+      c.closePath();
+      const grad = c.createRadialGradient(cx, cy, r * 0.08, cx, cy, r);
+      grad.addColorStop(0, seg.c0 || '#1E4F9A');
+      grad.addColorStop(1, seg.c1 || '#0A2456');
+      c.fillStyle = grad;
+      c.fill();
+      c.strokeStyle = 'rgba(150,194,255,0.34)';
+      c.lineWidth   = 2;
+      c.shadowColor = 'transparent';
+      c.shadowBlur  = 0;
+      c.stroke();
+      c.clip();
+
+      // Icon + label — centred at tr from centre, rotated to read outward
+      const mid = start + SEG_ANGLE / 2;
+      c.translate(cx + Math.cos(mid) * tr, cy + Math.sin(mid) * tr);
+      c.rotate(mid + Math.PI / 2);
+      c.textAlign    = 'center';
+      c.textBaseline = 'middle';
+
+      // All image icons at the same iconSz
+      if (seg.coin && _coinImg && _coinImg.complete && _coinImg.naturalWidth) {
+        c.drawImage(_coinImg, -iconSz / 2, iconY - iconSz / 2, iconSz, iconSz);
+      } else if (seg.gearImg && _gearImg && _gearImg.complete && _gearImg.naturalWidth) {
+        const gs = iconSz * 1.12;
+        c.drawImage(_gearImg, -gs / 2, iconY - gs / 2, gs, gs);
+      } else if (seg.boostImg && _boostImg && _boostImg.complete && _boostImg.naturalWidth) {
+        const bs = iconSz * 1.12;
+        c.drawImage(_boostImg, -bs / 2, iconY - bs / 2, bs, bs);
+      } else if (seg.fragmentImg && _fragmentImg && _fragmentImg.complete && _fragmentImg.naturalWidth) {
+        const fs = iconSz * 1.12;
+        c.drawImage(_fragmentImg, -fs / 2, iconY - fs / 2, fs, fs);
+      } else if (seg.xpImg && _xpImg && _xpImg.complete && _xpImg.naturalWidth) {
+        const xs = iconSz * 1.16;
+        c.drawImage(_xpImg, -xs / 2, iconY - xs / 2, xs, xs);
+      } else if (seg.emptyImg && _emptyImg && _emptyImg.complete && _emptyImg.naturalWidth) {
+        const es = iconSz * 1.08;
+        c.drawImage(_emptyImg, -es / 2, iconY - es / 2, es, es);
+      } else if (seg.icon) {
+        c.shadowColor = 'rgba(0,0,0,0.75)';
+        c.shadowBlur  = 6;
+        c.font      = `${iconSz}px sans-serif`;
+        c.fillStyle = '#ffffff';
+        c.fillText(seg.icon, 0, iconY);
+        c.shadowBlur  = 0;
+        c.shadowColor = 'transparent';
+      }
+
+      // Uniform label — same font size across all segments
+      c.shadowColor  = 'rgba(0,0,0,0.7)';
+      c.shadowBlur   = 3;
+      c.shadowOffsetX = 0;
+      c.shadowOffsetY = 1;
+      c.font      = `700 ${uniformLabelSz}px "Courier New", monospace`;
+      c.fillStyle = '#EAF3FF';
+      c.fillText(seg.label, 0, labelY);
+      c.shadowBlur    = 0;
+      c.shadowOffsetY = 0;
+      c.shadowColor   = 'transparent';
+
+      c.restore();
+    }
+
+    // Depth: darken the disc toward the rim so segments look slightly dished
+    const shade = c.createRadialGradient(cx, cy, r * 0.7, cx, cy, r);
+    shade.addColorStop(0, 'rgba(0,0,12,0)');
+    shade.addColorStop(1, 'rgba(0,0,12,0.30)');
+    c.beginPath();
+    c.arc(cx, cy, r, 0, Math.PI * 2);
+    c.fillStyle = shade;
+    c.fill();
+
+    _wheelCacheDirty = false;
+  }
+
+  function _drawWheel(ts) {
+    if (!_ctx || !_canvas) return;
+    const now = ts || performance.now();
+    if (_wheelCacheDirty || !_wheelCache) _buildWheelCache();
+
+    const W  = _canvasLogicalSize || _canvas.width;
+    const cx = W / 2;
+    const cy = W / 2;
+    const r  = cx * 0.88;
+
+    _ctx.clearRect(0, 0, W, W);
+
+    // Shadows only when wheel is static — shadowBlur in RAF causes flicker & lag
+    const anim  = _animPhase === 'spinning' || _animPhase === 'landing' || _animPhase === 'celebrate';
+    const _glow = !anim;
+
+    // ── Metallic rim: cool steel ring that frames the wheel without selling gold. ──
+    if (_glow) { _ctx.shadowColor = 'rgba(72,143,255,0.38)'; _ctx.shadowBlur = 14; }
+    _ctx.beginPath();
+    _ctx.arc(cx, cy, r + 10, 0, Math.PI * 2);
+    _ctx.fillStyle = '#071423';
+    _ctx.fill();
+    _ctx.shadowBlur  = 0;
+    _ctx.shadowColor = 'transparent';
+
+    if (!_rimGrad) {
+      _rimGrad = _ctx.createLinearGradient(0, cy - r - 10, 0, cy + r + 10);
+      _rimGrad.addColorStop(0,    '#B9D7FF');
+      _rimGrad.addColorStop(0.25, '#4D83C5');
+      _rimGrad.addColorStop(0.58, '#1C3E70');
+      _rimGrad.addColorStop(0.85, '#0A1C38');
+      _rimGrad.addColorStop(1,    '#365E97');
+    }
+    _ctx.beginPath();
+    _ctx.arc(cx, cy, r + 8.5, 0, Math.PI * 2);
+    _ctx.fillStyle = _rimGrad;
+    _ctx.fill();
+
+    // ── Rotated cached segment disc ──
+    _ctx.save();
+    _ctx.translate(cx, cy);
+    _ctx.rotate(_rot);
+    _ctx.drawImage(_wheelCache, -_cacheDiskD / 2, -_cacheDiskD / 2, _cacheDiskD, _cacheDiskD);
+    _ctx.restore();
+
+    // ── Winner highlight: dim losers, pulse the winning wedge ──
+    if ((_animPhase === 'celebrate' || _animPhase === 'done') && _prize) {
+      const start = _rot + _winIndex * SEG_ANGLE - Math.PI / 2;
+      const end   = start + SEG_ANGLE;
+      const pulse = _animPhase === 'celebrate'
+        ? 0.5 + 0.5 * Math.sin((now - _celebStart) / 110)
+        : 0.35;
+      // Dim everything except the winning wedge (evenodd: circle minus wedge)
+      _ctx.beginPath();
+      _ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      _ctx.moveTo(cx, cy);
+      _ctx.arc(cx, cy, r, start, end);
+      _ctx.closePath();
+      _ctx.fillStyle = 'rgba(4,8,24,0.45)';
+      _ctx.fill('evenodd');
+      // Light up the winner
       _ctx.beginPath();
       _ctx.moveTo(cx, cy);
       _ctx.arc(cx, cy, r, start, end);
       _ctx.closePath();
-      const grad = _ctx.createRadialGradient(cx, cy, r * 0.08, cx, cy, r);
-      if (i % 2 === 0) {
-        grad.addColorStop(0, '#1E4F9A');
-        grad.addColorStop(1, '#0A2456');
-      } else {
-        grad.addColorStop(0, '#2E1E88');
-        grad.addColorStop(1, '#1A1050');
-      }
-      _ctx.fillStyle = grad;
+      _ctx.fillStyle   = `rgba(151,204,255,${0.06 + 0.13 * pulse})`;
       _ctx.fill();
-      _ctx.strokeStyle = 'rgba(255,215,0,0.9)';
-      _ctx.lineWidth   = 3;
-      if (_glow) { _ctx.shadowColor = 'rgba(255,215,0,0.55)'; _ctx.shadowBlur = 8; }
+      _ctx.strokeStyle = `rgba(190,224,255,${0.4 + 0.45 * pulse})`;
+      _ctx.lineWidth   = 2.5;
       _ctx.stroke();
-      _ctx.shadowBlur  = 0;
-      _ctx.shadowColor = 'transparent';
-      _ctx.clip();
-
-      // Icon + label — centred at tr from centre, rotated to read outward
-      const mid = start + SEG_ANGLE / 2;
-      _ctx.translate(cx + Math.cos(mid) * tr, cy + Math.sin(mid) * tr);
-      _ctx.rotate(mid + Math.PI / 2);
-      _ctx.textAlign    = 'center';
-      _ctx.textBaseline = 'middle';
-
-      // All image icons at the same iconSz
-      if (seg.coin && _coinImg && _coinImg.complete && _coinImg.naturalWidth) {
-        _ctx.drawImage(_coinImg, -iconSz / 2, iconY - iconSz / 2, iconSz, iconSz);
-      } else if (seg.shirtImg && _shirtImg && _shirtImg.complete && _shirtImg.naturalWidth) {
-        const ss = iconSz * 1.08;
-        _ctx.drawImage(_shirtImg, -ss / 2, iconY - ss / 2, ss, ss);
-      } else if (seg.boosterImg && _boosterImg && _boosterImg.complete && _boosterImg.naturalWidth) {
-        const ts = iconSz * 1.14;
-        _ctx.drawImage(_boosterImg, -ts / 2, iconY - ts / 2, ts, ts);
-      } else if (seg.boosterBagImg && _boosterBagImg && _boosterBagImg.complete && _boosterBagImg.naturalWidth) {
-        const bs = iconSz * 1.12;
-        _ctx.drawImage(_boosterBagImg, -bs / 2, iconY - bs / 2, bs, bs);
-      } else if (seg.fragmentImg && _fragmentImg && _fragmentImg.complete && _fragmentImg.naturalWidth) {
-        const fs = iconSz * 1.12;
-        _ctx.drawImage(_fragmentImg, -fs / 2, iconY - fs / 2, fs, fs);
-      } else if (seg.xpImg && _xpImg && _xpImg.complete && _xpImg.naturalWidth) {
-        const xs = iconSz * 1.16;
-        _ctx.drawImage(_xpImg, -xs / 2, iconY - xs / 2, xs, xs);
-      } else if (seg.fireImg && _fireImg && _fireImg.complete && _fireImg.naturalWidth) {
-        const fs = iconSz * 1.18;
-        _ctx.drawImage(_fireImg, -fs / 2, iconY - fs / 2, fs, fs);
-      } else if (seg.icon) {
-        _ctx.shadowColor = 'rgba(0,0,0,0.75)';
-        _ctx.shadowBlur  = 6;
-        _ctx.font      = `${iconSz}px sans-serif`;
-        _ctx.fillStyle = '#ffffff';
-        _ctx.fillText(seg.icon, 0, iconY);
-        _ctx.shadowBlur  = 0;
-        _ctx.shadowColor = 'transparent';
-      }
-
-      // Uniform label — same font size across all segments
-      _ctx.shadowColor  = 'rgba(0,0,0,0.85)';
-      _ctx.shadowBlur   = 5;
-      _ctx.shadowOffsetX = 0;
-      _ctx.shadowOffsetY = 1;
-      _ctx.font      = `bold ${uniformLabelSz}px sans-serif`;
-      _ctx.fillStyle = '#ffffff';
-      _ctx.fillText(seg.label, 0, labelY);
-      _ctx.shadowBlur    = 0;
-      _ctx.shadowOffsetY = 0;
-      _ctx.shadowColor   = 'transparent';
-
-      _ctx.restore();
     }
 
-    // Hub — gold ring + game logo clipped to circle
+    // ── Rim bulbs: soft idle glow, alternating chase while spinning ──
+    for (let i = 0; i < 16; i++) {
+      const a  = -Math.PI / 2 + (i + 0.5) * (Math.PI / 8);
+      const bx = cx + Math.cos(a) * (r + 4.4);
+      const by = cy + Math.sin(a) * (r + 4.4);
+      let alpha;
+      if (_animPhase === 'celebrate')      alpha = ((i + ((now / 70)  | 0)) % 4 === 0) ? 1    : 0.25;
+      else if (anim)                        alpha = ((i + ((now / 110) | 0)) % 2 === 0) ? 0.95 : 0.3;
+      else                                  alpha = 0.85;
+      _ctx.beginPath();
+      _ctx.arc(bx, by, 2.3, 0, Math.PI * 2);
+      _ctx.fillStyle = `rgba(190,222,255,${alpha})`;
+      _ctx.fill();
+    }
+
+    // ── Hub — Base-blue ring + game logo clipped to circle ──
     const hr = r * 0.155; // hub radius
-    if (_glow) { _ctx.shadowColor = 'rgba(255,200,0,0.7)'; _ctx.shadowBlur = 12; }
+    if (_glow) { _ctx.shadowColor = 'rgba(77,143,255,0.58)'; _ctx.shadowBlur = 10; }
     _ctx.beginPath();
     _ctx.arc(cx, cy, hr, 0, Math.PI * 2);
-    _ctx.fillStyle = '#FFD700';
+    _ctx.fillStyle = '#4D8FFF';
     _ctx.fill();
     _ctx.shadowBlur  = 0;
     _ctx.shadowColor = 'transparent';
@@ -9645,6 +9790,30 @@ const DailySpin = (() => {
       _ctx.fill();
     }
     _ctx.restore();
+
+    // ── Gloss: fixed light source, subtle sheen across the top half ──
+    const gloss = _ctx.createLinearGradient(0, cy - r, 0, cy);
+    gloss.addColorStop(0, 'rgba(255,255,255,0.09)');
+    gloss.addColorStop(1, 'rgba(255,255,255,0)');
+    _ctx.beginPath();
+    _ctx.arc(cx, cy, r, Math.PI, Math.PI * 2);
+    _ctx.closePath();
+    _ctx.fillStyle = gloss;
+    _ctx.fill();
+
+    // ── Confetti particles (celebrate phase) ──
+    if (_particles.length) {
+      for (const p of _particles) {
+        _ctx.save();
+        _ctx.translate(p.x, p.y);
+        _ctx.rotate(p.rot);
+        _ctx.globalAlpha = Math.max(0, Math.min(1, p.life * 2.5));
+        _ctx.fillStyle = p.color;
+        _ctx.fillRect(-p.s / 2, -p.s / 2, p.s, p.s * 0.62);
+        _ctx.restore();
+      }
+      _ctx.globalAlpha = 1;
+    }
   }
 
   // ── Map server prize to display segment ───────────────────────────────────
@@ -9654,27 +9823,27 @@ const DailySpin = (() => {
       return { coin: true, label: String(Number(prize.value)) };
     }
     if (prize.type === 'booster') {
-      return { boosterBagImg: true, label: 'Boost' };
+      return { boostImg: true, label: 'BOOST' };
     }
     if (prize.type === 'fragments' || prize.type === 'fragment_burst') {
-      return { fragmentImg: true, label: 'Frag' };
+      return { fragmentImg: true, label: 'FRAG' };
     }
     if (prize.type === 'xp') {
       return { xpImg: true, label: 'XP' };
     }
     if (prize.type === 'crate') {
-      return { shirtImg: true, label: 'Crate' };
+      return { gearImg: true, label: 'GEAR' };
     }
     if (prize.type === 'trail') {
-      return { shirtImg: true, label: 'Gear' };
+      return { gearImg: true, label: 'GEAR' };
     }
     if (prize.type === 'skin') {
-      return { shirtImg: true, label: 'Gear' };
+      return { gearImg: true, label: 'GEAR' };
     }
     if (prize.type === 'nothing') {
-      return { fireImg: true, label: 'Miss' };
+      return { emptyImg: true, label: 'NEXT' };
     }
-    return { boosterBagImg: true, label: prize.label || '?' };
+    return { boostImg: true, label: prize.label || '?' };
   }
 
   function _buildSegments(prize) {
@@ -9705,13 +9874,44 @@ const DailySpin = (() => {
   }
 
   // ── Animation ─────────────────────────────────────────────────────────────
-  const SPIN_SPEED  = 8;   // rad/s at full speed
-  const ACCEL_MS    = 250; // ms to reach full speed
-  const MIN_SPIN_MS = 300; // ms minimum free-spin before landing
+  const SPIN_SPEED   = 8;    // rad/s at full speed
+  const ACCEL_MS     = 250;  // ms to reach full speed (after windup)
+  const WINDUP_MS    = 160;  // ms anticipation pull-back before launch
+  const WINDUP_ANGLE = 0.22; // rad pulled backward during windup
+  const MIN_SPIN_MS  = 650;  // ms minimum free-spin (incl. windup) before landing
 
   // easeOutSine — derivative at t=0 is π/2.
   // _landDur is set so that (π/2)*d/_landDur = SPIN_SPEED → zero velocity jolt.
   function _easeOut(t) { return Math.sin(t * Math.PI / 2); }
+
+  // ── Peg tick: pointer kick + click; vibration only on the slow final ticks ──
+  function _onTick(ts) {
+    _pointerKick = 1;
+    if (typeof Sound !== 'undefined' && Sound.spinTick) Sound.spinTick();
+    if (_animPhase === 'landing' && ts - _lastTickTs > 90 &&
+        typeof Vibrate !== 'undefined' && Vibrate.isEnabled() && navigator.vibrate) {
+      navigator.vibrate(8);
+    }
+    _lastTickTs = ts;
+  }
+
+  function _resetPointer() {
+    _pointerKick = 0;
+    if (_pointerEl) _pointerEl.style.transform = 'translateX(-50%)';
+  }
+
+  // Top tiers receive one brief burst. The base class is also removed so a
+  // result never leaves ambient animation running while the screen is open.
+  function _setRays(rarity) {
+    const wrap = document.querySelector('.spin-wheel-wrap');
+    if (!wrap) return;
+    wrap.classList.remove('spin-rays-burst', 'spin-rays-epic', 'spin-rays-legendary');
+    if (rarity === 'epic' || rarity === 'legendary') {
+      // Reflow lets a second top-tier result retrigger the short CSS keyframe.
+      void wrap.offsetWidth;
+      wrap.classList.add('spin-rays-burst', `spin-rays-${rarity}`);
+    }
+  }
 
   function _animFrame(ts) {
     if (_animPhase === 'idle') return;
@@ -9721,22 +9921,49 @@ const DailySpin = (() => {
 
     if (_animPhase === 'spinning') {
       const elapsed = ts - _animStart;
-      const speed   = elapsed < ACCEL_MS ? SPIN_SPEED * (elapsed / ACCEL_MS) : SPIN_SPEED;
-      _rot         += speed * dt;
-      if (_prize && elapsed >= MIN_SPIN_MS) _startLanding(ts);
+      if (elapsed < WINDUP_MS) {
+        // Anticipation: pull back before launching forward
+        _rot = _spinBase - WINDUP_ANGLE * Math.sin((elapsed / WINDUP_MS) * Math.PI / 2);
+      } else {
+        const fwd   = elapsed - WINDUP_MS;
+        const speed = fwd < ACCEL_MS ? SPIN_SPEED * (fwd / ACCEL_MS) : SPIN_SPEED;
+        _rot       += speed * dt;
+        if (_prize && elapsed >= MIN_SPIN_MS) _startLanding(ts);
+      }
     } else if (_animPhase === 'landing') {
       const t = Math.min(1, (ts - _landStart) / _landDur);
       _rot    = _landFrom + (_targetRot - _landFrom) * _easeOut(t);
       if (t >= 1) {
-        _rot       = _targetRot;
+        _rot = _targetRot;
+        _startCelebrate(ts);
+      }
+    } else if (_animPhase === 'celebrate') {
+      _updateParticles(dt);
+      if (ts - _celebStart >= _celebDur && _particles.length === 0) {
         _animPhase = 'done';
-        _drawWheel();
+        _drawWheel(ts);
+        _resetPointer();
         _onSpinComplete();
         return;
       }
     }
 
-    _drawWheel();
+    // Peg ticks: one per segment boundary crossing under the pointer
+    const segPos = Math.floor(_rot / SEG_ANGLE);
+    if (segPos !== _lastTickSeg) {
+      _lastTickSeg = segPos;
+      _onTick(ts);
+    }
+
+    // Pointer kick decay — single DOM transform write per frame
+    if (_pointerEl) {
+      _pointerKick *= Math.exp(-14 * dt);
+      if (_pointerKick < 0.02) _pointerKick = 0;
+      _pointerEl.style.transform =
+        `translateX(-50%) rotate(${(_pointerKick * 16).toFixed(1)}deg)`;
+    }
+
+    _drawWheel(ts);
     _animRaf = requestAnimationFrame(_animFrame);
   }
 
@@ -9745,14 +9972,86 @@ const DailySpin = (() => {
     _animPhase = 'landing';
     _landStart = ts;
     _landFrom  = _rot;
-    // At least 0.75 extra turns before stopping
+    // At least a full extra turn before stopping — leaves room for the
+    // decelerating tick-tick-tick tension
     const base   = -(_winIndex + 0.5) * SEG_ANGLE;
-    const minRot = _rot + 2 * Math.PI * 0.75;
+    const minRot = _rot + 2 * Math.PI * 1.0;
     const N      = Math.ceil((minRot - base) / (2 * Math.PI));
     _targetRot   = N * 2 * Math.PI + base;
     // Duration derived from distance so initial landing speed = SPIN_SPEED (no jolt):
     // easeOutSine'(0) = π/2  →  T = (π/2) × d / SPIN_SPEED
     _landDur = (Math.PI / 2) * (_targetRot - _landFrom) / SPIN_SPEED * 1000;
+  }
+
+  // ── Celebration: winner pulse + rarity-scaled feedback, then the prize card ──
+  function _startCelebrate(ts) {
+    _animPhase  = 'celebrate';
+    _celebStart = ts;
+    const rarity = (_prize && _prize.rarity) || 'common';
+    const isMiss = !!(_prize && _prize.type === 'nothing');
+    const isBig  = rarity === 'epic' || rarity === 'legendary';
+    _celebDur = isMiss ? 500 : isBig ? 1250 : (rarity === 'rare' || rarity === 'uncommon') ? 1000 : 800;
+
+    if (isMiss) {
+      if (typeof Sound !== 'undefined' && Sound.log) Sound.log();
+      return;
+    }
+    if (typeof Sound !== 'undefined') {
+      if (isBig && Sound.newRecord) Sound.newRecord();
+      else if ((rarity === 'rare' || rarity === 'uncommon') && Sound.checkpoint) Sound.checkpoint();
+      else if (Sound.coin) Sound.coin();
+    }
+    if (typeof Vibrate !== 'undefined' && Vibrate.isEnabled() && navigator.vibrate) {
+      navigator.vibrate(
+        rarity === 'legendary' ? [60, 40, 60, 40, 120] :
+        rarity === 'epic'      ? [50, 30, 90] :
+        rarity === 'rare'      ? [35, 25, 55] : 30
+      );
+    }
+    _spawnConfetti(rarity);
+  }
+
+  // ── Confetti: burst from the winning wedge at the top of the wheel ──
+  const CONFETTI_COLORS = {
+    common:    ['#A9BCD9'],
+    uncommon:  ['#74D6A5', '#B9E7D0'],
+    rare:      ['#63A7FF', '#B7D7FF'],
+    epic:      ['#C294FF', '#8FB7FF', '#E6D6FF'],
+    legendary: ['#EFC049', '#FFF1B0', '#B9D8FF'],
+  };
+  const CONFETTI_COUNTS = { common: 0, uncommon: 8, rare: 14, epic: 24, legendary: 32 };
+
+  function _spawnConfetti(rarity) {
+    const W  = _canvasLogicalSize || 300;
+    const cx = W / 2;
+    const r  = cx * 0.88;
+    const colors = CONFETTI_COLORS[rarity] || CONFETTI_COLORS.common;
+    const n = CONFETTI_COUNTS[rarity] || 0;
+    for (let i = 0; i < n; i++) {
+      _particles.push({
+        x:   cx + (Math.random() - 0.5) * r * 0.7,
+        y:   cx - r * 0.72 + (Math.random() - 0.5) * r * 0.3,
+        vx:  (Math.random() - 0.5) * 260,
+        vy:  -70 - Math.random() * 230,
+        rot: Math.random() * Math.PI * 2,
+        vr:  (Math.random() - 0.5) * 14,
+        s:   3 + Math.random() * 3.5,
+        life: 0.75 + Math.random() * 0.35,
+        color: colors[(Math.random() * colors.length) | 0],
+      });
+    }
+  }
+
+  function _updateParticles(dt) {
+    for (let i = _particles.length - 1; i >= 0; i--) {
+      const p = _particles[i];
+      p.life -= dt;
+      if (p.life <= 0) { _particles.splice(i, 1); continue; }
+      p.vy  += 520 * dt;
+      p.x   += p.vx * dt;
+      p.y   += p.vy * dt;
+      p.rot += p.vr * dt;
+    }
   }
 
   // ── Apply prize locally ───────────────────────────────────────────────────
@@ -9899,6 +10198,7 @@ const DailySpin = (() => {
     const cardEl  = document.getElementById('spin-prize-card');
     const iconEl  = document.getElementById('spin-prize-icon');
     const labelEl = document.getElementById('spin-prize-label');
+    const kickerEl = document.getElementById('spin-result-kicker');
 
     if (cardEl && iconEl && labelEl && _prize) {
       const IMG = (src, size) =>
@@ -9914,13 +10214,10 @@ const DailySpin = (() => {
         iconEl.innerHTML = IMG(src, '64px');
         labelEl.textContent = _prize._resolvedTrailName ? `${_prize._resolvedTrailName} trail!` : 'New trail!';
       } else if (_prize.type === 'booster') {
-        const src = _prize._resolvedItemId && BOOSTER_ICON_SRCS[_prize._resolvedItemId]
-          ? BOOSTER_ICON_SRCS[_prize._resolvedItemId]
-          : BOOSTER_ICON_SRCS.boost_magnet;
-        iconEl.innerHTML = IMG(src, '56px');
+        iconEl.innerHTML = IMG('/game/ui-icons/spin/spin-boost.png', '56px');
         labelEl.textContent = _prize._resolvedBoosterName ? `${_prize._resolvedBoosterName}!` : 'New booster!';
       } else if (_prize.type === 'fragments' || _prize.type === 'fragment_burst') {
-        iconEl.innerHTML = IMG('/game/ui-icons/fragments.png', '56px');
+        iconEl.innerHTML = IMG('/game/ui-icons/spin/spin-fragments.png', '56px');
         const awarded = Number(_prize.fragmentsAwarded || 0);
         const pooled = Number(_prize.fragmentsPooled || 0);
         const total = awarded + pooled || Number(_prize.value || 0);
@@ -9928,52 +10225,47 @@ const DailySpin = (() => {
           ? `${RewardEconomy.currencyHtml('fragments', pooled)} <span class="reward-overflow">→ Pool</span>`
           : `${RewardEconomy.currencyHtml('fragments', total)}${pooled > 0 ? ` <span class="reward-overflow">${pooled} → Pool</span>` : ''}`;
       } else if (_prize.type === 'crate') {
-        iconEl.innerHTML = IMG('/game/ui-icons/starter-pack.png', '56px');
+        iconEl.innerHTML = IMG('/game/ui-icons/spin/spin-crate.png', '56px');
         const pooled = Number(_prize.fragmentsPooled || 0);
         labelEl.innerHTML = pooled > 0
           ? `${_escapeHtml(_prize.label || 'Crate')} <span class="reward-overflow">${pooled} → Pool</span>`
           : _escapeHtml(_prize.label || 'Reward crate!');
       } else if (_prize.type === 'xp') {
-        iconEl.innerHTML = IMG('/game/ui-icons/xp.png', '56px');
+        iconEl.innerHTML = IMG('/game/ui-icons/spin/spin-xp.png', '56px');
         labelEl.textContent = _prize.label || `+${_prize.value} XP`;
       } else if (_prize.type === 'coins') {
         iconEl.innerHTML = IMG('/game/coin.png', '56px');
         labelEl.innerHTML = RewardEconomy.currencyHtml('coins', _prize.value);
       } else if (_prize.type === 'nothing') {
-        iconEl.innerHTML = IMG('/game/ui-icons/fire.png', '56px');
-        labelEl.textContent = 'Better luck next time!';
+        iconEl.innerHTML = IMG('/game/ui-icons/spin/spin-empty.png', '56px');
+        labelEl.textContent = _spinText('spin.try_tomorrow', 'Try again tomorrow');
       } else {
-        iconEl.innerHTML = IMG('/game/ui-icons/starter-pack.png', '56px');
+        iconEl.innerHTML = IMG('/game/ui-icons/spin/spin-crate.png', '56px');
         labelEl.textContent = _prize.label || 'Prize!';
       }
 
-      // ── Rarity badge ────────────────────────────────────────────────────
       const rarity = _prize.rarity || 'common';
-      // Remove previous rarity classes
       cardEl.className = cardEl.className.replace(/\brarity-\w+/g, '').trim();
       cardEl.classList.add('rarity-' + rarity);
-      // Rarity label element
-      let badgeEl = cardEl.querySelector('.spin-rarity-badge');
-      if (!badgeEl) {
-        badgeEl = document.createElement('div');
-        badgeEl.className = 'spin-rarity-badge';
-        // Insert after icon, before label
-        cardEl.insertBefore(badgeEl, labelEl);
+      if (kickerEl) {
+        kickerEl.textContent = _prize.type === 'nothing'
+          ? _spinText('spin.no_drop', 'NO DROP')
+          : _spinText(`spin.rarity.${rarity}`, rarity.toUpperCase());
       }
-      const RARITY_LABELS = { common: 'Common', uncommon: 'Uncommon', rare: 'Rare', epic: 'Epic', legendary: 'Legendary' };
-      badgeEl.textContent = RARITY_LABELS[rarity] || rarity;
-      badgeEl.className = 'spin-rarity-badge rarity-badge-' + rarity;
+
+      // Only top rewards receive a short burst; it cannot keep looping.
+      _setRays(rarity === 'epic' || rarity === 'legendary' ? rarity : null);
 
       cardEl.classList.remove('hidden');
     }
 
-    // ── NFT claim section (inside the card) ──────────────────────────────────
+    // ── NFT claim action (sibling of the compact result strip) ───────────────
     const nftSection = document.getElementById('spin-nft-section');
     const mintBtn    = document.getElementById('btn-spin-nft');
     _mintItemId = null;
     if (nftSection) {
       nftSection.classList.add('hidden');
-      if (mintBtn) { mintBtn.textContent = 'CLAIM ONCHAIN'; mintBtn.disabled = false; }
+      if (mintBtn) { mintBtn.textContent = _spinText('spin.nft_mint', 'MINT ON BASE'); mintBtn.disabled = false; }
       const laterBtn = document.getElementById('btn-spin-nft-later');
       if (laterBtn) laterBtn.style.display = '';
 
@@ -10012,19 +10304,26 @@ const DailySpin = (() => {
     _lastTs    = 0;
     _animPhase = 'spinning';
     _animStart = performance.now();
+    _spinBase  = _rot;
+    _lastTickSeg = Math.floor(_rot / SEG_ANGLE);
+    _lastTickTs  = 0;
+    _pointerKick = 0;
+    _particles.length = 0;
+    _setRays(null);
     cancelAnimationFrame(_animRaf);
     _animRaf   = requestAnimationFrame(_animFrame);
 
     const doBtn = document.getElementById('btn-do-spin');
-    if (doBtn) { doBtn.disabled = true; doBtn.textContent = 'Spinning...'; }
+    if (doBtn) { doBtn.disabled = true; doBtn.textContent = _spinText('spin.preparing', 'PREPARING DROP…'); }
     const cardEl = document.getElementById('spin-prize-card');
     if (cardEl) {
       cardEl.classList.add('hidden');
-      // Reset rarity styling from previous spin
       cardEl.className = cardEl.className.replace(/\brarity-\w+/g, '').trim();
-      const oldBadge = cardEl.querySelector('.spin-rarity-badge');
-      if (oldBadge) oldBadge.remove();
     }
+    const kickerEl = document.getElementById('spin-result-kicker');
+    if (kickerEl) kickerEl.textContent = '';
+    const nftSection = document.getElementById('spin-nft-section');
+    if (nftSection) nftSection.classList.add('hidden');
     _mintItemId = null;
 
     spinFn();
@@ -10041,6 +10340,7 @@ const DailySpin = (() => {
         if (_prize || (_animPhase !== 'spinning' && _animPhase !== 'landing')) return;
         cancelAnimationFrame(_animRaf);
         _animPhase = 'idle';
+        _resetPointer();
         _drawWheel();
         _updateDoBtn();
       }, 2000);
@@ -10061,23 +10361,23 @@ const DailySpin = (() => {
     if (!doBtn) return;
     const info      = window.__SPIN || {};
     const pending   = info.isPending || false;
-    const busy      = _animPhase === 'spinning' || _animPhase === 'landing';
+    const busy      = _animPhase === 'spinning' || _animPhase === 'landing' || _animPhase === 'celebrate';
     const nextCost  = info.nextCost  || 0;
     const balance   = typeof Save !== 'undefined' ? Save.getCoins() : 0;
     const canAfford = nextCost === 0 || balance >= nextCost;
 
     if (busy || pending) {
       doBtn.disabled    = true;
-      doBtn.textContent = 'Spinning...';
+      doBtn.textContent = _spinText('spin.spinning', 'SPINNING…');
     } else if (!canAfford) {
       doBtn.disabled    = true;
-      doBtn.innerHTML   = `Need ${nextCost - balance} more coins`;
+      doBtn.textContent = _spinText('spin.need_coins', 'Need {count} more coins', { count: nextCost - balance });
     } else if (nextCost === 0) {
       doBtn.disabled    = false;
-      doBtn.innerHTML   = '<img src="/game/ui-icons/daily-spin.png" class="btn-inline-icon ui-icon" alt="" aria-hidden="true"> FREE SPIN';
+      doBtn.innerHTML   = `<img src="/game/ui-icons/spin/spin-wheel.png" class="btn-inline-icon" alt="" aria-hidden="true"> ${_spinText('spin.free', 'FREE SPIN')}`;
     } else {
       doBtn.disabled    = false;
-      doBtn.innerHTML   = `<img src="/game/ui-icons/daily-spin.png" class="btn-inline-icon ui-icon" alt="" aria-hidden="true"> SPIN &nbsp;·&nbsp; <img src="/game/coin.png" style="width:14px;height:14px;object-fit:contain;vertical-align:middle;display:inline-block;"> ${nextCost}`;
+      doBtn.innerHTML   = `<img src="/game/ui-icons/spin/spin-wheel.png" class="btn-inline-icon" alt="" aria-hidden="true"> ${_spinText('spin.paid', 'SPIN')} &nbsp;·&nbsp; <img src="/game/coin.png" style="width:14px;height:14px;object-fit:contain;vertical-align:middle;display:inline-block;"> ${nextCost}`;
     }
   }
 
@@ -10093,8 +10393,8 @@ const DailySpin = (() => {
     banner.classList.remove('hidden');
     if (sub) {
       sub.textContent = nextCost === 0
-        ? 'Free spin available!'
-        : `Spin for ${nextCost} coins`;
+        ? _spinText('spin.available', 'Free drop available!')
+        : _spinText('spin.paid_banner', 'Spin for {count} coins', { count: nextCost });
     }
   }
 
@@ -10127,7 +10427,7 @@ const DailySpin = (() => {
       const h   = Math.floor(s / 3600);
       const m   = Math.floor((s % 3600) / 60);
       const sec = s % 60;
-      timerEl.textContent = `Next spin in ${[h, m, sec].map(v => String(v).padStart(2, '0')).join(':')}`;
+      timerEl.textContent = `${_spinText('spin.next', 'Next drop in')} ${[h, m, sec].map(v => String(v).padStart(2, '0')).join(':')}`;
       timerEl.classList.remove('hidden');
     }
     tick();
@@ -10139,6 +10439,10 @@ const DailySpin = (() => {
     if (!_canvas) _initCanvas();
     else { _sizeCanvas(); _drawWheel(); }
 
+    // Clear leftovers from a previous spin's finale
+    _setRays(null);
+    _resetPointer();
+
     _updateDoBtn();
 
     const info     = window.__SPIN || {};
@@ -10148,6 +10452,8 @@ const DailySpin = (() => {
 
     // Always hide prize card when (re-)entering spin screen — user saw result already
     if (cardEl) cardEl.classList.add('hidden');
+    const nftSection = document.getElementById('spin-nft-section');
+    if (nftSection) nftSection.classList.add('hidden');
 
     if (!avail) {
       _startCountdown();
@@ -10166,20 +10472,19 @@ const DailySpin = (() => {
     if (_prize) return;
     cancelAnimationFrame(_animRaf);
     _animPhase = 'idle';
+    _resetPointer();
     _drawWheel();
     _updateDoBtn();
     // Flash "not enough coins" on the result area briefly
     const cardEl  = document.getElementById('spin-prize-card');
     const iconEl  = document.getElementById('spin-prize-icon');
     const labelEl = document.getElementById('spin-prize-label');
+    const kickerEl = document.getElementById('spin-result-kicker');
     if (cardEl && iconEl && labelEl) {
       iconEl.innerHTML = '<img src="/game/ui-icons/coin-pouch.png" class="spin-prize-icon-img ui-icon" alt="" aria-hidden="true">';
-      labelEl.textContent = 'Not enough coins';
-      // Strip rarity styling from previous spin
+      labelEl.textContent = _spinText('spin.unavailable', 'Not enough coins');
+      if (kickerEl) kickerEl.textContent = '';
       cardEl.className = cardEl.className.replace(/\brarity-\w+/g, '').trim();
-      const oldBadge = cardEl.querySelector('.spin-rarity-badge');
-      if (oldBadge) oldBadge.remove();
-      // Hide NFT section if visible
       const nftSection = document.getElementById('spin-nft-section');
       if (nftSection) nftSection.classList.add('hidden');
       cardEl.classList.remove('hidden');
@@ -10193,7 +10498,7 @@ const DailySpin = (() => {
     if (!mintFn || window.__NFT_PENDING || !_mintItemId) return;
     const mintBtn  = document.getElementById('btn-spin-nft');
     const laterBtn = document.getElementById('btn-spin-nft-later');
-    if (mintBtn)  { mintBtn.textContent = 'CLAIMING...'; mintBtn.disabled = true; }
+    if (mintBtn)  { mintBtn.textContent = _spinText('spin.nft_minting', 'MINTING…'); mintBtn.disabled = true; }
     if (laterBtn) laterBtn.style.display = 'none';
     mintFn(_mintItemId);
   }
@@ -10773,6 +11078,7 @@ function initGame() {
   currentState = GameState.PLAYING;
   UI.show('game');
   UI.updateBest(Save.getBest());
+  UI.resetRunRecordFeedback();
   UI.updateCoins(Save.getCoins(), 0); // HUD начинается с 0 — показываем монеты текущей сессии
 
   lastTime = performance.now();
@@ -11361,14 +11667,230 @@ function cycleProfileGear(type, dir) {
 
 const _MEDAL_TIER = (level) => level >= 7 ? 'gold' : level >= 4 ? 'silver' : level >= 1 ? 'bronze' : 'none';
 
+// ===== Onchain achievement badges (10 categories x 8 tiers) =====
+const Badges = (() => {
+  // Client mirror of server BADGE_CATEGORIES (names/targets for instant UI).
+  const CATS = [
+    { id: 'rows', name: 'Marathon Runner', unit: 'rows', iconSrc: '/game/ui-icons/quests/career-rows.png' },
+    { id: 'coins', name: 'Coin Collector', unit: 'coins', iconSrc: '/game/ui-icons/quests/career-coins.png' },
+    { id: 'games', name: 'Dedicated Player', unit: 'runs', iconSrc: '/game/ui-icons/quests/career-games.png' },
+    { id: 'record', name: 'High Scorer', unit: 'best score', iconSrc: '/game/ui-icons/quests/career-record.png' },
+    { id: 'elite', name: 'Elite Runner', unit: 'elite runs', iconSrc: '/game/ui-icons/quests/career-elite.png' },
+    { id: 'checkins', name: 'Daily Devotee', unit: 'check-ins', iconSrc: '/game/ui-icons/badges/checkins.png' },
+    { id: 'streak', name: 'Streak Keeper', unit: 'day streak', iconSrc: '/game/ui-icons/badges/streak.png' },
+    { id: 'level', name: 'Rising Legend', unit: 'levels', iconSrc: '/game/ui-icons/badges/level.png' },
+    { id: 'collection', name: 'Collector', unit: 'items', iconSrc: '/game/ui-icons/badges/collection.png' },
+    { id: 'txs', name: 'Onchain Runner', unit: 'onchain actions', iconSrc: '/game/ui-icons/badges/txs.png' },
+  ];
+  const CAREER_QUEST_IDS = new Set(['rows', 'coins', 'games', 'record', 'elite']);
+  const ROMAN = ['I','II','III','IV','V','VI','VII','VIII'];
+  let _data = null;
+  let _for = '';
+  let _openCat = null;
+  let _mintingItem = null;
+
+  async function fetchData(force) {
+    const addr = (window.__BASE_WALLET || '').toLowerCase();
+    if (!addr) return null;
+    if (!force && _data && _for === addr) return _data;
+    try {
+      const res = await fetch('/api/nft/badges?address=' + addr);
+      const json = await res.json();
+      if (json && json.ok) { _data = json; _for = addr; return json; }
+    } catch (_) {}
+    return null;
+  }
+
+  function _cat(catId) {
+    if (!_data) return null;
+    return (_data.categories || []).find(c => c.id === catId) || null;
+  }
+
+  function _achievedCount(cat) {
+    if (!cat) return 0;
+    return cat.tiers.filter(t => cat.progress >= t.target).length;
+  }
+
+  function renderMedalRow() {
+    const holder = document.getElementById('career-medals');
+    if (!holder) return;
+    holder.innerHTML = CATS.map(def => {
+      const cat = _cat(def.id);
+      const achieved = _achievedCount(cat);
+      const label = cat ? `${achieved}/8` : '·/8';
+      return `
+      <div class="career-medal medal-${_MEDAL_TIER(achieved)}" data-badge-cat="${def.id}" role="button" tabindex="0" title="${_escapeHtml(def.name)}" aria-label="${_escapeHtml(def.name)}: ${label} unlocked">
+        <span class="career-medal-ring">${_imgHtml(def.iconSrc, 'career-medal-icon ui-icon', def.name, ' aria-hidden="true"')}</span>
+        <small>${label}</small>
+      </div>`;
+    }).join('');
+    holder.querySelectorAll('[data-badge-cat]').forEach(el => {
+      el.addEventListener('click', () => openModal(el.getAttribute('data-badge-cat')));
+      el.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        openModal(el.getAttribute('data-badge-cat'));
+      });
+    });
+  }
+
+  function renderCareerTracks() {
+    const holder = document.getElementById('quest-career-badge-list');
+    if (!holder) return;
+
+    const addr = (window.__BASE_WALLET || '').toLowerCase();
+    const hasWallet = Boolean(addr);
+    const _btr = (key, fallback) => (typeof window.t === 'function' ? window.t(key) : fallback);
+    const badgeTracks = CATS.filter(def => !CAREER_QUEST_IDS.has(def.id));
+
+    holder.innerHTML = badgeTracks.map(def => {
+      const cat = _cat(def.id);
+      const achieved = _achievedCount(cat);
+      const claimed = cat ? cat.tiers.filter(t => t.minted).length : 0;
+      const nextTier = cat && cat.tiers.find(t => cat.progress < t.target);
+      const maxTier = cat ? cat.tiers[cat.tiers.length - 1] : null;
+      const target = nextTier ? nextTier.target : (maxTier?.target || 0);
+      const progress = cat ? Math.min(cat.progress, target) : 0;
+      const pct = target ? Math.min(100, Math.floor((progress / target) * 100)) : 0;
+      const detail = cat
+        ? (achieved >= 8
+          ? _btr('badges.all_unlocked', 'All levels unlocked')
+          : `${_btr('badges.track', 'Badge track')} · ${claimed}/8 ${_btr('badges.claimed_word', 'claimed')}`)
+        : _btr('badges.connect_short', 'Connect wallet to load progress');
+      const progressText = cat
+        ? `${progress} / ${target}`
+        : hasWallet ? _btr('common.loading', 'Loading…') : '— / 8';
+
+      return `
+        <div class="quest-card quest-card-career quest-card-badge-track" data-badge-career="${def.id}" role="button" tabindex="0" aria-label="${_escapeHtml(def.name)}">
+          <div class="quest-header">
+            <span class="quest-name">${_imgHtml(def.iconSrc, 'quest-icon-img', def.name, ' aria-hidden="true"')} ${_escapeHtml(def.name)}</span>
+            <span class="quest-level">${cat ? `${achieved}/8` : '—/8'}</span>
+          </div>
+          <div class="quest-desc">${_escapeHtml(detail)}</div>
+          <div class="quest-reward-row">
+            <span class="quest-badge-track-label">${_btr('badges.track', 'Badge track')}</span>
+            <span class="quest-progress-text">${progressText}</span>
+          </div>
+          <div class="quest-bar-bg"><div class="quest-bar-fill" style="width:${pct}%"></div></div>
+          <div class="quest-progress"><span class="quest-badge-track-action">${_btr('badges.view', 'VIEW MILESTONES')}</span></div>
+        </div>`;
+    }).join('');
+
+    holder.querySelectorAll('[data-badge-career]').forEach(card => {
+      const open = () => openModal(card.dataset.badgeCareer);
+      card.addEventListener('click', open);
+      card.addEventListener('keydown', event => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        open();
+      });
+    });
+  }
+
+  function _renderModal() {
+    const cat = _cat(_openCat);
+    const def = CATS.find(c => c.id === _openCat);
+    if (!def) return;
+    const title = document.getElementById('badge-modal-title');
+    const icon = document.getElementById('badge-modal-icon');
+    const prog = document.getElementById('badge-modal-progress');
+    const list = document.getElementById('badge-modal-list');
+    if (title) title.textContent = def.name.toUpperCase();
+    if (icon) icon.innerHTML = _imgHtml(def.iconSrc, 'badge-modal-icon-img ui-icon', def.name, ' aria-hidden="true"');
+    const _btr = (k, fb) => (typeof window.t === 'function' ? window.t(k) : fb);
+    if (!cat) {
+      if (prog) prog.textContent = window.__BASE_WALLET ? _btr('common.loading', 'Loading…') : _btr('badges.connect', 'Connect wallet to claim badges');
+      if (list) list.innerHTML = '';
+      return;
+    }
+    const achieved = _achievedCount(cat);
+    const claimed = cat.tiers.filter(t => t.minted).length;
+    if (prog) prog.textContent = `${cat.progress} ${def.unit} · ${achieved}/8 ${_btr('badges.unlocked', 'unlocked')} · ${claimed}/8 ${_btr('badges.claimed_word', 'claimed')}`;
+    if (list) {
+      const nextTier = cat.tiers.find(t => cat.progress < t.target);
+      list.innerHTML = cat.tiers.map(t => {
+        const reached = cat.progress >= t.target;
+        const minting = _mintingItem === t.itemId;
+        const isNext = nextTier && nextTier.tier === t.tier;
+        const remaining = Math.max(0, t.target - cat.progress);
+        let action;
+        if (t.minted) action = '<span class="badge-tier-claimed">' + _btr('badges.claimed', '✓ CLAIMED') + '</span>';
+        else if (!reached) action = '<span class="badge-tier-locked">' + _uiIconHtml('lock', 'badge-tier-lock-img', 'locked') + '</span>';
+        else if (minting) action = '<span class="badge-tier-claiming">' + _btr('badges.claiming', 'CLAIMING…') + '</span>';
+        else action = `<button class="badge-tier-claim claim-action" data-badge-mint="${t.itemId}">` + _btr('badges.claim', 'CLAIM') + '</button>';
+        const state = t.minted
+          ? _btr('badges.claimed', 'CLAIMED')
+          : reached
+            ? _btr('badges.ready', 'READY TO CLAIM')
+            : isNext
+              ? `${remaining} more to unlock`
+              : _btr('badges.locked', 'LOCKED');
+        return `
+        <div class="badge-tier${t.minted ? ' badge-tier-done' : ''}${reached ? ' badge-tier-reached' : ' badge-tier-far'}${isNext ? ' badge-tier-next' : ''}">
+          <span class="badge-tier-roman">${ROMAN[t.tier - 1]}</span>
+          <span class="badge-tier-target">${t.target} ${def.unit}<small class="badge-tier-state">${state}</small></span>
+          ${action}
+        </div>`;
+      }).join('');
+      list.querySelectorAll('[data-badge-mint]').forEach(btn => {
+        btn.addEventListener('click', () => _mint(btn.getAttribute('data-badge-mint')));
+      });
+    }
+  }
+
+  function _mint(itemId) {
+    if (_mintingItem || !window.__NFT_MINT) return;
+    if (window.__NFT_DEPLOYED === false) return;
+    _mintingItem = itemId;
+    _renderModal();
+    window.__NFT_MINT(itemId);
+  }
+
+  async function openModal(catId) {
+    _openCat = catId;
+    const modal = document.getElementById('badge-modal');
+    if (modal) modal.classList.remove('hidden');
+    _renderModal();
+    await fetchData(true);
+    _renderModal();
+    renderMedalRow();
+    renderCareerTracks();
+  }
+
+  function closeModal() {
+    _openCat = null;
+    const modal = document.getElementById('badge-modal');
+    if (modal) modal.classList.add('hidden');
+  }
+
+  window.addEventListener('nft-minted', async (e) => {
+    const itemId = e.detail && e.detail.itemId;
+    if (!itemId || itemId.indexOf('badge_') !== 0) return;
+    _mintingItem = null;
+    await fetchData(true);
+    _renderModal();
+    renderMedalRow();
+    renderCareerTracks();
+    if (typeof Sound !== 'undefined' && Sound.coin) Sound.coin();
+  });
+  window.addEventListener('nft-mint-error', () => {
+    if (_mintingItem) { _mintingItem = null; _renderModal(); }
+  });
+
+  const _modalEl = document.getElementById('badge-modal');
+  if (_modalEl) _modalEl.addEventListener('click', (e) => { if (e.target === _modalEl) closeModal(); });
+  const _closeBtn = document.getElementById('btn-badge-modal-close');
+  if (_closeBtn) _closeBtn.addEventListener('click', () => closeModal());
+
+  return { fetchData, renderMedalRow, renderCareerTracks, openModal, closeModal };
+})();
+
 function _renderCareerMedals() {
   const holder = document.getElementById('career-medals');
-  if (!holder || typeof Quests === 'undefined' || typeof Quests.getCareerMedals !== 'function') return;
-  holder.innerHTML = Quests.getCareerMedals().map(medal => `
-    <div class="career-medal medal-${_MEDAL_TIER(medal.level)}" title="${_escapeHtml(medal.name)}">
-      <span class="career-medal-ring">${_imgHtml(medal.iconSrc, 'career-medal-icon ui-icon', medal.name, ' aria-hidden="true"')}</span>
-      <small>${medal.level}/${medal.max}</small>
-    </div>`).join('');
+  if (!holder) return;
+  Badges.renderMedalRow();
+  Badges.fetchData().then(() => Badges.renderMedalRow());
 }
 
 function _renderCollectionShelf() {
@@ -11560,6 +12082,99 @@ function _initSettingsScreen() {
   if (vibToggle) vibToggle.checked = Vibrate.isEnabled();
 }
 
+function _feedbackText(key, fallback) {
+  return typeof window.t === 'function' ? window.t(key) : fallback;
+}
+
+function _setFeedbackStatus(message, tone) {
+  const status = document.getElementById('feedback-status');
+  if (!status) return;
+  status.textContent = message || '';
+  status.classList.toggle('is-error', tone === 'error');
+  status.classList.toggle('is-success', tone === 'success');
+}
+
+function _initFeedbackForm() {
+  const form = document.getElementById('feedback-form');
+  const kindInput = document.getElementById('feedback-kind');
+  const messageInput = document.getElementById('feedback-message');
+  const submit = document.getElementById('feedback-submit');
+  if (!form || !kindInput || !messageInput || !submit || form.dataset.bound === 'true') return;
+
+  form.dataset.bound = 'true';
+  messageInput.placeholder = _feedbackText(
+    'feedback.placeholder',
+    'What happened, or what would make the game better?',
+  );
+  const updateSubmitState = () => {
+    submit.disabled = messageInput.value.trim().length < 10;
+  };
+
+  form.querySelectorAll('[data-feedback-kind]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const kind = button.getAttribute('data-feedback-kind');
+      if (kind !== 'bug' && kind !== 'idea') return;
+      kindInput.value = kind;
+      form.querySelectorAll('[data-feedback-kind]').forEach((item) => {
+        const active = item.getAttribute('data-feedback-kind') === kind;
+        item.classList.toggle('is-active', active);
+        item.setAttribute('aria-pressed', active ? 'true' : 'false');
+      });
+      _setFeedbackStatus('', '');
+    });
+  });
+
+  messageInput.addEventListener('input', () => {
+    updateSubmitState();
+    _setFeedbackStatus('', '');
+  });
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const message = messageInput.value.trim();
+    if (message.length < 10) {
+      _setFeedbackStatus(_feedbackText('feedback.too_short', 'Add at least 10 characters.'), 'error');
+      updateSubmitState();
+      return;
+    }
+
+    submit.disabled = true;
+    const defaultLabel = _feedbackText('feedback.send', 'SEND FEEDBACK');
+    submit.textContent = _feedbackText('feedback.sending', 'Sending…');
+    _setFeedbackStatus('', '');
+
+    try {
+      const response = await fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kind: kindInput.value,
+          message,
+          address: window.__BASE_WALLET || undefined,
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.ok) {
+        const copy = response.status === 429
+          ? _feedbackText('feedback.rate_limited', 'One message per minute.')
+          : _feedbackText('feedback.try_again', 'Could not send it. Try again.');
+        _setFeedbackStatus(copy, 'error');
+        return;
+      }
+
+      messageInput.value = '';
+      _setFeedbackStatus(_feedbackText('feedback.sent', 'Sent. Thank you.'), 'success');
+    } catch (_) {
+      _setFeedbackStatus(_feedbackText('feedback.try_again', 'Could not send it. Try again.'), 'error');
+    } finally {
+      submit.textContent = defaultLabel;
+      updateSubmitState();
+    }
+  });
+
+  updateSubmitState();
+}
+
 function _requestSessionToken(runId) {
   if (typeof window.__BASE_SESSION_START === 'function') {
     window.__BASE_SESSION_START(runId); // async, non-blocking
@@ -11639,11 +12254,13 @@ function _initUI() {
   _bind('btn-settings', 'click', () => {
     _settingsReturnScreen = 'menu';
     _initSettingsScreen();
+    _initFeedbackForm();
     UI.show('settings');
   });
   _bind('btn-settings-game', 'click', () => {
     _settingsReturnScreen = 'game';
     _initSettingsScreen();
+    _initFeedbackForm();
     UI.show('settings');
   });
   _bind('btn-settings-back', 'click', () => {
@@ -11907,13 +12524,6 @@ function _initUI() {
   _bind('btn-quests', 'click', () => { Quests.render(); UI.show('quests'); });
   _bind('btn-quests-back', 'click', () => goToMenu());
 
-  // Quest notify on game over — tap to go to quests
-  _bind('go-quest-notify', 'click', () => {
-    _leaveActiveRun();
-    Quests.render();
-    UI.show('quests');
-  });
-
   // Тап по "Today's goals" в лодауте ведёт в квесты
   _bind('loadout-goals', 'click', () => {
     _leaveActiveRun();
@@ -11924,6 +12534,160 @@ function _initUI() {
   // Profile
   _bind('btn-profile', 'click', () => { _renderProfile(); UI.show('profile'); });
   _bind('btn-profile-back', 'click', () => goToMenu());
+
+  // ===== Referral program =====
+  const Referral = (() => {
+    let _status = null;
+    let _fetchedFor = '';
+
+    async function fetchStatus(force) {
+      const addr = (window.__BASE_WALLET || '').toLowerCase();
+      if (!addr) return null;
+      if (!force && _status && _fetchedFor === addr) return _status;
+      try {
+        const res = await fetch('/api/referral/status?address=' + addr);
+        const data = await res.json();
+        if (data && data.ok) { _status = data; _fetchedFor = addr; return data; }
+      } catch (_) {}
+      return null;
+    }
+
+    function _fmtUsd(cents) { return '$' + (Math.max(0, cents | 0) / 100).toFixed(2); }
+    function _shortAddr(a) { return a ? a.slice(0, 6) + '…' + a.slice(-4) : ''; }
+    const _tr = (k, fb) => (typeof window.t === 'function' ? window.t(k) : fb);
+
+    async function refreshEntryPoints(force) {
+      const st = await fetchStatus(force);
+      const active = Boolean(st && st.active);
+      const banner = document.getElementById('btn-referral-banner');
+      if (banner) banner.classList.toggle('hidden', !active);
+      const row = document.getElementById('btn-profile-referral');
+      if (row) {
+        row.classList.toggle('hidden', !active);
+        const v = document.getElementById('profile-referral-value');
+        if (v && active) {
+          v.textContent = (st.invited || []).length + ' invited · ' + _fmtUsd(st.balanceCents);
+        }
+      }
+      return active;
+    }
+
+    function render(st) {
+      const chip = document.getElementById('referral-balance-chip');
+      const codeEl = document.getElementById('referral-code');
+      const thrEl = document.getElementById('referral-threshold');
+      const list = document.getElementById('referral-invited-list');
+      const pitchEl = document.getElementById('referral-pitch');
+      const payoutMeta = document.getElementById('referral-payout-meta');
+      const payoutFill = document.getElementById('referral-payout-fill');
+      const threshold = (st && st.threshold) || 10;
+      const rewardCents = (st && st.rewardCents) || 25;
+      const payoutMinCents = (st && st.payoutMinCents) || 100;
+      const balanceCents = Math.max(0, (st && st.balanceCents) || 0);
+      const transactionLabel = _tr('ref.game_transactions', 'game transactions on Base');
+      if (pitchEl) {
+        pitchEl.innerHTML = _tr('ref.pitch_a', 'Invite friends to Base Runner. When a friend makes') +
+          ' <strong id="referral-threshold">' + threshold + ' ' + transactionLabel + '</strong> ' +
+          _tr('ref.pitch_b', 'you earn') + ' <strong>' + _fmtUsd(rewardCents) + '</strong>.';
+      }
+      if (!st || !st.active) {
+        if (chip) chip.textContent = '$0.00';
+        if (codeEl) codeEl.textContent = '--------';
+        if (payoutMeta) payoutMeta.textContent = _fmtUsd(payoutMinCents) + ' to weekly payout';
+        if (payoutFill) payoutFill.style.width = '0%';
+        if (list) list.innerHTML = '<div class="referral-empty">' + _tr('ref.paused', 'Referral program is paused.') + '</div>';
+        return;
+      }
+      const remaining = Math.max(0, payoutMinCents - balanceCents);
+      if (chip) chip.textContent = _fmtUsd(balanceCents);
+      if (payoutMeta) {
+        payoutMeta.textContent = remaining === 0
+          ? 'Eligible for weekly payout'
+          : _fmtUsd(remaining) + ' to weekly payout';
+      }
+      if (payoutFill) payoutFill.style.width = Math.min(100, (balanceCents / payoutMinCents) * 100) + '%';
+      if (codeEl) codeEl.textContent = st.code || '--------';
+      if (thrEl) thrEl.textContent = String(threshold);
+      if (list) {
+        const invited = st.invited || [];
+        if (!invited.length) {
+          list.innerHTML = '<div class="referral-empty">' + _tr('ref.empty', 'No invites yet. Share your link to start earning.') + '</div>';
+        } else {
+          list.innerHTML = invited.map((f) => {
+            const txCount = Math.min(Math.max(0, Number(f.txCount) || 0), threshold);
+            const progress = Math.round((txCount / threshold) * 100);
+            const isQualified = f.status === 'qualified';
+            const isPaused = f.status === 'qualified_unpaid';
+            const isPaid = f.status === 'paid';
+            const statusClass = isPaid ? ' paid' : isPaused ? ' paused' : isQualified ? ' earned' : ' pending';
+            const status = isPaid
+              ? 'PAID'
+              : isPaused
+                ? 'REWARDS PAUSED'
+                : isQualified
+                  ? '✓ ' + _fmtUsd(rewardCents) + ' EARNED'
+                  : (threshold - txCount) + ' TO GO';
+            return '<div class="referral-friend' + statusClass + '">' +
+              '<div class="referral-friend-head">' +
+                '<span class="referral-friend-addr">' + _shortAddr(f.address) + '</span>' +
+                '<span class="referral-friend-status">' + status + '</span>' +
+              '</div>' +
+              '<div class="referral-friend-track" role="progressbar" aria-valuemin="0" aria-valuemax="' + threshold + '" aria-valuenow="' + txCount + '"><span style="width:' + progress + '%"></span></div>' +
+              '<span class="referral-friend-progress">' + txCount + '/' + threshold + ' game tx</span>' +
+            '</div>';
+          }).join('');
+        }
+      }
+    }
+
+    async function show() {
+      render(_status);            // instant paint from cache
+      UI.show('referral');
+      render(await fetchStatus(true)); // then refresh
+    }
+
+    async function share() {
+      const st = await fetchStatus();
+      if (!st || !st.code) return;
+      const link = location.origin + '/?ref=' + st.code;
+      const text = 'I run Base Runner on Base — join me and beat my score! ' + link;
+      let shared = false;
+      if (navigator.share) {
+        try { await navigator.share({ text: text, url: link }); shared = true; } catch (_) {}
+      }
+      if (!shared) {
+        try {
+          await navigator.clipboard.writeText(link);
+          const hint = document.getElementById('referral-share-hint');
+          if (hint) {
+            hint.classList.remove('hidden');
+            setTimeout(() => hint.classList.add('hidden'), 2000);
+          }
+        } catch (_) {}
+      }
+    }
+
+    // Entry points depend on the wallet bridge, which connects after boot —
+    // poll a few times, then stop (status is re-fetched on screen open).
+    let _tries = 0;
+    const _boot = setInterval(async () => {
+      _tries++;
+      if (window.__BASE_WALLET) {
+        clearInterval(_boot);
+        refreshEntryPoints();
+      } else if (_tries >= 15) {
+        clearInterval(_boot);
+      }
+    }, 2000);
+
+    return { refreshEntryPoints, show, share };
+  })();
+
+  _bind('btn-referral-banner',  'click', () => Referral.show());
+  _bind('btn-profile-referral', 'click', () => Referral.show());
+  _bind('btn-referral-home',    'click', () => goToMenu());
+  _bind('btn-referral-share',   'click', () => Referral.share());
+  _bind('btn-profile', 'click', () => Referral.refreshEntryPoints(true));
 
   // Daily Spin
   _bind('btn-ci-banner', 'click', () => UI.showCheckIn());
@@ -11971,7 +12735,10 @@ function _initUI() {
     // ── Reset spin NFT claim button on success ──────────────────────────
     const spinMintBtn  = document.getElementById('btn-spin-nft');
     const spinNftSec   = document.getElementById('spin-nft-section');
-    if (spinMintBtn) { spinMintBtn.textContent = '✓ CLAIMED'; spinMintBtn.disabled = true; }
+    if (spinMintBtn) {
+      spinMintBtn.textContent = typeof window.t === 'function' ? window.t('spin.nft_claimed') : '✓ MINTED';
+      spinMintBtn.disabled = true;
+    }
     const levelupMintBtn = document.querySelector('.levelup-nft-btn');
     if (levelupMintBtn?.dataset.id === itemId) {
       levelupMintBtn.textContent = '✓ CLAIMED';
@@ -12015,7 +12782,7 @@ function _initUI() {
     // Reset spin NFT claim button on error
     const spinMintBtn = document.getElementById('btn-spin-nft');
     if (spinMintBtn && spinMintBtn.disabled) {
-      spinMintBtn.textContent = 'CLAIM ONCHAIN';
+      spinMintBtn.textContent = typeof window.t === 'function' ? window.t('spin.nft_mint') : 'MINT ON BASE';
       spinMintBtn.disabled    = false;
     }
     document.querySelectorAll('.levelup-nft-btn').forEach(btn => {

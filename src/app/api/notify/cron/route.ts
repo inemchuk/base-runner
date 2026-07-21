@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchOptedInAddresses, sendBaseNotification } from '@/lib/baseNotifications';
+import { getReferralRedis, qualifyIfReady, referralEnabled } from '@/lib/referral';
 
 // ── GET /api/notify/cron — daily engagement notifications ──────────────────
 // Invoked by Vercel Cron (see vercel.json). Auth: `Authorization: Bearer
@@ -157,6 +158,23 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // Referral qualification sweep — safety net for referees whose eager
+    // qualification in /api/referral/tx did not land (transient errors).
+    let referralQualified = 0;
+    if (referralEnabled() && !dryRun) {
+      try {
+        const refRedis = await getReferralRedis();
+        if (refRedis) {
+          const pending = await refRedis.smembers('referral_pending');
+          for (const referee of pending) {
+            if (await qualifyIfReady(refRedis, referee)) referralQualified++;
+          }
+        }
+      } catch (e) {
+        console.warn('referral sweep failed:', e);
+      }
+    }
+
     return NextResponse.json({
       ok: true,
       dryRun,
@@ -164,6 +182,7 @@ export async function GET(req: NextRequest) {
       streak: streak.length,
       checkin: checkin.length,
       onboarding: onboarding.length,
+      referralQualified,
       ...(dryRun ? {} : { sends }),
     });
   } catch (e) {

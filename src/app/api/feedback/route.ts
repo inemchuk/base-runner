@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'crypto';
-import { after, NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { isAddress } from 'viem';
 
 export const dynamic = 'force-dynamic';
@@ -7,6 +7,7 @@ export const dynamic = 'force-dynamic';
 const INBOX_KEY = 'feedback:inbox';
 const MAX_INBOX_ENTRIES = 1000;
 const RATE_LIMIT_SECONDS = 60;
+const TELEGRAM_TIMEOUT_MS = 5000;
 
 type FeedbackKind = 'bug' | 'idea';
 
@@ -132,6 +133,7 @@ async function sendTelegramFeedback(entry: FeedbackEntry): Promise<void> {
   const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    signal: AbortSignal.timeout(TELEGRAM_TIMEOUT_MS),
     body: JSON.stringify({
       chat_id: chatId,
       text,
@@ -139,6 +141,8 @@ async function sendTelegramFeedback(entry: FeedbackEntry): Promise<void> {
     }),
   });
   if (!response.ok) throw new Error(`Telegram send failed (${response.status})`);
+  const body = await response.json().catch(() => null);
+  if (!body?.ok) throw new Error('Telegram send failed (invalid response)');
 }
 
 export async function POST(req: NextRequest) {
@@ -149,6 +153,9 @@ export async function POST(req: NextRequest) {
     const address = normalizeAddress(body?.address);
     if (!kind || !message || address === undefined) {
       return NextResponse.json({ ok: false, error: 'invalid_feedback' }, { status: 400 });
+    }
+    if (!telegramConfigured()) {
+      return NextResponse.json({ ok: false, error: 'telegram_unavailable' }, { status: 503 });
     }
 
     const redis = await getRedis();
@@ -164,12 +171,11 @@ export async function POST(req: NextRequest) {
     };
     await appendFeedback(redis, entry);
 
-    if (telegramConfigured()) {
-      after(() => {
-        sendTelegramFeedback(entry).catch((error) => {
-          console.warn('feedback telegram notification failed:', error);
-        });
-      });
+    try {
+      await sendTelegramFeedback(entry);
+    } catch (error) {
+      console.error('feedback telegram notification failed:', error);
+      return NextResponse.json({ ok: false, error: 'telegram_delivery_failed' }, { status: 502 });
     }
 
     return NextResponse.json({ ok: true, id: entry.id });
